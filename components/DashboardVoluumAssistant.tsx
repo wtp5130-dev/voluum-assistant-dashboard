@@ -47,6 +47,7 @@ export default function DashboardVoluumAssistant() {
   const [selectedCountry, setSelectedCountry] =
     useState<string>("All countries");
 
+<<<<<<< HEAD
   // Chat state
   const [chatInput, setChatInput] = useState<string>("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -58,6 +59,15 @@ export default function DashboardVoluumAssistant() {
     const has = (pattern: string) => upper.includes(pattern);
 
     // explicit words
+=======
+  // ------- helper: guess country from campaign name -------
+  const inferCountryFromName = (name: string): string => {
+    const upper = name.toUpperCase();
+
+    const has = (pattern: string) => upper.includes(pattern);
+
+    // Explicit country words
+>>>>>>> 42f34366cff14816a4f280cbb07ec6fa1d56b918
     if (has(" MALAYSIA") || has(" MALAYSIA -") || has(" MALAYSIA –")) {
       return "MY";
     }
@@ -65,7 +75,13 @@ export default function DashboardVoluumAssistant() {
       return "MX";
     }
 
+<<<<<<< HEAD
     // patterns like MY_, MY – , etc
+=======
+    // Common patterns in your names:
+    // "Global - MY_InPagePush...", "Global - MX_Interstitial...",
+    // "[In-Page] MY – Classic Push – ...", etc.
+>>>>>>> 42f34366cff14816a4f280cbb07ec6fa1d56b918
     if (
       has(" MY_") ||
       has(" MY ") ||
@@ -88,7 +104,11 @@ export default function DashboardVoluumAssistant() {
       return "MX";
     }
 
+<<<<<<< HEAD
     // generic pattern for any 2-letter code
+=======
+    // Generic pattern " - XX " / " XX_" where XX is any two-letter code
+>>>>>>> 42f34366cff14816a4f280cbb07ec6fa1d56b918
     const m = upper.match(/[\s\-–]([A-Z]{2})[_\s\-–]/);
     if (m && m[1]) {
       return m[1];
@@ -178,6 +198,7 @@ export default function DashboardVoluumAssistant() {
       const matchSource =
         selectedSource === "All sources" ||
         c.trafficSource === selectedSource;
+<<<<<<< HEAD
 
       const country = inferCountryFromName(c.name);
       const matchCountry =
@@ -188,6 +209,18 @@ export default function DashboardVoluumAssistant() {
   }, [campaigns, selectedSource, selectedCountry]);
 
   // ------- INSIGHTS: BEST, WORST, LOSERS TO CUT (local, simple) -------
+=======
+
+      const country = inferCountryFromName(c.name);
+      const matchCountry =
+        selectedCountry === "All countries" || country === selectedCountry;
+
+      return matchSource && matchCountry;
+    });
+  }, [campaigns, selectedSource, selectedCountry]);
+
+  // ------- INSIGHTS: BEST, WORST, LOSERS TO CUT -------
+>>>>>>> 42f34366cff14816a4f280cbb07ec6fa1d56b918
   useEffect(() => {
     const list: string[] = [];
 
@@ -474,6 +507,10 @@ export default function DashboardVoluumAssistant() {
                         className="border-b border-slate-800/60 align-top"
                       >
                         <td className="px-2 py-2">
+<<<<<<< HEAD
+=======
+                          {/* full name, no truncate, allow wrapping */}
+>>>>>>> 42f34366cff14816a4f280cbb07ec6fa1d56b918
                           <div className="text-[11px] whitespace-normal">
                             {c.name}
                           </div>
@@ -485,6 +522,7 @@ export default function DashboardVoluumAssistant() {
                           {country}
                         </td>
                         <td className="px-2 py-2 text-right">
+<<<<<<< HEAD
                           {Number(c.visits).toLocaleString()}
                         </td>
                         <td className="px-2 py-2 text-right">
@@ -524,6 +562,39 @@ export default function DashboardVoluumAssistant() {
                           }`}
                         >
                           {Number(c.roi).toFixed(1)}%
+=======
+                          {c.visits.toLocaleString()}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {c.signups.toLocaleString()}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {c.deposits.toLocaleString()}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {c.deposits > 0 ? `$${c.cpa.toFixed(2)}` : "–"}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {c.signups > 0 ? `$${c.cpr.toFixed(2)}` : "–"}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          ${c.revenue.toFixed(2)}
+                        </td>
+                        <td
+                          className={`px-2 py-2 text-right ${
+                            c.profit >= 0 ? "text-emerald-400" : "text-rose-400"
+                          }`}
+                        >
+                          {c.profit >= 0 ? "$" : "-$"}
+                          {Math.abs(c.profit).toFixed(2)}
+                        </td>
+                        <td
+                          className={`px-2 py-2 text-right ${
+                            c.roi >= 0 ? "text-emerald-400" : "text-rose-400"
+                          }`}
+                        >
+                          {c.roi.toFixed(1)}%
+>>>>>>> 42f34366cff14816a4f280cbb07ec6fa1d56b918
                         </td>
                       </tr>
                     );
