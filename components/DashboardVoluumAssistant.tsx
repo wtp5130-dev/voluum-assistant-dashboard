@@ -16,9 +16,14 @@ type Campaign = {
   trafficSource: string;
   visits: number;
   conversions: number;
+  signups: number;
+  deposits: number;
   revenue: number;
   profit: number;
   roi: number;
+  cost: number;
+  cpa: number;
+  cpr: number;
 };
 
 type DateRangeKey = "today" | "yesterday" | "last7days";
@@ -34,7 +39,6 @@ export default function DashboardVoluumAssistant() {
   const [selectedSource, setSelectedSource] = useState<string>("All sources");
 
   // ------- FETCH DATA WHEN DATE RANGE CHANGES -------
-
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -65,7 +69,6 @@ export default function DashboardVoluumAssistant() {
   }, [selectedDateRange]);
 
   // ------- DERIVED DATA: SOURCES + FILTERED CAMPAIGNS -------
-
   const trafficSources = useMemo(() => {
     const set = new Set<string>();
     campaigns.forEach((c) => {
@@ -81,7 +84,6 @@ export default function DashboardVoluumAssistant() {
   }, [campaigns, selectedSource]);
 
   // ------- INSIGHTS: BEST, WORST, LOSERS TO CUT -------
-
   useEffect(() => {
     const list: string[] = [];
 
@@ -114,9 +116,9 @@ export default function DashboardVoluumAssistant() {
       );
     }
 
-    // "Losers to cut": lots of visits, zero conversions, losing money
+    // "Losers to review": high traffic, zero signups, losing money
     const losersToCut = filteredCampaigns.filter(
-      (c) => c.visits >= 5000 && c.conversions === 0 && c.profit < 0
+      (c) => c.visits >= 5000 && c.signups === 0 && c.profit < 0
     );
 
     if (losersToCut.length > 0) {
@@ -125,7 +127,7 @@ export default function DashboardVoluumAssistant() {
         .map((c) => c.name)
         .join("; ");
       list.push(
-        `Losers to review (>= 5000 visits, 0 conversions, losing money): ${names}.`
+        `Losers to review (>= 5000 visits, 0 signups, losing money): ${names}.`
       );
     }
 
@@ -224,8 +226,8 @@ export default function DashboardVoluumAssistant() {
             </div>
           </div>
 
-          {/* KPI cards (still overall for the date range, not filtered by source yet) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* KPI cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
             {kpis.map((kpi) => (
               <div
                 key={kpi.id}
@@ -264,7 +266,10 @@ export default function DashboardVoluumAssistant() {
                   <tr>
                     <th className="text-left px-2 py-2">Campaign</th>
                     <th className="text-right px-2 py-2">Visits</th>
-                    <th className="text-right px-2 py-2">Conv</th>
+                    <th className="text-right px-2 py-2">Signups</th>
+                    <th className="text-right px-2 py-2">Deposits</th>
+                    <th className="text-right px-2 py-2">CPA</th>
+                    <th className="text-right px-2 py-2">CPR</th>
                     <th className="text-right px-2 py-2">Revenue</th>
                     <th className="text-right px-2 py-2">Profit</th>
                     <th className="text-right px-2 py-2">ROI%</th>
@@ -290,7 +295,16 @@ export default function DashboardVoluumAssistant() {
                         {c.visits.toLocaleString()}
                       </td>
                       <td className="px-2 py-2 text-right">
-                        {c.conversions.toLocaleString()}
+                        {c.signups.toLocaleString()}
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        {c.deposits.toLocaleString()}
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        {c.deposits > 0 ? `$${c.cpa.toFixed(2)}` : "–"}
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        {c.signups > 0 ? `$${c.cpr.toFixed(2)}` : "–"}
                       </td>
                       <td className="px-2 py-2 text-right">
                         ${c.revenue.toFixed(2)}
@@ -316,7 +330,7 @@ export default function DashboardVoluumAssistant() {
                     <tr>
                       <td
                         className="px-2 py-4 text-center text-slate-500 text-[11px]"
-                        colSpan={6}
+                        colSpan={9}
                       >
                         No campaign data available for this date range and
                         traffic source.
