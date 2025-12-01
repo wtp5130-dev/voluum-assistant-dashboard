@@ -113,7 +113,7 @@ ${JSON.stringify(summaryContext, null, 2)}
     const client = new OpenAI({ apiKey });
 
     const completion = await client.chat.completions.create({
-      model: "gpt-5.1",
+      model: "gpt-4.1-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
