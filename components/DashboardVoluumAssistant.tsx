@@ -335,7 +335,7 @@ export default function DashboardVoluumAssistant() {
       </header>
 
       {/* Content */}
-      <main className="flex-1 p-4 flex flex-col gap-4 lg:flex-row">
+      <main className="flex-1 p-4 flex flex-col gap-4">
         {/* Left side: filters + KPIs + table */}
         <section className="flex-1 flex flex-col gap-4">
           {/* Filters + loading / error */}
@@ -546,8 +546,8 @@ export default function DashboardVoluumAssistant() {
         </section>
 
         {/* Right side: assistant panel */}
-        <aside className="w-full lg:w-80 flex-shrink-0">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 h-full flex flex-col">
+        <aside className="w-full max-w-5xl mx-auto flex-shrink-0">
+  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 h-full flex flex-col">
             <h2 className="text-sm font-semibold mb-1">Assistant insights</h2>
             <p className="text-[11px] text-slate-400 mb-3">
               Notes for{" "}
@@ -583,20 +583,25 @@ export default function DashboardVoluumAssistant() {
               </div>
               <div className="flex-1 space-y-2 text-xs overflow-y-auto pr-1 mb-2">
                 {chatMessages.map((m, idx) => (
-                  <div
-                    key={idx}
-                    className={`rounded-xl px-3 py-2 ${
-                      m.role === "user"
-                        ? "bg-sky-900/60 text-sky-50"
-                        : "bg-slate-800/80 text-slate-50"
-                    }`}
-                  >
-                    <div className="text-[10px] mb-0.5 opacity-70">
-                      {m.role === "user" ? "You" : "Assistant"}
-                    </div>
-                    <div>{m.content}</div>
-                  </div>
-                ))}
+  <div
+    key={idx}
+    className={`rounded-xl px-3 py-2 ${
+      m.role === "user"
+        ? "bg-sky-900/60 text-sky-50"
+        : "bg-slate-800/80 text-slate-50"
+    }`}
+  >
+    <div className="text-[10px] mb-0.5 opacity-70">
+      {m.role === "user" ? "You" : "Assistant"}
+    </div>
+
+    {/* This preserves new lines and makes it easier to read */}
+    <pre className="whitespace-pre-wrap text-[11px] leading-relaxed">
+      {m.content}
+    </pre>
+  </div>
+))}
+
                 {chatLoading && (
                   <div className="text-[11px] text-slate-400">
                     Thinking about your question…
