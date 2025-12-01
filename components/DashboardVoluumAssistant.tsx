@@ -16,25 +16,90 @@ type Campaign = {
   trafficSource: string;
   visits: number;
   conversions: number;
+  signups: number;
+  deposits: number;
   revenue: number;
   profit: number;
   roi: number;
+  cost: number;
+  cpa: number;
+  cpr: number;
 };
 
 type DateRangeKey = "today" | "yesterday" | "last7days";
+
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
+};
 
 export default function DashboardVoluumAssistant() {
   const [kpis, setKpis] = useState<Kpi[]>([]);
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
   const [insights, setInsights] = useState<string[]>([]);
+
   const [selectedDateRange, setSelectedDateRange] =
     useState<DateRangeKey>("last7days");
   const [selectedSource, setSelectedSource] = useState<string>("All sources");
+  const [selectedCountry, setSelectedCountry] =
+    useState<string>("All countries");
+
+  // Chat state
+  const [chatInput, setChatInput] = useState<string>("");
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [chatLoading, setChatLoading] = useState<boolean>(false);
+
+  // ------- helper: guess country from campaign name -------
+  const inferCountryFromName = (name: string): string => {
+    const upper = name.toUpperCase();
+    const has = (pattern: string) => upper.includes(pattern);
+
+    // explicit words
+    if (has(" MALAYSIA") || has(" MALAYSIA -") || has(" MALAYSIA –")) {
+      return "MY";
+    }
+    if (has(" MEXICO") || has(" MEXICO -") || has(" MEXICO –")) {
+      return "MX";
+    }
+
+    // patterns like MY_, MY – , etc
+    if (
+      has(" MY_") ||
+      has(" MY ") ||
+      has(" MY-") ||
+      has(" MY–") ||
+      has(" MY]") ||
+      has(" MY –")
+    ) {
+      return "MY";
+    }
+
+    if (
+      has(" MX_") ||
+      has(" MX ") ||
+      has(" MX-") ||
+      has(" MX–") ||
+      has(" MX]") ||
+      has(" MX –")
+    ) {
+      return "MX";
+    }
+
+    // generic pattern for any 2-letter code
+    const m = upper.match(/[\s\-–]([A-Z]{2})[_\s\-–]/);
+    if (m && m[1]) {
+      return m[1];
+    }
+
+    if (has(" GLOBAL")) return "GLOBAL";
+
+    return "Unknown";
+  };
 
   // ------- FETCH DATA WHEN DATE RANGE CHANGES -------
-
   useEffect(() => {
     const fetchData = async () => {
       try {
@@ -51,7 +116,31 @@ export default function DashboardVoluumAssistant() {
         }
 
         setKpis(json.kpis || []);
-        setCampaigns(json.campaigns || []);
+
+        // normalize campaigns to ensure all numeric fields exist
+        const normalizedCampaigns: Campaign[] = (json.campaigns || []).map(
+          (c: any) => ({
+            id:
+              c.id ??
+              c.campaignId ??
+              c.campaignName ??
+              String(c.name ?? "unknown"),
+            name: c.name ?? c.campaignName ?? "Unknown campaign",
+            trafficSource: c.trafficSource ?? c.trafficSourceName ?? "Unknown",
+            visits: Number(c.visits ?? 0),
+            conversions: Number(c.conversions ?? 0),
+            signups: Number(c.signups ?? c.customConversions1 ?? 0),
+            deposits: Number(c.deposits ?? c.customConversions2 ?? 0),
+            revenue: Number(c.revenue ?? 0),
+            profit: Number(c.profit ?? 0),
+            roi: Number(c.roi ?? 0),
+            cost: Number(c.cost ?? 0),
+            cpa: Number(c.cpa ?? c.CostPerSignup ?? 0),
+            cpr: Number(c.cpr ?? c.CPR ?? 0),
+          })
+        );
+
+        setCampaigns(normalizedCampaigns);
       } catch (e: any) {
         console.error(e);
         setError(e.message || "Unknown error");
@@ -64,8 +153,7 @@ export default function DashboardVoluumAssistant() {
     fetchData();
   }, [selectedDateRange]);
 
-  // ------- DERIVED DATA: SOURCES + FILTERED CAMPAIGNS -------
-
+  // ------- DERIVED DATA: SOURCES + COUNTRIES + FILTERED CAMPAIGNS -------
   const trafficSources = useMemo(() => {
     const set = new Set<string>();
     campaigns.forEach((c) => {
@@ -75,19 +163,37 @@ export default function DashboardVoluumAssistant() {
     return ["All sources", ...list];
   }, [campaigns]);
 
+  const countries = useMemo(() => {
+    const set = new Set<string>();
+    campaigns.forEach((c) => {
+      const country = inferCountryFromName(c.name);
+      set.add(country);
+    });
+    const list = Array.from(set).sort();
+    return ["All countries", ...list];
+  }, [campaigns]);
+
   const filteredCampaigns = useMemo(() => {
-    if (selectedSource === "All sources") return campaigns;
-    return campaigns.filter((c) => c.trafficSource === selectedSource);
-  }, [campaigns, selectedSource]);
+    return campaigns.filter((c) => {
+      const matchSource =
+        selectedSource === "All sources" ||
+        c.trafficSource === selectedSource;
 
-  // ------- INSIGHTS: BEST, WORST, LOSERS TO CUT -------
+      const country = inferCountryFromName(c.name);
+      const matchCountry =
+        selectedCountry === "All countries" || country === selectedCountry;
 
+      return matchSource && matchCountry;
+    });
+  }, [campaigns, selectedSource, selectedCountry]);
+
+  // ------- INSIGHTS: BEST, WORST, LOSERS TO CUT (local, simple) -------
   useEffect(() => {
     const list: string[] = [];
 
     if (!filteredCampaigns.length) {
       list.push(
-        "No campaign data for this date range and traffic source selection."
+        "No campaign data for this date range, traffic source, and country selection."
       );
       setInsights(list);
       return;
@@ -114,9 +220,9 @@ export default function DashboardVoluumAssistant() {
       );
     }
 
-    // "Losers to cut": lots of visits, zero conversions, losing money
+    // "Losers to review": high traffic, zero signups, losing money
     const losersToCut = filteredCampaigns.filter(
-      (c) => c.visits >= 5000 && c.conversions === 0 && c.profit < 0
+      (c) => c.visits >= 5000 && c.signups === 0 && c.profit < 0
     );
 
     if (losersToCut.length > 0) {
@@ -125,7 +231,7 @@ export default function DashboardVoluumAssistant() {
         .map((c) => c.name)
         .join("; ");
       list.push(
-        `Losers to review (>= 5000 visits, 0 conversions, losing money): ${names}.`
+        `Losers to review (>= 5000 visits, 0 signups, losing money): ${names}.`
       );
     }
 
@@ -136,12 +242,81 @@ export default function DashboardVoluumAssistant() {
     }
 
     setInsights(list);
-  }, [filteredCampaigns, selectedDateRange, selectedSource]);
+  }, [filteredCampaigns, selectedDateRange, selectedSource, selectedCountry]);
 
   const labelForRange: Record<DateRangeKey, string> = {
     today: "Today",
     yesterday: "Yesterday",
     last7days: "Last 7 days",
+  };
+
+  // ------- CHAT: send question to /api/assistant -------
+  const handleSendChat = async () => {
+    const trimmed = chatInput.trim();
+    if (!trimmed || chatLoading) return;
+
+    const newUserMessage: ChatMessage = {
+      role: "user",
+      content: trimmed,
+    };
+
+    setChatMessages((prev) => [...prev, newUserMessage]);
+    setChatInput("");
+    setChatLoading(true);
+
+    try {
+      const res = await fetch("/api/assistant", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          question: trimmed,
+          kpis,
+          campaigns: filteredCampaigns,
+          dateRange: selectedDateRange,
+          trafficSource: selectedSource,
+          country: selectedCountry,
+        }),
+      });
+
+      const json = await res.json();
+
+      if (!res.ok) {
+        throw new Error(json.error || json.message || "Assistant error");
+      }
+
+      const answer: string =
+        json.answer ||
+        json.message ||
+        "No answer text returned from assistant.";
+
+      const aiMessage: ChatMessage = {
+        role: "assistant",
+        content: answer,
+      };
+
+      setChatMessages((prev) => [...prev, aiMessage]);
+    } catch (e: any) {
+      const errorMessage: ChatMessage = {
+        role: "assistant",
+        content:
+          "Sorry, I couldn't generate an answer: " +
+          (e?.message || String(e)),
+      };
+      setChatMessages((prev) => [...prev, errorMessage]);
+    } finally {
+      setChatLoading(false);
+    }
+  };
+
+  const handleChatKeyDown: React.KeyboardEventHandler<HTMLInputElement> = (
+    e
+  ) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSendChat();
+    }
   };
 
   return (
@@ -213,6 +388,22 @@ export default function DashboardVoluumAssistant() {
               </select>
             </div>
 
+            {/* Country select */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-400">Country:</span>
+              <select
+                className="bg-slate-900 border border-slate-700 text-[11px] rounded-full px-3 py-1.5"
+                value={selectedCountry}
+                onChange={(e) => setSelectedCountry(e.target.value)}
+              >
+                {countries.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Status messages */}
             <div className="flex items-center gap-3 text-[11px] ml-auto">
               {loading && (
@@ -224,8 +415,8 @@ export default function DashboardVoluumAssistant() {
             </div>
           </div>
 
-          {/* KPI cards (still overall for the date range, not filtered by source yet) */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+          {/* KPI cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
             {kpis.map((kpi) => (
               <div
                 key={kpi.id}
@@ -255,7 +446,7 @@ export default function DashboardVoluumAssistant() {
               <h2 className="text-sm font-semibold">Campaign performance</h2>
               <span className="text-[10px] text-slate-500">
                 Range: {labelForRange[selectedDateRange]} • Source:{" "}
-                {selectedSource}
+                {selectedSource} • Country: {selectedCountry}
               </span>
             </div>
             <div className="overflow-x-auto">
@@ -263,63 +454,87 @@ export default function DashboardVoluumAssistant() {
                 <thead className="border-b border-slate-800 text-slate-400 text-[10px] uppercase">
                   <tr>
                     <th className="text-left px-2 py-2">Campaign</th>
+                    <th className="text-left px-2 py-2">Country (guessed)</th>
                     <th className="text-right px-2 py-2">Visits</th>
-                    <th className="text-right px-2 py-2">Conv</th>
+                    <th className="text-right px-2 py-2">Signups</th>
+                    <th className="text-right px-2 py-2">Deposits</th>
+                    <th className="text-right px-2 py-2">CPA</th>
+                    <th className="text-right px-2 py-2">CPR</th>
                     <th className="text-right px-2 py-2">Revenue</th>
                     <th className="text-right px-2 py-2">Profit</th>
                     <th className="text-right px-2 py-2">ROI%</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCampaigns.map((c) => (
-                    <tr
-                      key={c.id}
-                      className="border-b border-slate-800/60"
-                    >
-                      <td className="px-2 py-2">
-                        <div className="max-w-xs">
-                          <div className="font-medium text-[11px] truncate">
+                  {filteredCampaigns.map((c) => {
+                    const country = inferCountryFromName(c.name);
+                    return (
+                      <tr
+                        key={c.id}
+                        className="border-b border-slate-800/60 align-top"
+                      >
+                        <td className="px-2 py-2">
+                          <div className="text-[11px] whitespace-normal">
                             {c.name}
                           </div>
-                          <div className="text-[10px] text-slate-500 truncate">
+                          <div className="text-[10px] text-slate-500">
                             {c.trafficSource}
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        {c.visits.toLocaleString()}
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        {c.conversions.toLocaleString()}
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        ${c.revenue.toFixed(2)}
-                      </td>
-                      <td
-                        className={`px-2 py-2 text-right ${
-                          c.profit >= 0 ? "text-emerald-400" : "text-rose-400"
-                        }`}
-                      >
-                        {c.profit >= 0 ? "$" : "-$"}
-                        {Math.abs(c.profit).toFixed(2)}
-                      </td>
-                      <td
-                        className={`px-2 py-2 text-right ${
-                          c.roi >= 0 ? "text-emerald-400" : "text-rose-400"
-                        }`}
-                      >
-                        {c.roi.toFixed(1)}%
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-2 py-2 text-left text-[11px]">
+                          {country}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {Number(c.visits).toLocaleString()}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {Number(c.signups).toLocaleString()}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {Number(c.deposits).toLocaleString()}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {Number(c.deposits) > 0
+                            ? `$${Number(c.cpa).toFixed(2)}`
+                            : "–"}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {Number(c.signups) > 0
+                            ? `$${Number(c.cpr).toFixed(2)}`
+                            : "–"}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          ${Number(c.revenue).toFixed(2)}
+                        </td>
+                        <td
+                          className={`px-2 py-2 text-right ${
+                            Number(c.profit) >= 0
+                              ? "text-emerald-400"
+                              : "text-rose-400"
+                          }`}
+                        >
+                          {Number(c.profit) >= 0 ? "$" : "-$"}
+                          {Math.abs(Number(c.profit)).toFixed(2)}
+                        </td>
+                        <td
+                          className={`px-2 py-2 text-right ${
+                            Number(c.roi) >= 0
+                              ? "text-emerald-400"
+                              : "text-rose-400"
+                          }`}
+                        >
+                          {Number(c.roi).toFixed(1)}%
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {filteredCampaigns.length === 0 && !loading && !error && (
                     <tr>
                       <td
                         className="px-2 py-4 text-center text-slate-500 text-[11px]"
-                        colSpan={6}
+                        colSpan={10}
                       >
-                        No campaign data available for this date range and
-                        traffic source.
+                        No campaign data available for this selection.
                       </td>
                     </tr>
                   )}
@@ -339,13 +554,12 @@ export default function DashboardVoluumAssistant() {
                 {labelForRange[selectedDateRange]}
               </span>{" "}
               –{" "}
-              <span className="font-semibold">
-                {selectedSource}
-              </span>
-              .
+              <span className="font-semibold">{selectedSource}</span> –{" "}
+              <span className="font-semibold">{selectedCountry}</span>.
             </p>
 
-            <div className="flex-1 space-y-2 text-xs overflow-y-auto pr-1">
+            {/* Auto insights (rule-based) */}
+            <div className="space-y-2 text-xs max-h-40 overflow-y-auto pr-1 mb-2">
               {insights.map((text, idx) => (
                 <div
                   key={idx}
@@ -361,19 +575,53 @@ export default function DashboardVoluumAssistant() {
               )}
             </div>
 
-            <div className="mt-3 border-t border-slate-800 pt-2">
-              <label className="block text-[10px] text-slate-400 mb-1">
-                Ask (coming soon)
-              </label>
-              <div className="flex gap-2">
-                <input
-                  className="flex-1 bg-slate-950 border border-slate-700 text-xs rounded-xl px-3 py-1.5 placeholder:text-slate-500"
-                  placeholder='Later: "Which campaigns should I pause?"'
-                  disabled
-                />
-                <button className="text-xs px-3 py-1.5 rounded-xl bg-slate-700 text-slate-50">
-                  Send
-                </button>
+            {/* Chat history */}
+            <div className="flex-1 border-t border-slate-800 pt-2 mt-1 flex flex-col">
+              <div className="text-[10px] text-slate-400 mb-1">
+                Ask the AI about this view (OpenAI-powered):
+              </div>
+              <div className="flex-1 space-y-2 text-xs overflow-y-auto pr-1 mb-2">
+                {chatMessages.map((m, idx) => (
+                  <div
+                    key={idx}
+                    className={`rounded-xl px-3 py-2 ${
+                      m.role === "user"
+                        ? "bg-sky-900/60 text-sky-50"
+                        : "bg-slate-800/80 text-slate-50"
+                    }`}
+                  >
+                    <div className="text-[10px] mb-0.5 opacity-70">
+                      {m.role === "user" ? "You" : "Assistant"}
+                    </div>
+                    <div>{m.content}</div>
+                  </div>
+                ))}
+                {chatLoading && (
+                  <div className="text-[11px] text-slate-400">
+                    Thinking about your question…
+                  </div>
+                )}
+              </div>
+
+              {/* Chat input */}
+              <div className="mt-auto pt-1 border-t border-slate-800">
+                <div className="flex gap-2 mt-1">
+                  <input
+                    className="flex-1 bg-slate-950 border border-slate-700 text-xs rounded-xl px-3 py-1.5 placeholder:text-slate-500"
+                    placeholder='e.g. "Which MY campaigns should I pause?"'
+                    value={chatInput}
+                    onChange={(e) => setChatInput(e.target.value)}
+                    onKeyDown={handleChatKeyDown}
+                    disabled={chatLoading}
+                  />
+                  <button
+                    className="text-xs px-3 py-1.5 rounded-xl bg-slate-700 text-slate-50 disabled:opacity-60"
+                    onClick={handleSendChat}
+                    disabled={chatLoading || !chatInput.trim()}
+                  >
+                    {chatLoading ? "..." : "Ask"}
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -1,17 +1,23 @@
 // app/api/voluum-dashboard/route.ts
 import { NextResponse } from "next/server";
 
-type VoluumRow = {
-  campaignName?: string;
-  trafficSourceName?: string;
-  visits?: number;
-  clicks?: number;
-  conversions?: number;
-  revenue?: number;
-  cost?: number;
-  profit?: number;
-  roi?: number;
+type DashboardCampaign = {
+  id: string;
+  name: string;
+  trafficSource: string;
+  visits: number;
+  conversions: number;
+  signups: number;
+  deposits: number;
+  revenue: number;
+  profit: number;
+  roi: number;
+  cost: number;
+  cpa: number; // CostPerSignup
+  cpr: number; // CPR
 };
+
+type DateRangeKey = "today" | "yesterday" | "last7days";
 
 export async function GET(request: Request) {
   const base = process.env.VOLUUM_API_BASE;
@@ -28,22 +34,22 @@ export async function GET(request: Request) {
     );
   }
 
-  // --- 1) Date range handling (VERY SIMPLE) ---
+  // --- 1) Date range handling (same presets as UI) ---
   const { searchParams } = new URL(request.url);
-  const dateRange = searchParams.get("dateRange") || "last7days";
+  const dateRange =
+    (searchParams.get("dateRange") as DateRangeKey | null) || "last7days";
 
-  // Start from "now"
+  // End time = now, rounded down to the hour
   const to = new Date();
-  // ✅ round TO to the nearest hour (down)
   to.setUTCMinutes(0, 0, 0);
 
-  const from = new Date(to); // copy
+  const from = new Date(to); // copy base
 
   if (dateRange === "today") {
-    // from = today at 00:00
+    // today 00:00 -> now
     from.setUTCHours(0, 0, 0, 0);
   } else if (dateRange === "yesterday") {
-    // from = yesterday at 00:00, to = yesterday at 23:00 (approx)
+    // yesterday 00:00 -> yesterday 23:00
     from.setUTCDate(from.getUTCDate() - 1);
     from.setUTCHours(0, 0, 0, 0);
     to.setUTCDate(from.getUTCDate());
@@ -51,15 +57,14 @@ export async function GET(request: Request) {
   } else {
     // default: last 7 days (to current rounded hour)
     from.setUTCDate(from.getUTCDate() - 7);
-    // also make sure minutes/seconds are 0
     from.setUTCMinutes(0, 0, 0);
   }
 
-  const fromIso = from.toISOString(); // e.g. 2025-11-24T03:00:00.000Z
-  const toIso = to.toISOString();     // e.g. 2025-12-01T03:00:00.000Z
+  const fromIso = from.toISOString();
+  const toIso = to.toISOString();
 
-  // --- 2) Get session token ---
-  const authUrl = `${base}/auth/access/session`;
+  // --- 2) Get session token (same as before) ---
+  const authUrl = `${base.replace(/\/$/, "")}/auth/access/session`;
 
   try {
     const authRes = await fetch(authUrl, {
@@ -93,12 +98,57 @@ export async function GET(request: Request) {
 
     const token = authJson.token as string;
 
-    // --- 3) Call /report grouped by campaign ---
-    const reportUrl = `${base}/report?from=${encodeURIComponent(
-      fromIso
-    )}&to=${encodeURIComponent(
-      toIso
-    )}&tz=UTC&groupBy=campaign&columns=visits,clicks,conversions,revenue,cost,profit,roi,campaignName,trafficSourceName`;
+    // --- 3) Build /report URL with the same style as your panel ---
+    // We mimic:
+    //  reportType=table
+    //  dateRange=custom-date-time
+    //  groupBy=campaign
+    //  conversionTimeMode=CONVERSION
+    //  column=... (multiple times)
+    const params = new URLSearchParams({
+      reportType: "table",
+      limit: "100",
+      dateRange: "custom-date-time",
+      from: fromIso,
+      to: toIso,
+      searchMode: "TEXT",
+      offset: "0",
+      include: "ACTIVE",
+      // currency isn't strictly needed to get values, but harmless:
+      currency: "MYR",
+      sort: "visits",
+      direction: "DESC",
+      groupBy: "campaign",
+      conversionTimeMode: "CONVERSION",
+      tz: "Asia/Singapore",
+    });
+
+    const columns = [
+      "profit",
+      "ConversionRate",
+      "CostPerSignup",
+      "CPR",
+      "CostPerFTD",
+      "customConversions1",
+      "customConversions2",
+      "customConversions3",
+      "customRevenue1",
+      "customRevenue2",
+      "customRevenue3",
+      "campaignName",
+      "trafficSourceName",
+      "costSources",
+      "cost",
+      "visits",
+      "conversions",
+      "roi",
+      "revenue",
+      "clicks",
+    ];
+
+    columns.forEach((col) => params.append("column", col));
+
+    const reportUrl = `${base.replace(/\/$/, "")}/report?${params.toString()}`;
 
     const reportRes = await fetch(reportUrl, {
       method: "GET",
@@ -130,53 +180,97 @@ export async function GET(request: Request) {
       );
     }
 
-    // --- 4) Map Voluum rows -> our simplified shape ---
-    const rows: VoluumRow[] = reportJson.rows || reportJson.data || [];
+    // --- 4) Map rows => our campaign shape ---
+    const rows: any[] = reportJson.rows || reportJson.data || [];
 
-    const campaigns = rows.map((row, index) => {
+    const campaigns: DashboardCampaign[] = rows.map((row, index) => {
+      const visits = Number(row.visits ?? 0);
+      const conversions = Number(row.conversions ?? 0);
       const revenue = Number(row.revenue ?? 0);
       const cost = Number(row.cost ?? 0);
+
+      // Profit / ROI
       const profit = Number(
         typeof row.profit === "number" ? row.profit : revenue - cost
       );
       const roi = Number(row.roi ?? (cost !== 0 ? (profit / cost) * 100 : 0));
 
+      // Custom conversions:
+      //  - Assume customConversions1 = signups
+      //  - Assume customConversions2 = deposits / FTD
+      const signups = Number(row.customConversions1 ?? 0);
+      const deposits = Number(row.customConversions2 ?? 0);
+
+      // CPA / CPR directly from Voluum columns if present
+      const cpa = Number(row.CostPerSignup ?? 0);
+      const cpr = Number(row.CPR ?? 0);
+
       return {
         id: row.campaignName || `row-${index}`,
         name: row.campaignName || "Unknown campaign",
         trafficSource: row.trafficSourceName || "Unknown source",
-        visits: Number(row.visits ?? row.clicks ?? 0),
-        conversions: Number(row.conversions ?? 0),
+        visits,
+        conversions,
+        signups,
+        deposits,
         revenue,
         profit,
         roi,
+        cost,
+        cpa,
+        cpr,
       };
     });
 
-    // --- 5) Build KPI summary ---
+    // --- 5) Build KPI summary from campaigns ---
     const totals = campaigns.reduce(
       (acc, c) => {
         acc.visits += c.visits;
         acc.conversions += c.conversions;
         acc.revenue += c.revenue;
         acc.profit += c.profit;
+        acc.cost += c.cost;
+        acc.signups += c.signups;
+        acc.deposits += c.deposits;
         return acc;
       },
-      { visits: 0, conversions: 0, revenue: 0, profit: 0 }
+      {
+        visits: 0,
+        conversions: 0,
+        revenue: 0,
+        profit: 0,
+        cost: 0,
+        signups: 0,
+        deposits: 0,
+      }
     );
+
+    const signupCount = totals.signups;
+    const depositCount = totals.deposits;
+    const totalCost = totals.cost;
+
+    const cpaTotal = depositCount > 0 ? totalCost / depositCount : 0;
+    const cprTotal = signupCount > 0 ? totalCost / signupCount : 0;
 
     const kpis = [
       {
-        id: "clicks",
+        id: "visits",
         label: "Visits",
         value: totals.visits.toLocaleString(),
         delta: "–",
         positive: true,
       },
       {
-        id: "conversions",
-        label: "Conversions",
-        value: totals.conversions.toLocaleString(),
+        id: "signups",
+        label: "Signups",
+        value: signupCount.toLocaleString(),
+        delta: "–",
+        positive: true,
+      },
+      {
+        id: "deposits",
+        label: "Deposits",
+        value: depositCount.toLocaleString(),
         delta: "–",
         positive: true,
       },
@@ -193,6 +287,30 @@ export async function GET(request: Request) {
         value: `$${totals.profit.toFixed(2)}`,
         delta: "–",
         positive: totals.profit >= 0,
+      },
+      {
+        id: "cpa",
+        label: "CPA (per deposit)",
+        value:
+          depositCount > 0
+            ? `$${cpaTotal.toFixed(2)}`
+            : totalCost > 0
+            ? "No deposits"
+            : "$0.00",
+        delta: "–",
+        positive: cpaTotal > 0 ? cpaTotal < 1000000 : true,
+      },
+      {
+        id: "cpr",
+        label: "CPR (per signup)",
+        value:
+          signupCount > 0
+            ? `$${cprTotal.toFixed(2)}`
+            : totalCost > 0
+            ? "No signups"
+            : "$0.00",
+        delta: "–",
+        positive: cprTotal > 0 ? cprTotal < 1000000 : true,
       },
     ];
 
