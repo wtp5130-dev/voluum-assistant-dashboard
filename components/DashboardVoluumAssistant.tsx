@@ -42,23 +42,50 @@ export default function DashboardVoluumAssistant() {
 
   // ------- helper: guess country from campaign name -------
   const inferCountryFromName = (name: string): string => {
-    // Very simple heuristic based on how your names look
-    // e.g. "Global - MX_ClassicPush..." or "Malaysia - Smart Campaign"
     const upper = name.toUpperCase();
 
-    if (upper.includes(" MALAYSIA") || upper.includes(" MALAYSIA -")) return "MY";
-    if (upper.includes(" MEXICO") || upper.includes(" MEXICO -")) return "MX";
+    const has = (pattern: string) => upper.includes(pattern);
 
-    // Look for " - XX " style (two-letter country code)
-    const segments = name.split("-").map((s) => s.trim());
-    for (const seg of segments) {
-      if (/^[A-Z]{2}$/.test(seg)) {
-        return seg;
-      }
+    // Explicit country words
+    if (has(" MALAYSIA") || has(" MALAYSIA -") || has(" MALAYSIA –")) {
+      return "MY";
+    }
+    if (has(" MEXICO") || has(" MEXICO -") || has(" MEXICO –")) {
+      return "MX";
     }
 
-    // Fallbacks
-    if (upper.includes(" GLOBAL")) return "GLOBAL";
+    // Common patterns in your names:
+    // "Global - MY_InPagePush...", "Global - MX_Interstitial...",
+    // "[In-Page] MY – Classic Push – ...", etc.
+    if (
+      has(" MY_") ||
+      has(" MY ") ||
+      has(" MY-") ||
+      has(" MY–") ||
+      has(" MY]") ||
+      has(" MY –")
+    ) {
+      return "MY";
+    }
+
+    if (
+      has(" MX_") ||
+      has(" MX ") ||
+      has(" MX-") ||
+      has(" MX–") ||
+      has(" MX]") ||
+      has(" MX –")
+    ) {
+      return "MX";
+    }
+
+    // Generic pattern " - XX " / " XX_" where XX is any two-letter code
+    const m = upper.match(/[\s\-–]([A-Z]{2})[_\s\-–]/);
+    if (m && m[1]) {
+      return m[1];
+    }
+
+    if (has(" GLOBAL")) return "GLOBAL";
 
     return "Unknown";
   };
