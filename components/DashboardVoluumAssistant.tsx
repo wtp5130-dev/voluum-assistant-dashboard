@@ -37,6 +37,31 @@ export default function DashboardVoluumAssistant() {
   const [selectedDateRange, setSelectedDateRange] =
     useState<DateRangeKey>("last7days");
   const [selectedSource, setSelectedSource] = useState<string>("All sources");
+  const [selectedCountry, setSelectedCountry] =
+    useState<string>("All countries");
+
+  // ------- helper: guess country from campaign name -------
+  const inferCountryFromName = (name: string): string => {
+    // Very simple heuristic based on how your names look
+    // e.g. "Global - MX_ClassicPush..." or "Malaysia - Smart Campaign"
+    const upper = name.toUpperCase();
+
+    if (upper.includes(" MALAYSIA") || upper.includes(" MALAYSIA -")) return "MY";
+    if (upper.includes(" MEXICO") || upper.includes(" MEXICO -")) return "MX";
+
+    // Look for " - XX " style (two-letter country code)
+    const segments = name.split("-").map((s) => s.trim());
+    for (const seg of segments) {
+      if (/^[A-Z]{2}$/.test(seg)) {
+        return seg;
+      }
+    }
+
+    // Fallbacks
+    if (upper.includes(" GLOBAL")) return "GLOBAL";
+
+    return "Unknown";
+  };
 
   // ------- FETCH DATA WHEN DATE RANGE CHANGES -------
   useEffect(() => {
@@ -68,7 +93,7 @@ export default function DashboardVoluumAssistant() {
     fetchData();
   }, [selectedDateRange]);
 
-  // ------- DERIVED DATA: SOURCES + FILTERED CAMPAIGNS -------
+  // ------- DERIVED DATA: SOURCES + COUNTRIES + FILTERED CAMPAIGNS -------
   const trafficSources = useMemo(() => {
     const set = new Set<string>();
     campaigns.forEach((c) => {
@@ -78,10 +103,29 @@ export default function DashboardVoluumAssistant() {
     return ["All sources", ...list];
   }, [campaigns]);
 
+  const countries = useMemo(() => {
+    const set = new Set<string>();
+    campaigns.forEach((c) => {
+      const country = inferCountryFromName(c.name);
+      set.add(country);
+    });
+    const list = Array.from(set).sort();
+    return ["All countries", ...list];
+  }, [campaigns]);
+
   const filteredCampaigns = useMemo(() => {
-    if (selectedSource === "All sources") return campaigns;
-    return campaigns.filter((c) => c.trafficSource === selectedSource);
-  }, [campaigns, selectedSource]);
+    return campaigns.filter((c) => {
+      const matchSource =
+        selectedSource === "All sources" ||
+        c.trafficSource === selectedSource;
+
+      const country = inferCountryFromName(c.name);
+      const matchCountry =
+        selectedCountry === "All countries" || country === selectedCountry;
+
+      return matchSource && matchCountry;
+    });
+  }, [campaigns, selectedSource, selectedCountry]);
 
   // ------- INSIGHTS: BEST, WORST, LOSERS TO CUT -------
   useEffect(() => {
@@ -89,7 +133,7 @@ export default function DashboardVoluumAssistant() {
 
     if (!filteredCampaigns.length) {
       list.push(
-        "No campaign data for this date range and traffic source selection."
+        "No campaign data for this date range, traffic source, and country selection."
       );
       setInsights(list);
       return;
@@ -138,7 +182,7 @@ export default function DashboardVoluumAssistant() {
     }
 
     setInsights(list);
-  }, [filteredCampaigns, selectedDateRange, selectedSource]);
+  }, [filteredCampaigns, selectedDateRange, selectedSource, selectedCountry]);
 
   const labelForRange: Record<DateRangeKey, string> = {
     today: "Today",
@@ -215,6 +259,22 @@ export default function DashboardVoluumAssistant() {
               </select>
             </div>
 
+            {/* Country select */}
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] text-slate-400">Country:</span>
+              <select
+                className="bg-slate-900 border border-slate-700 text-[11px] rounded-full px-3 py-1.5"
+                value={selectedCountry}
+                onChange={(e) => setSelectedCountry(e.target.value)}
+              >
+                {countries.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </div>
+
             {/* Status messages */}
             <div className="flex items-center gap-3 text-[11px] ml-auto">
               {loading && (
@@ -257,7 +317,7 @@ export default function DashboardVoluumAssistant() {
               <h2 className="text-sm font-semibold">Campaign performance</h2>
               <span className="text-[10px] text-slate-500">
                 Range: {labelForRange[selectedDateRange]} • Source:{" "}
-                {selectedSource}
+                {selectedSource} • Country: {selectedCountry}
               </span>
             </div>
             <div className="overflow-x-auto">
@@ -265,6 +325,7 @@ export default function DashboardVoluumAssistant() {
                 <thead className="border-b border-slate-800 text-slate-400 text-[10px] uppercase">
                   <tr>
                     <th className="text-left px-2 py-2">Campaign</th>
+                    <th className="text-left px-2 py-2">Country (guessed)</th>
                     <th className="text-right px-2 py-2">Visits</th>
                     <th className="text-right px-2 py-2">Signups</th>
                     <th className="text-right px-2 py-2">Deposits</th>
@@ -276,64 +337,68 @@ export default function DashboardVoluumAssistant() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCampaigns.map((c) => (
-                    <tr
-                      key={c.id}
-                      className="border-b border-slate-800/60"
-                    >
-                      <td className="px-2 py-2">
-                        <div className="max-w-xs">
-                          <div className="font-medium text-[11px] truncate">
+                  {filteredCampaigns.map((c) => {
+                    const country = inferCountryFromName(c.name);
+                    return (
+                      <tr
+                        key={c.id}
+                        className="border-b border-slate-800/60 align-top"
+                      >
+                        <td className="px-2 py-2">
+                          {/* full name, no truncate, allow wrapping */}
+                          <div className="text-[11px] whitespace-normal">
                             {c.name}
                           </div>
-                          <div className="text-[10px] text-slate-500 truncate">
+                          <div className="text-[10px] text-slate-500">
                             {c.trafficSource}
                           </div>
-                        </div>
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        {c.visits.toLocaleString()}
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        {c.signups.toLocaleString()}
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        {c.deposits.toLocaleString()}
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        {c.deposits > 0 ? `$${c.cpa.toFixed(2)}` : "–"}
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        {c.signups > 0 ? `$${c.cpr.toFixed(2)}` : "–"}
-                      </td>
-                      <td className="px-2 py-2 text-right">
-                        ${c.revenue.toFixed(2)}
-                      </td>
-                      <td
-                        className={`px-2 py-2 text-right ${
-                          c.profit >= 0 ? "text-emerald-400" : "text-rose-400"
-                        }`}
-                      >
-                        {c.profit >= 0 ? "$" : "-$"}
-                        {Math.abs(c.profit).toFixed(2)}
-                      </td>
-                      <td
-                        className={`px-2 py-2 text-right ${
-                          c.roi >= 0 ? "text-emerald-400" : "text-rose-400"
-                        }`}
-                      >
-                        {c.roi.toFixed(1)}%
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-2 py-2 text-left text-[11px]">
+                          {country}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {c.visits.toLocaleString()}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {c.signups.toLocaleString()}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {c.deposits.toLocaleString()}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {c.deposits > 0 ? `$${c.cpa.toFixed(2)}` : "–"}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          {c.signups > 0 ? `$${c.cpr.toFixed(2)}` : "–"}
+                        </td>
+                        <td className="px-2 py-2 text-right">
+                          ${c.revenue.toFixed(2)}
+                        </td>
+                        <td
+                          className={`px-2 py-2 text-right ${
+                            c.profit >= 0 ? "text-emerald-400" : "text-rose-400"
+                          }`}
+                        >
+                          {c.profit >= 0 ? "$" : "-$"}
+                          {Math.abs(c.profit).toFixed(2)}
+                        </td>
+                        <td
+                          className={`px-2 py-2 text-right ${
+                            c.roi >= 0 ? "text-emerald-400" : "text-rose-400"
+                          }`}
+                        >
+                          {c.roi.toFixed(1)}%
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {filteredCampaigns.length === 0 && !loading && !error && (
                     <tr>
                       <td
                         className="px-2 py-4 text-center text-slate-500 text-[11px]"
-                        colSpan={9}
+                        colSpan={10}
                       >
-                        No campaign data available for this date range and
-                        traffic source.
+                        No campaign data available for this selection.
                       </td>
                     </tr>
                   )}
@@ -353,10 +418,8 @@ export default function DashboardVoluumAssistant() {
                 {labelForRange[selectedDateRange]}
               </span>{" "}
               –{" "}
-              <span className="font-semibold">
-                {selectedSource}
-              </span>
-              .
+              <span className="font-semibold">{selectedSource}</span> –{" "}
+              <span className="font-semibold">{selectedCountry}</span>.
             </p>
 
             <div className="flex-1 space-y-2 text-xs overflow-y-auto pr-1">
