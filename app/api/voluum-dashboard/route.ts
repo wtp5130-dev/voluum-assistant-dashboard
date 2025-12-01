@@ -1,18 +1,6 @@
 // app/api/voluum-dashboard/route.ts
 import { NextResponse } from "next/server";
 
-type VoluumRow = {
-  campaignName?: string;
-  trafficSourceName?: string;
-  visits?: number;
-  clicks?: number;
-  conversions?: number;
-  revenue?: number;
-  cost?: number;
-  profit?: number;
-  roi?: number;
-};
-
 type DashboardCampaign = {
   id: string;
   name: string;
@@ -25,9 +13,11 @@ type DashboardCampaign = {
   profit: number;
   roi: number;
   cost: number;
-  cpa: number;
-  cpr: number;
+  cpa: number; // CostPerSignup
+  cpr: number; // CPR
 };
+
+type DateRangeKey = "today" | "yesterday" | "last7days";
 
 export async function GET(request: Request) {
   const base = process.env.VOLUUM_API_BASE;
@@ -44,11 +34,10 @@ export async function GET(request: Request) {
     );
   }
 
-  // --- 1) Date range handling (simple presets) ---
+  // --- 1) Date range handling (same presets as UI) ---
   const { searchParams } = new URL(request.url);
   const dateRange =
-    (searchParams.get("dateRange") as "today" | "yesterday" | "last7days") ||
-    "last7days";
+    (searchParams.get("dateRange") as DateRangeKey | null) || "last7days";
 
   // End time = now, rounded down to the hour
   const to = new Date();
@@ -74,8 +63,8 @@ export async function GET(request: Request) {
   const fromIso = from.toISOString();
   const toIso = to.toISOString();
 
-  // --- 2) Get session token ---
-  const authUrl = `${base}/auth/access/session`;
+  // --- 2) Get session token (same as before) ---
+  const authUrl = `${base.replace(/\/$/, "")}/auth/access/session`;
 
   try {
     const authRes = await fetch(authUrl, {
@@ -109,12 +98,57 @@ export async function GET(request: Request) {
 
     const token = authJson.token as string;
 
-    // --- 3) Call /report grouped by campaign ---
-    const reportUrl = `${base}/report?from=${encodeURIComponent(
-      fromIso
-    )}&to=${encodeURIComponent(
-      toIso
-    )}&tz=UTC&groupBy=campaign&columns=visits,clicks,conversions,revenue,cost,profit,roi,campaignName,trafficSourceName`;
+    // --- 3) Build /report URL with the same style as your panel ---
+    // We mimic:
+    //  reportType=table
+    //  dateRange=custom-date-time
+    //  groupBy=campaign
+    //  conversionTimeMode=CONVERSION
+    //  column=... (multiple times)
+    const params = new URLSearchParams({
+      reportType: "table",
+      limit: "100",
+      dateRange: "custom-date-time",
+      from: fromIso,
+      to: toIso,
+      searchMode: "TEXT",
+      offset: "0",
+      include: "ACTIVE",
+      // currency isn't strictly needed to get values, but harmless:
+      currency: "MYR",
+      sort: "visits",
+      direction: "DESC",
+      groupBy: "campaign",
+      conversionTimeMode: "CONVERSION",
+      tz: "Asia/Singapore",
+    });
+
+    const columns = [
+      "profit",
+      "ConversionRate",
+      "CostPerSignup",
+      "CPR",
+      "CostPerFTD",
+      "customConversions1",
+      "customConversions2",
+      "customConversions3",
+      "customRevenue1",
+      "customRevenue2",
+      "customRevenue3",
+      "campaignName",
+      "trafficSourceName",
+      "costSources",
+      "cost",
+      "visits",
+      "conversions",
+      "roi",
+      "revenue",
+      "clicks",
+    ];
+
+    columns.forEach((col) => params.append("column", col));
+
+    const reportUrl = `${base.replace(/\/$/, "")}/report?${params.toString()}`;
 
     const reportRes = await fetch(reportUrl, {
       method: "GET",
@@ -146,30 +180,36 @@ export async function GET(request: Request) {
       );
     }
 
-    // --- 4) Map Voluum rows -> our simplified shape ---
-    const rows: VoluumRow[] = reportJson.rows || reportJson.data || [];
+    // --- 4) Map rows => our campaign shape ---
+    const rows: any[] = reportJson.rows || reportJson.data || [];
 
     const campaigns: DashboardCampaign[] = rows.map((row, index) => {
+      const visits = Number(row.visits ?? 0);
+      const conversions = Number(row.conversions ?? 0);
       const revenue = Number(row.revenue ?? 0);
       const cost = Number(row.cost ?? 0);
-      const conversions = Number(row.conversions ?? 0);
+
+      // Profit / ROI
       const profit = Number(
         typeof row.profit === "number" ? row.profit : revenue - cost
       );
       const roi = Number(row.roi ?? (cost !== 0 ? (profit / cost) * 100 : 0));
 
-      // For now: treat conversions as both signups & deposits
-      const signups = conversions;
-      const deposits = conversions;
+      // Custom conversions:
+      //  - Assume customConversions1 = signups
+      //  - Assume customConversions2 = deposits / FTD
+      const signups = Number(row.customConversions1 ?? 0);
+      const deposits = Number(row.customConversions2 ?? 0);
 
-      const cpa = deposits > 0 ? cost / deposits : 0;
-      const cpr = signups > 0 ? cost / signups : 0;
+      // CPA / CPR directly from Voluum columns if present
+      const cpa = Number(row.CostPerSignup ?? 0);
+      const cpr = Number(row.CPR ?? 0);
 
       return {
         id: row.campaignName || `row-${index}`,
         name: row.campaignName || "Unknown campaign",
         trafficSource: row.trafficSourceName || "Unknown source",
-        visits: Number(row.visits ?? row.clicks ?? 0),
+        visits,
         conversions,
         signups,
         deposits,
@@ -182,7 +222,7 @@ export async function GET(request: Request) {
       };
     });
 
-    // --- 5) Build KPI summary (also using signups/deposits/CPA/CPR) ---
+    // --- 5) Build KPI summary from campaigns ---
     const totals = campaigns.reduce(
       (acc, c) => {
         acc.visits += c.visits;
