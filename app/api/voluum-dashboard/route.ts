@@ -28,22 +28,23 @@ export async function GET(request: Request) {
     );
   }
 
-  // --- 1) Date range handling (VERY SIMPLE) ---
+  // --- 1) Date range handling (simple presets) ---
   const { searchParams } = new URL(request.url);
-  const dateRange = searchParams.get("dateRange") || "last7days";
+  const dateRange =
+    (searchParams.get("dateRange") as "today" | "yesterday" | "last7days") ||
+    "last7days";
 
-  // Start from "now"
+  // End time = now, rounded down to the hour
   const to = new Date();
-  // ✅ round TO to the nearest hour (down)
   to.setUTCMinutes(0, 0, 0);
 
-  const from = new Date(to); // copy
+  const from = new Date(to); // copy base
 
   if (dateRange === "today") {
-    // from = today at 00:00
+    // today 00:00 -> now
     from.setUTCHours(0, 0, 0, 0);
   } else if (dateRange === "yesterday") {
-    // from = yesterday at 00:00, to = yesterday at 23:00 (approx)
+    // yesterday 00:00 -> yesterday 23:00
     from.setUTCDate(from.getUTCDate() - 1);
     from.setUTCHours(0, 0, 0, 0);
     to.setUTCDate(from.getUTCDate());
@@ -51,12 +52,11 @@ export async function GET(request: Request) {
   } else {
     // default: last 7 days (to current rounded hour)
     from.setUTCDate(from.getUTCDate() - 7);
-    // also make sure minutes/seconds are 0
     from.setUTCMinutes(0, 0, 0);
   }
 
   const fromIso = from.toISOString(); // e.g. 2025-11-24T03:00:00.000Z
-  const toIso = to.toISOString();     // e.g. 2025-12-01T03:00:00.000Z
+  const toIso = to.toISOString(); // e.g. 2025-12-01T03:00:00.000Z
 
   // --- 2) Get session token ---
   const authUrl = `${base}/auth/access/session`;
@@ -150,33 +150,55 @@ export async function GET(request: Request) {
         revenue,
         profit,
         roi,
-      };
+        // keep cost in case you want to show it per-campaign later
+        _cost: cost,
+      } as any;
     });
 
-    // --- 5) Build KPI summary ---
+    // --- 5) Build KPI summary, including signup/deposit/CPA/CPR ---
+
     const totals = campaigns.reduce(
-      (acc, c) => {
+      (acc, c: any) => {
         acc.visits += c.visits;
         acc.conversions += c.conversions;
         acc.revenue += c.revenue;
         acc.profit += c.profit;
+        acc.cost += typeof c._cost === "number" ? c._cost : 0;
         return acc;
       },
-      { visits: 0, conversions: 0, revenue: 0, profit: 0 }
+      { visits: 0, conversions: 0, revenue: 0, profit: 0, cost: 0 }
     );
+
+    // For now:
+    // - treat "signups" as total conversions
+    // - treat "deposits" also as conversions (placeholder)
+    const signupCount = totals.conversions;
+    const depositCount = totals.conversions;
+
+    const totalCost = totals.cost;
+
+    const cpa = depositCount > 0 ? totalCost / depositCount : 0; // cost per deposit
+    const cpr = signupCount > 0 ? totalCost / signupCount : 0; // cost per registration
 
     const kpis = [
       {
-        id: "clicks",
+        id: "visits",
         label: "Visits",
         value: totals.visits.toLocaleString(),
         delta: "–",
         positive: true,
       },
       {
-        id: "conversions",
-        label: "Conversions",
-        value: totals.conversions.toLocaleString(),
+        id: "signups",
+        label: "Signups",
+        value: signupCount.toLocaleString(),
+        delta: "–",
+        positive: true,
+      },
+      {
+        id: "deposits",
+        label: "Deposits",
+        value: depositCount.toLocaleString(),
         delta: "–",
         positive: true,
       },
@@ -193,6 +215,30 @@ export async function GET(request: Request) {
         value: `$${totals.profit.toFixed(2)}`,
         delta: "–",
         positive: totals.profit >= 0,
+      },
+      {
+        id: "cpa",
+        label: "CPA (per deposit)",
+        value:
+          depositCount > 0
+            ? `$${cpa.toFixed(2)}`
+            : totals.cost > 0
+            ? "No deposits"
+            : "$0.00",
+        delta: "–",
+        positive: cpa > 0 ? cpa < 1000000 : true, // dummy condition, adjust as you like
+      },
+      {
+        id: "cpr",
+        label: "CPR (per signup)",
+        value:
+          signupCount > 0
+            ? `$${cpr.toFixed(2)}`
+            : totals.cost > 0
+            ? "No signups"
+            : "$0.00",
+        delta: "–",
+        positive: cpr > 0 ? cpr < 1000000 : true,
       },
     ];
 
