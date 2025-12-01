@@ -13,6 +13,22 @@ type VoluumRow = {
   roi?: number;
 };
 
+type DashboardCampaign = {
+  id: string;
+  name: string;
+  trafficSource: string;
+  visits: number;
+  conversions: number;
+  signups: number;
+  deposits: number;
+  revenue: number;
+  profit: number;
+  roi: number;
+  cost: number;
+  cpa: number;
+  cpr: number;
+};
+
 export async function GET(request: Request) {
   const base = process.env.VOLUUM_API_BASE;
   const accessId = process.env.VOLUUM_ACCESS_ID;
@@ -55,8 +71,8 @@ export async function GET(request: Request) {
     from.setUTCMinutes(0, 0, 0);
   }
 
-  const fromIso = from.toISOString(); // e.g. 2025-11-24T03:00:00.000Z
-  const toIso = to.toISOString(); // e.g. 2025-12-01T03:00:00.000Z
+  const fromIso = from.toISOString();
+  const toIso = to.toISOString();
 
   // --- 2) Get session token ---
   const authUrl = `${base}/auth/access/session`;
@@ -133,52 +149,68 @@ export async function GET(request: Request) {
     // --- 4) Map Voluum rows -> our simplified shape ---
     const rows: VoluumRow[] = reportJson.rows || reportJson.data || [];
 
-    const campaigns = rows.map((row, index) => {
+    const campaigns: DashboardCampaign[] = rows.map((row, index) => {
       const revenue = Number(row.revenue ?? 0);
       const cost = Number(row.cost ?? 0);
+      const conversions = Number(row.conversions ?? 0);
       const profit = Number(
         typeof row.profit === "number" ? row.profit : revenue - cost
       );
       const roi = Number(row.roi ?? (cost !== 0 ? (profit / cost) * 100 : 0));
+
+      // For now: treat conversions as both signups & deposits
+      const signups = conversions;
+      const deposits = conversions;
+
+      const cpa = deposits > 0 ? cost / deposits : 0;
+      const cpr = signups > 0 ? cost / signups : 0;
 
       return {
         id: row.campaignName || `row-${index}`,
         name: row.campaignName || "Unknown campaign",
         trafficSource: row.trafficSourceName || "Unknown source",
         visits: Number(row.visits ?? row.clicks ?? 0),
-        conversions: Number(row.conversions ?? 0),
+        conversions,
+        signups,
+        deposits,
         revenue,
         profit,
         roi,
-        // keep cost in case you want to show it per-campaign later
-        _cost: cost,
-      } as any;
+        cost,
+        cpa,
+        cpr,
+      };
     });
 
-    // --- 5) Build KPI summary, including signup/deposit/CPA/CPR ---
-
+    // --- 5) Build KPI summary (also using signups/deposits/CPA/CPR) ---
     const totals = campaigns.reduce(
-      (acc, c: any) => {
+      (acc, c) => {
         acc.visits += c.visits;
         acc.conversions += c.conversions;
         acc.revenue += c.revenue;
         acc.profit += c.profit;
-        acc.cost += typeof c._cost === "number" ? c._cost : 0;
+        acc.cost += c.cost;
+        acc.signups += c.signups;
+        acc.deposits += c.deposits;
         return acc;
       },
-      { visits: 0, conversions: 0, revenue: 0, profit: 0, cost: 0 }
+      {
+        visits: 0,
+        conversions: 0,
+        revenue: 0,
+        profit: 0,
+        cost: 0,
+        signups: 0,
+        deposits: 0,
+      }
     );
 
-    // For now:
-    // - treat "signups" as total conversions
-    // - treat "deposits" also as conversions (placeholder)
-    const signupCount = totals.conversions;
-    const depositCount = totals.conversions;
-
+    const signupCount = totals.signups;
+    const depositCount = totals.deposits;
     const totalCost = totals.cost;
 
-    const cpa = depositCount > 0 ? totalCost / depositCount : 0; // cost per deposit
-    const cpr = signupCount > 0 ? totalCost / signupCount : 0; // cost per registration
+    const cpaTotal = depositCount > 0 ? totalCost / depositCount : 0;
+    const cprTotal = signupCount > 0 ? totalCost / signupCount : 0;
 
     const kpis = [
       {
@@ -221,24 +253,24 @@ export async function GET(request: Request) {
         label: "CPA (per deposit)",
         value:
           depositCount > 0
-            ? `$${cpa.toFixed(2)}`
-            : totals.cost > 0
+            ? `$${cpaTotal.toFixed(2)}`
+            : totalCost > 0
             ? "No deposits"
             : "$0.00",
         delta: "–",
-        positive: cpa > 0 ? cpa < 1000000 : true, // dummy condition, adjust as you like
+        positive: cpaTotal > 0 ? cpaTotal < 1000000 : true,
       },
       {
         id: "cpr",
         label: "CPR (per signup)",
         value:
           signupCount > 0
-            ? `$${cpr.toFixed(2)}`
-            : totals.cost > 0
+            ? `$${cprTotal.toFixed(2)}`
+            : totalCost > 0
             ? "No signups"
             : "$0.00",
         delta: "–",
-        positive: cpr > 0 ? cpr < 1000000 : true,
+        positive: cprTotal > 0 ? cprTotal < 1000000 : true,
       },
     ];
 
