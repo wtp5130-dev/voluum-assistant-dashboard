@@ -61,7 +61,13 @@ type DashboardData = {
   campaigns: Campaign[];
 };
 
-type DateRangeKey = "today" | "yesterday" | "last7days" | "last30days";
+// 🔹 Now includes "custom"
+type DateRangeKey =
+  | "today"
+  | "yesterday"
+  | "last7days"
+  | "last30days"
+  | "custom";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -74,7 +80,6 @@ type ChatMessage = {
  * ===========
  */
 
-// Change these if your routes are different
 const DASHBOARD_API_URL = "/api/voluum-dashboard";
 const CHAT_API_URL = "/api/chat";
 
@@ -83,6 +88,7 @@ const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
   { key: "yesterday", label: "Yesterday" },
   { key: "last7days", label: "Last 7 days" },
   { key: "last30days", label: "Last 30 days" },
+  { key: "custom", label: "Custom…" },
 ];
 
 /**
@@ -102,6 +108,23 @@ function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
 }
 
+function formatDateYMD(date: Date): string {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function getTodayYMD(): string {
+  return formatDateYMD(new Date());
+}
+
+function getDaysAgoYMD(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return formatDateYMD(d);
+}
+
 /**
  * ===========
  * Main page
@@ -114,7 +137,13 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [dateRange, setDateRange] = useState<DateRangeKey>("last7days");
-  const [trafficSourceFilter, setTrafficSourceFilter] = useState<string>("all");
+
+  // 🔹 Custom date state (default to last 7 days)
+  const [fromDate, setFromDate] = useState<string>(() => getDaysAgoYMD(7));
+  const [toDate, setToDate] = useState<string>(() => getTodayYMD());
+
+  const [trafficSourceFilter, setTrafficSourceFilter] =
+    useState<string>("all");
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(
     null
   );
@@ -127,22 +156,39 @@ export default function DashboardPage() {
         "Hey! I can help you analyze campaigns, zones, and creatives. What do you want to look at?",
     },
   ]);
-
   const [chatInput, setChatInput] = useState<string>("");
   const [chatLoading, setChatLoading] = useState<boolean>(false);
 
   /**
-   * Fetch dashboard data whenever dateRange changes
+   * Fetch dashboard data whenever dateRange or custom dates change
    */
   useEffect(() => {
+    // If custom but dates are missing, don't fetch yet
+    if (dateRange === "custom" && (!fromDate || !toDate)) {
+      return;
+    }
+
     const fetchData = async () => {
       try {
         setLoading(true);
         setError(null);
 
-        const url = `${DASHBOARD_API_URL}?dateRange=${encodeURIComponent(
-          dateRange
-        )}`;
+        const params = new URLSearchParams();
+
+        if (dateRange === "custom") {
+          // Ensure from <= to (swap if user picks reversed)
+          let from = fromDate;
+          let to = toDate;
+          if (new Date(from) > new Date(to)) {
+            [from, to] = [to, from];
+          }
+          params.set("from", from);
+          params.set("to", to);
+        } else {
+          params.set("dateRange", dateRange);
+        }
+
+        const url = `${DASHBOARD_API_URL}?${params.toString()}`;
         const res = await fetch(url);
 
         if (!res.ok) {
@@ -152,7 +198,6 @@ export default function DashboardPage() {
         const json = (await res.json()) as DashboardData;
         setData(json);
 
-        // If current selection is not in filtered list, pick first
         if (json.campaigns && json.campaigns.length > 0) {
           setSelectedCampaignId((prev) => {
             const stillExists = json.campaigns.some((c) => c.id === prev);
@@ -173,7 +218,7 @@ export default function DashboardPage() {
     };
 
     fetchData();
-  }, [dateRange]);
+  }, [dateRange, fromDate, toDate]);
 
   /**
    * Traffic source options
@@ -231,7 +276,6 @@ export default function DashboardPage() {
 
     const raw = selectedCampaign.zones ?? [];
 
-    // Keep all zones that have some metrics; drop only totally empty placeholder rows
     return raw.filter((z) => {
       const hasMetrics =
         (z.visits ?? 0) > 0 ||
@@ -248,7 +292,6 @@ export default function DashboardPage() {
 
     const raw = selectedCampaign.creatives ?? [];
 
-    // Remove only totally empty placeholder rows
     return raw.filter((c) => {
       const hasMetrics =
         (c.visits ?? 0) > 0 ||
@@ -333,7 +376,8 @@ export default function DashboardPage() {
           <p className="text-sm opacity-80 mb-4">{error}</p>
           <p className="text-xs opacity-60">
             Check your API route (`{DASHBOARD_API_URL}`) and make sure it
-            accepts a <code>dateRange</code> query param.
+            accepts either <code>dateRange</code> or <code>from/to</code>{" "}
+            query params.
           </p>
         </div>
       </main>
@@ -351,7 +395,7 @@ export default function DashboardPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6 space-y-6">
       {/* Header + Controls */}
-      <header className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+      <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold">
             Voluum Assistant
@@ -362,45 +406,77 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <div className="flex flex-wrap gap-3 items-center">
-          {/* Date range selector */}
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] uppercase tracking-wide text-slate-500">
-              Date Range
-            </label>
-            <select
-              value={dateRange}
-              onChange={(e) =>
-                setDateRange(e.target.value as DateRangeKey)
-              }
-              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
-            >
-              {DATE_RANGE_OPTIONS.map((opt) => (
-                <option key={opt.key} value={opt.key}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
+        <div className="flex flex-col gap-3 items-stretch md:items-end">
+          <div className="flex flex-wrap gap-3 items-center justify-end">
+            {/* Date range selector */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wide text-slate-500">
+                Date Range
+              </label>
+              <select
+                value={dateRange}
+                onChange={(e) =>
+                  setDateRange(e.target.value as DateRangeKey)
+                }
+                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs min-w-[140px]"
+              >
+                {DATE_RANGE_OPTIONS.map((opt) => (
+                  <option key={opt.key} value={opt.key}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Traffic source selector */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wide text-slate-500">
+                Traffic Source
+              </label>
+              <select
+                value={trafficSourceFilter}
+                onChange={(e) =>
+                  setTrafficSourceFilter(e.target.value)
+                }
+                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs min-w-[160px]"
+              >
+                <option value="all">All sources</option>
+                {trafficSources.map((src) => (
+                  <option key={src} value={src}>
+                    {src}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
-          {/* Traffic source selector */}
-          <div className="flex flex-col gap-1">
-            <label className="text-[10px] uppercase tracking-wide text-slate-500">
-              Traffic Source
-            </label>
-            <select
-              value={trafficSourceFilter}
-              onChange={(e) => setTrafficSourceFilter(e.target.value)}
-              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs min-w-[160px]"
-            >
-              <option value="all">All sources</option>
-              {trafficSources.map((src) => (
-                <option key={src} value={src}>
-                  {src}
-                </option>
-              ))}
-            </select>
-          </div>
+          {/* Custom date pickers */}
+          {dateRange === "custom" && (
+            <div className="flex flex-wrap gap-3 items-end justify-end">
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase tracking-wide text-slate-500">
+                  From
+                </label>
+                <input
+                  type="date"
+                  value={fromDate}
+                  onChange={(e) => setFromDate(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <label className="text-[10px] uppercase tracking-wide text-slate-500">
+                  To
+                </label>
+                <input
+                  type="date"
+                  value={toDate}
+                  onChange={(e) => setToDate(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+                />
+              </div>
+            </div>
+          )}
         </div>
       </header>
 
@@ -719,7 +795,7 @@ export default function DashboardPage() {
                               </td>
                             </tr>
                           );
-                        })}
+                        ))}
                       </tbody>
                     </table>
                   </div>
