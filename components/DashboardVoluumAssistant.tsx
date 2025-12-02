@@ -24,6 +24,23 @@ type Campaign = {
   cost: number;
   cpa: number;
   cpr: number;
+  zones: {
+    id: string;
+    visits: number;
+    conversions: number;
+    revenue: number;
+    cost: number;
+    roi: number;
+  }[];
+  creatives: {
+    id: string;
+    name?: string | null;
+    visits: number;
+    conversions: number;
+    revenue: number;
+    cost: number;
+    roi: number;
+  }[];
 };
 
 type DateRangeKey = "today" | "yesterday" | "last7days";
@@ -51,6 +68,18 @@ export default function DashboardVoluumAssistant() {
   const [chatInput, setChatInput] = useState<string>("");
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [chatLoading, setChatLoading] = useState<boolean>(false);
+
+  // Expanded campaign rows (for zones + creatives)
+  const [expandedCampaigns, setExpandedCampaigns] = useState<
+    Record<string, boolean>
+  >({});
+
+  const toggleCampaignExpanded = (id: string) => {
+    setExpandedCampaigns((prev) => ({
+      ...prev,
+      [id]: !prev[id],
+    }));
+  };
 
   // ------- helper: guess country from campaign name -------
   const inferCountryFromName = (name: string): string => {
@@ -137,10 +166,29 @@ export default function DashboardVoluumAssistant() {
             cost: Number(c.cost ?? 0),
             cpa: Number(c.cpa ?? c.CostPerSignup ?? 0),
             cpr: Number(c.cpr ?? c.CPR ?? 0),
+            zones: (c.zones || []).map((z: any) => ({
+              id: String(z.id ?? ""),
+              visits: Number(z.visits ?? 0),
+              conversions: Number(z.conversions ?? 0),
+              revenue: Number(z.revenue ?? 0),
+              cost: Number(z.cost ?? 0),
+              roi: Number(z.roi ?? 0),
+            })),
+            creatives: (c.creatives || []).map((cr: any) => ({
+              id: String(cr.id ?? ""),
+              name: cr.name ?? null,
+              visits: Number(cr.visits ?? 0),
+              conversions: Number(cr.conversions ?? 0),
+              revenue: Number(cr.revenue ?? 0),
+              cost: Number(cr.cost ?? 0),
+              roi: Number(cr.roi ?? 0),
+            })),
           })
         );
 
         setCampaigns(normalizedCampaigns);
+        // reset expanded state when campaigns change
+        setExpandedCampaigns({});
       } catch (e: any) {
         console.error(e);
         setError(e.message || "Unknown error");
@@ -344,29 +392,25 @@ export default function DashboardVoluumAssistant() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] text-slate-400">Date range:</span>
               <div className="flex gap-1">
-                {(
-                  [
-                    "today",
-                    "yesterday",
-                    "last7days",
-                  ] as DateRangeKey[]
-                ).map((key) => {
-                  const isActive = selectedDateRange === key;
-                  return (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => setSelectedDateRange(key)}
-                      className={`text-[11px] px-3 py-1.5 rounded-full border transition ${
-                        isActive
-                          ? "bg-sky-500 text-slate-950 border-sky-400"
-                          : "bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500"
-                      }`}
-                    >
-                      {labelForRange[key]}
-                    </button>
-                  );
-                })}
+                {(["today", "yesterday", "last7days"] as DateRangeKey[]).map(
+                  (key) => {
+                    const isActive = selectedDateRange === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSelectedDateRange(key)}
+                        className={`text-[11px] px-3 py-1.5 rounded-full border transition ${
+                          isActive
+                            ? "bg-sky-500 text-slate-950 border-sky-400"
+                            : "bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500"
+                        }`}
+                      >
+                        {labelForRange[key]}
+                      </button>
+                    );
+                  }
+                )}
               </div>
             </div>
 
@@ -468,65 +512,263 @@ export default function DashboardVoluumAssistant() {
                 <tbody>
                   {filteredCampaigns.map((c) => {
                     const country = inferCountryFromName(c.name);
+                    const isExpanded = !!expandedCampaigns[c.id];
+
+                    const zonesSorted = [...c.zones].sort(
+                      (a, b) => b.cost - a.cost
+                    );
+                    const creativesSorted = [...c.creatives].sort(
+                      (a, b) => b.cost - a.cost
+                    );
+
                     return (
-                      <tr
-                        key={c.id}
-                        className="border-b border-slate-800/60 align-top"
-                      >
-                        <td className="px-2 py-2">
-                          {/* full name, allow wrapping */}
-                          <div className="text-[11px] whitespace-normal">
-                            {c.name}
-                          </div>
-                          <div className="text-[10px] text-slate-500">
-                            {c.trafficSource}
-                          </div>
-                        </td>
-                        <td className="px-2 py-2 text-left text-[11px]">
-                          {country}
-                        </td>
-                        <td className="px-2 py-2 text-right">
-                          {Number(c.visits).toLocaleString()}
-                        </td>
-                        <td className="px-2 py-2 text-right">
-                          {Number(c.signups).toLocaleString()}
-                        </td>
-                        <td className="px-2 py-2 text-right">
-                          {Number(c.deposits).toLocaleString()}
-                        </td>
-                        <td className="px-2 py-2 text-right">
-                          {Number(c.deposits) > 0
-                            ? `$${Number(c.cpa).toFixed(2)}`
-                            : "–"}
-                        </td>
-                        <td className="px-2 py-2 text-right">
-                          {Number(c.signups) > 0
-                            ? `$${Number(c.cpr).toFixed(2)}`
-                            : "–"}
-                        </td>
-                        <td className="px-2 py-2 text-right">
-                          ${Number(c.revenue).toFixed(2)}
-                        </td>
-                        <td
-                          className={`px-2 py-2 text-right ${
-                            Number(c.profit) >= 0
-                              ? "text-emerald-400"
-                              : "text-rose-400"
-                          }`}
-                        >
-                          {Number(c.profit) >= 0 ? "$" : "-$"}
-                          {Math.abs(Number(c.profit)).toFixed(2)}
-                        </td>
-                        <td
-                          className={`px-2 py-2 text-right ${
-                            Number(c.roi) >= 0
-                              ? "text-emerald-400"
-                              : "text-rose-400"
-                          }`}
-                        >
-                          {Number(c.roi).toFixed(1)}%
-                        </td>
-                      </tr>
+                      <React.Fragment key={c.id}>
+                        {/* Main campaign row */}
+                        <tr className="border-b border-slate-800/60 align-top">
+                          <td className="px-2 py-2">
+                            <div className="flex items-start gap-2">
+                              <button
+                                type="button"
+                                onClick={() => toggleCampaignExpanded(c.id)}
+                                className="mt-0.5 inline-flex items-center justify-center w-5 h-5 rounded-full border border-slate-700 bg-slate-900 text-[10px] text-slate-200 hover:border-slate-500"
+                                aria-label={
+                                  isExpanded
+                                    ? "Collapse campaign details"
+                                    : "Expand campaign details"
+                                }
+                              >
+                                {isExpanded ? "▼" : "▶"}
+                              </button>
+                              <div>
+                                <div className="text-[11px] whitespace-normal">
+                                  {c.name}
+                                </div>
+                                <div className="text-[10px] text-slate-500">
+                                  {c.trafficSource}
+                                </div>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-2 py-2 text-left text-[11px]">
+                            {country}
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            {Number(c.visits).toLocaleString()}
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            {Number(c.signups).toLocaleString()}
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            {Number(c.deposits).toLocaleString()}
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            {Number(c.deposits) > 0
+                              ? `$${Number(c.cpa).toFixed(2)}`
+                              : "–"}
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            {Number(c.signups) > 0
+                              ? `$${Number(c.cpr).toFixed(2)}`
+                              : "–"}
+                          </td>
+                          <td className="px-2 py-2 text-right">
+                            ${Number(c.revenue).toFixed(2)}
+                          </td>
+                          <td
+                            className={`px-2 py-2 text-right ${
+                              Number(c.profit) >= 0
+                                ? "text-emerald-400"
+                                : "text-rose-400"
+                            }`}
+                          >
+                            {Number(c.profit) >= 0 ? "$" : "-$"}
+                            {Math.abs(Number(c.profit)).toFixed(2)}
+                          </td>
+                          <td
+                            className={`px-2 py-2 text-right ${
+                              Number(c.roi) >= 0
+                                ? "text-emerald-400"
+                                : "text-rose-400"
+                            }`}
+                          >
+                            {Number(c.roi).toFixed(1)}%
+                          </td>
+                        </tr>
+
+                        {/* Expanded details row */}
+                        {isExpanded && (
+                          <tr className="border-b border-slate-800/60">
+                            <td
+                              colSpan={10}
+                              className="bg-slate-950 px-3 py-3"
+                            >
+                              <div className="grid gap-3 md:grid-cols-2">
+                                {/* Zones */}
+                                <div>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <h3 className="text-[11px] font-semibold text-slate-200">
+                                      Zones breakdown
+                                    </h3>
+                                    <span className="text-[10px] text-slate-500">
+                                      {zonesSorted.length} zones
+                                    </span>
+                                  </div>
+                                  {zonesSorted.length === 0 ? (
+                                    <div className="text-[11px] text-slate-500 bg-slate-900/70 rounded-xl px-3 py-2">
+                                      No zone data for this campaign in this
+                                      range.
+                                    </div>
+                                  ) : (
+                                    <div className="border border-slate-800 rounded-xl overflow-hidden">
+                                      <div className="max-h-48 overflow-y-auto">
+                                        <table className="w-full text-[10px]">
+                                          <thead className="bg-slate-900 text-slate-400 uppercase">
+                                            <tr>
+                                              <th className="text-left px-2 py-1">
+                                                Zone
+                                              </th>
+                                              <th className="text-right px-2 py-1">
+                                                Visits
+                                              </th>
+                                              <th className="text-right px-2 py-1">
+                                                Conv
+                                              </th>
+                                              <th className="text-right px-2 py-1">
+                                                Rev
+                                              </th>
+                                              <th className="text-right px-2 py-1">
+                                                Cost
+                                              </th>
+                                              <th className="text-right px-2 py-1">
+                                                ROI%
+                                              </th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {zonesSorted.map((z) => (
+                                              <tr
+                                                key={`${c.id}-zone-${z.id}`}
+                                                className="border-t border-slate-800/60"
+                                              >
+                                                <td className="px-2 py-1 text-left">
+                                                  {z.id || "(no id)"}
+                                                </td>
+                                                <td className="px-2 py-1 text-right">
+                                                  {z.visits.toLocaleString()}
+                                                </td>
+                                                <td className="px-2 py-1 text-right">
+                                                  {z.conversions.toLocaleString()}
+                                                </td>
+                                                <td className="px-2 py-1 text-right">
+                                                  ${z.revenue.toFixed(2)}
+                                                </td>
+                                                <td className="px-2 py-1 text-right">
+                                                  ${z.cost.toFixed(2)}
+                                                </td>
+                                                <td
+                                                  className={`px-2 py-1 text-right ${
+                                                    z.roi >= 0
+                                                      ? "text-emerald-400"
+                                                      : "text-rose-400"
+                                                  }`}
+                                                >
+                                                  {z.roi.toFixed(1)}%
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Creatives */}
+                                <div>
+                                  <div className="flex items-center justify-between mb-1">
+                                    <h3 className="text-[11px] font-semibold text-slate-200">
+                                      Creatives breakdown
+                                    </h3>
+                                    <span className="text-[10px] text-slate-500">
+                                      {creativesSorted.length} creatives
+                                    </span>
+                                  </div>
+                                  {creativesSorted.length === 0 ? (
+                                    <div className="text-[11px] text-slate-500 bg-slate-900/70 rounded-xl px-3 py-2">
+                                      No creative data for this campaign in this
+                                      range.
+                                    </div>
+                                  ) : (
+                                    <div className="border border-slate-800 rounded-xl overflow-hidden">
+                                      <div className="max-h-48 overflow-y-auto">
+                                        <table className="w-full text-[10px]">
+                                          <thead className="bg-slate-900 text-slate-400 uppercase">
+                                            <tr>
+                                              <th className="text-left px-2 py-1">
+                                                Creative
+                                              </th>
+                                              <th className="text-right px-2 py-1">
+                                                Visits
+                                              </th>
+                                              <th className="text-right px-2 py-1">
+                                                Conv
+                                              </th>
+                                              <th className="text-right px-2 py-1">
+                                                Rev
+                                              </th>
+                                              <th className="text-right px-2 py-1">
+                                                Cost
+                                              </th>
+                                              <th className="text-right px-2 py-1">
+                                                ROI%
+                                              </th>
+                                            </tr>
+                                          </thead>
+                                          <tbody>
+                                            {creativesSorted.map((cr) => (
+                                              <tr
+                                                key={`${c.id}-creative-${cr.id}`}
+                                                className="border-t border-slate-800/60"
+                                              >
+                                                <td className="px-2 py-1 text-left">
+                                                  {cr.name ||
+                                                    cr.id ||
+                                                    "(no name)"}
+                                                </td>
+                                                <td className="px-2 py-1 text-right">
+                                                  {cr.visits.toLocaleString()}
+                                                </td>
+                                                <td className="px-2 py-1 text-right">
+                                                  {cr.conversions.toLocaleString()}
+                                                </td>
+                                                <td className="px-2 py-1 text-right">
+                                                  ${cr.revenue.toFixed(2)}
+                                                </td>
+                                                <td className="px-2 py-1 text-right">
+                                                  ${cr.cost.toFixed(2)}
+                                                </td>
+                                                <td
+                                                  className={`px-2 py-1 text-right ${
+                                                    cr.roi >= 0
+                                                      ? "text-emerald-400"
+                                                      : "text-rose-400"
+                                                  }`}
+                                                >
+                                                  {cr.roi.toFixed(1)}%
+                                                </td>
+                                              </tr>
+                                            ))}
+                                          </tbody>
+                                        </table>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                      </React.Fragment>
                     );
                   })}
                   {filteredCampaigns.length === 0 && !loading && !error && (
@@ -547,7 +789,7 @@ export default function DashboardVoluumAssistant() {
 
         {/* Right side: assistant panel */}
         <aside className="w-full max-w-5xl mx-auto flex-shrink-0">
-  <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 h-full flex flex-col">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-3 h-full flex flex-col">
             <h2 className="text-sm font-semibold mb-1">Assistant insights</h2>
             <p className="text-[11px] text-slate-400 mb-3">
               Notes for{" "}
@@ -583,24 +825,23 @@ export default function DashboardVoluumAssistant() {
               </div>
               <div className="flex-1 space-y-2 text-xs overflow-y-auto pr-1 mb-2">
                 {chatMessages.map((m, idx) => (
-  <div
-    key={idx}
-    className={`rounded-xl px-3 py-2 ${
-      m.role === "user"
-        ? "bg-sky-900/60 text-sky-50"
-        : "bg-slate-800/80 text-slate-50"
-    }`}
-  >
-    <div className="text-[10px] mb-0.5 opacity-70">
-      {m.role === "user" ? "You" : "Assistant"}
-    </div>
+                  <div
+                    key={idx}
+                    className={`rounded-xl px-3 py-2 ${
+                      m.role === "user"
+                        ? "bg-sky-900/60 text-sky-50"
+                        : "bg-slate-800/80 text-slate-50"
+                    }`}
+                  >
+                    <div className="text-[10px] mb-0.5 opacity-70">
+                      {m.role === "user" ? "You" : "Assistant"}
+                    </div>
 
-    {/* This preserves new lines and makes it easier to read */}
-    <pre className="whitespace-pre-wrap text-[11px] leading-relaxed">
-      {m.content}
-    </pre>
-  </div>
-))}
+                    <pre className="whitespace-pre-wrap text-[11px] leading-relaxed">
+                      {m.content}
+                    </pre>
+                  </div>
+                ))}
 
                 {chatLoading && (
                   <div className="text-[11px] text-slate-400">
