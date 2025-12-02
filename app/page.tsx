@@ -80,7 +80,7 @@ type ChatMessage = {
  */
 
 const DASHBOARD_API_URL = "/api/voluum-dashboard";
-const CHAT_API_URL = "/api/chat";
+const CHAT_API_URL = "/api/assistant";
 
 const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
   { key: "today", label: "Today" },
