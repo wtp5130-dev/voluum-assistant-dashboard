@@ -61,7 +61,6 @@ type DashboardData = {
   campaigns: Campaign[];
 };
 
-// 🔹 Now includes "custom"
 type DateRangeKey =
   | "today"
   | "yesterday"
@@ -138,7 +137,7 @@ export default function DashboardPage() {
 
   const [dateRange, setDateRange] = useState<DateRangeKey>("last7days");
 
-  // 🔹 Custom date state (default to last 7 days)
+  // Custom date state (default to last 7 days)
   const [fromDate, setFromDate] = useState<string>(() => getDaysAgoYMD(7));
   const [toDate, setToDate] = useState<string>(() => getTodayYMD());
 
@@ -163,7 +162,6 @@ export default function DashboardPage() {
    * Fetch dashboard data whenever dateRange or custom dates change
    */
   useEffect(() => {
-    // If custom but dates are missing, don't fetch yet
     if (dateRange === "custom" && (!fromDate || !toDate)) {
       return;
     }
@@ -176,7 +174,6 @@ export default function DashboardPage() {
         const params = new URLSearchParams();
 
         if (dateRange === "custom") {
-          // Ensure from <= to (swap if user picks reversed)
           let from = fromDate;
           let to = toDate;
           if (new Date(from) > new Date(to)) {
@@ -242,7 +239,7 @@ export default function DashboardPage() {
   }, [data, trafficSourceFilter]);
 
   /**
-   * Make sure selected campaign always exists in filtered list
+   * Ensure selected campaign exists in filtered list
    */
   useEffect(() => {
     if (!filteredCampaigns.length) {
@@ -795,7 +792,7 @@ export default function DashboardPage() {
                               </td>
                             </tr>
                           );
-                        ))}
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -837,7 +834,7 @@ export default function DashboardPage() {
                 <textarea
                   rows={1}
                   className="flex-1 resize-none bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                  placeholder="Ask something like “Which zones are burning budget?”"
+                  placeholder='Ask something like “Which zones are burning budget?”'
                   value={chatInput}
                   onChange={(e) => setChatInput(e.target.value)}
                   onKeyDown={(e) => {
