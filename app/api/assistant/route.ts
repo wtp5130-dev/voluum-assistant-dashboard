@@ -1,11 +1,36 @@
+// app/api/assistant/route.ts
 import { NextResponse } from "next/server";
 import OpenAI from "openai";
+
+type DateRangeKey = "today" | "yesterday" | "last7days";
+
+/**
+ * GET /api/assistant
+ *
+ * Simple health check so you can open /api/assistant in the browser
+ * and verify that OPENAI_API_KEY is detected.
+ */
+export async function GET() {
+  const hasKey = !!process.env.OPENAI_API_KEY;
+
+  return NextResponse.json(
+    {
+      status: hasKey ? "ok" : "error",
+      hasOpenAIKey: hasKey,
+      message: hasKey
+        ? "Assistant API is up. Use POST with a question."
+        : "OPENAI_API_KEY is missing. Set it in .env.local and in Vercel.",
+    },
+    { status: hasKey ? 200 : 500 }
+  );
+}
 
 /**
  * POST /api/assistant
  *
- * This takes the dashboard data (campaigns, KPIs, date range, etc.)
- * + the user's question, and asks OpenAI for a marketing analysis.
+ * Called from DashboardVoluumAssistant.tsx
+ * Receives: question, kpis, campaigns, dateRange, trafficSource, country
+ * Returns: answer (Markdown) + summaryContext
  */
 export async function POST(req: Request) {
   try {
@@ -34,27 +59,25 @@ export async function POST(req: Request) {
       country,
     } = body || {};
 
-    // Keep KPIs and date range as-is (or empty)
     const safeKpis = kpis || {};
-    const safeDateRange = dateRange || null;
+    const safeDateRange: DateRangeKey | null =
+      dateRange && ["today", "yesterday", "last7days"].includes(dateRange)
+        ? (dateRange as DateRangeKey)
+        : null;
 
-    // Limit the number of campaigns we send to the model (for token cost)
     const topCampaigns = Array.isArray(campaigns)
       ? campaigns.slice(0, 30)
       : [];
 
-    /**
-     * Prepare a compact JSON context.
-     * If, later, you add zones/creatives to each campaign, they will be included.
-     */
+    // Build a compact context we pass to the model
     const summaryContext = {
       dateRange: safeDateRange,
       trafficSource: trafficSource || null,
       country: country || null,
       kpis: safeKpis,
       campaigns: (topCampaigns || []).map((c: any) => ({
-        name: c.name,
         id: c.id,
+        name: c.name,
         trafficSource: c.trafficSource,
         visits: Number(c.visits ?? 0),
         signups: Number(c.signups ?? 0),
@@ -66,8 +89,7 @@ export async function POST(req: Request) {
         cpa: Number(c.cpa ?? 0),
         cpr: Number(c.cpr ?? 0),
 
-        // If later you add zones/creatives to your dashboard data,
-        // they will be passed through to the model here.
+        // Zones & creatives from /api/voluum-dashboard (if present)
         zones: (c.zones || []).map((z: any) => ({
           id: String(z.id ?? z.zoneId ?? "unknown"),
           visits: Number(z.visits ?? 0),
@@ -89,11 +111,6 @@ export async function POST(req: Request) {
       })),
     };
 
-    /**
-     * This tells the model HOW to speak.
-     * We explicitly ask for Markdown, headings, and bullet points.
-     * We also tell it to reference zones/creatives when present.
-     */
     const systemPrompt = `
 You are a senior performance marketing analyst for online casino and sweepstakes offers.
 You analyze Voluum campaign stats and explain what to do in clear, practical language.
@@ -107,7 +124,7 @@ Formatting:
   - "### Zone Actions"
   - "### Creative Actions"
 - Use bullet lists, not long paragraphs.
-- Keep the total answer to something that fits on one screen (no novels).
+- Keep the total answer short enough to fit on one screen.
 
 Rules:
 - When zone data is present, call out specific **zone IDs** to blacklist, bid down, or scale.
@@ -127,9 +144,8 @@ Context (JSON):
 ${JSON.stringify(summaryContext, null, 2)}
 `.trim();
 
-    // Call OpenAI
     const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini", // fast + cheap, good for this use case
+      model: "gpt-4.1-mini",
       messages: [
         { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
@@ -141,14 +157,15 @@ ${JSON.stringify(summaryContext, null, 2)}
       completion.choices?.[0]?.message?.content ??
       "Sorry, I couldn't generate an answer based on the data I received.";
 
-    // Return the answer to the frontend
-    return NextResponse.json({
-      answer,
-      summaryContext,
-    });
+    return NextResponse.json(
+      {
+        answer,
+        summaryContext,
+      },
+      { status: 200 }
+    );
   } catch (err: any) {
-    console.error("Error in /api/assistant:", err);
-
+    console.error("Assistant API error:", err);
     return NextResponse.json(
       {
         error: "Error calling OpenAI assistant.",
@@ -157,25 +174,4 @@ ${JSON.stringify(summaryContext, null, 2)}
       { status: 500 }
     );
   }
-}
-
-/**
- * GET /api/assistant
- *
- * Simple health check so you can open /api/assistant in the browser
- * and see if OPENAI_API_KEY is detected.
- */
-export async function GET() {
-  const hasKey = !!process.env.OPENAI_API_KEY;
-
-  return NextResponse.json(
-    {
-      status: hasKey ? "ok" : "error",
-      hasOpenAIKey: hasKey,
-      message: hasKey
-        ? "Assistant API is up. Use POST with a question."
-        : "OPENAI_API_KEY is missing. Set it in .env.local and in Vercel.",
-    },
-    { status: hasKey ? 200 : 500 }
-  );
 }
