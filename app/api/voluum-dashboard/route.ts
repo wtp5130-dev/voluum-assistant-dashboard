@@ -1,6 +1,9 @@
 // app/api/voluum-dashboard/route.ts
 import { NextResponse } from "next/server";
 
+/**
+ * Types
+ */
 type DashboardZone = {
   id: string;
   visits: number;
@@ -48,6 +51,239 @@ type DashboardKpiCard = {
 
 type DateRangeKey = "today" | "yesterday" | "last7days";
 
+/**
+ * Fetch zones for a specific campaign
+ * Uses your real Voluum URL:
+ *   groupBy=custom-variable-1  (V1: zoneid)
+ */
+async function fetchZonesForCampaign(
+  base: string,
+  token: string,
+  fromIso: string,
+  toIso: string,
+  campaignId: string
+): Promise<DashboardZone[]> {
+  try {
+    const params = new URLSearchParams({
+      reportType: "tree",
+      reportDataType: "3",
+      limit: "100",
+      dateRange: "custom-date-time",
+      from: fromIso,
+      to: toIso,
+      searchMode: "TEXT",
+      currency: "MYR",
+      sort: "visits",
+      direction: "DESC",
+      offset: "0",
+      groupBy: "custom-variable-1", // V1: zoneid
+      conversionTimeMode: "CONVERSION",
+      tz: "Asia/Singapore",
+    });
+
+    const columns = [
+      "profit",
+      "externalName",
+      "customVariable1Marker",
+      "visits",
+      "uniqueVisits",
+      "suspiciousVisitsPercentage",
+      "conversions",
+      "costSources",
+      "cost",
+      "revenue",
+      "roi",
+      "cv",
+      "epv",
+      "cpv",
+      "errors",
+      "CPR",
+      "ConversionRate",
+      "CostPerFTD",
+      "CostPerSignup",
+      "customConversions1",
+      "customRevenue1",
+      "customConversions2",
+      "customRevenue2",
+      "customConversions3",
+      "customRevenue3",
+      "customVariable2Marker",
+      "actions",
+      "type",
+      "clicks",
+      "suspiciousClicksPercentage",
+      "suspiciousVisits",
+      "suspiciousClicks",
+      "customVariable1", // the actual zoneid value
+      "customVariable4",
+      "customVariable2",
+    ];
+
+    columns.forEach((c) => params.append("column", c));
+
+    // Filter by campaign (matches your URL: filter1=campaign&filter1Value=...)
+    params.append("filter1", "campaign");
+    params.append("filter1Value", campaignId);
+
+    const url = `${base.replace(/\/$/, "")}/report?${params.toString()}`;
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "cwauth-token": token,
+        Accept: "application/json",
+      },
+    });
+
+    const text = await res.text();
+    let json: any = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      // ignore
+    }
+
+    if (!res.ok || !json?.rows) {
+      console.warn("[Voluum] fetchZonesForCampaign failed:", res.status, text);
+      return [];
+    }
+
+    const rows: any[] = json.rows || json.data || [];
+
+    return rows.map((row) => ({
+      id: String(row.customVariable1 ?? row.externalName ?? "unknown"),
+      visits: Number(row.visits ?? 0),
+      conversions: Number(row.conversions ?? 0),
+      revenue: Number(row.revenue ?? 0),
+      cost: Number(row.cost ?? 0),
+      roi: Number(row.roi ?? 0),
+    }));
+  } catch (err) {
+    console.error("[Voluum] fetchZonesForCampaign error:", err);
+    return [];
+  }
+}
+
+/**
+ * Fetch creatives for a specific campaign
+ * We mirror the same pattern but group by V2: bannerid (custom-variable-2).
+ * If your creative report uses slightly different columns, this will still
+ * work for core metrics (visits/conversions/revenue/cost/roi).
+ */
+async function fetchCreativesForCampaign(
+  base: string,
+  token: string,
+  fromIso: string,
+  toIso: string,
+  campaignId: string
+): Promise<DashboardCreative[]> {
+  try {
+    const params = new URLSearchParams({
+      reportType: "tree",
+      reportDataType: "3",
+      limit: "100",
+      dateRange: "custom-date-time",
+      from: fromIso,
+      to: toIso,
+      searchMode: "TEXT",
+      currency: "MYR",
+      sort: "visits",
+      direction: "DESC",
+      offset: "0",
+      groupBy: "custom-variable-2", // V2: bannerid
+      conversionTimeMode: "CONVERSION",
+      tz: "Asia/Singapore",
+    });
+
+    const columns = [
+      "profit",
+      "externalName",
+      "customVariable2Marker",
+      "visits",
+      "uniqueVisits",
+      "suspiciousVisitsPercentage",
+      "conversions",
+      "costSources",
+      "cost",
+      "revenue",
+      "roi",
+      "cv",
+      "epv",
+      "cpv",
+      "errors",
+      "CPR",
+      "ConversionRate",
+      "CostPerFTD",
+      "CostPerSignup",
+      "customConversions1",
+      "customRevenue1",
+      "customConversions2",
+      "customRevenue2",
+      "customConversions3",
+      "customRevenue3",
+      "actions",
+      "type",
+      "clicks",
+      "suspiciousClicksPercentage",
+      "suspiciousVisits",
+      "suspiciousClicks",
+      "customVariable2", // the actual bannerid value
+      "customVariable1",
+      "customVariable4",
+    ];
+
+    columns.forEach((c) => params.append("column", c));
+
+    params.append("filter1", "campaign");
+    params.append("filter1Value", campaignId);
+
+    const url = `${base.replace(/\/$/, "")}/report?${params.toString()}`;
+
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        "cwauth-token": token,
+        Accept: "application/json",
+      },
+    });
+
+    const text = await res.text();
+    let json: any = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      // ignore
+    }
+
+    if (!res.ok || !json?.rows) {
+      console.warn(
+        "[Voluum] fetchCreativesForCampaign failed:",
+        res.status,
+        text
+      );
+      return [];
+    }
+
+    const rows: any[] = json.rows || json.data || [];
+
+    return rows.map((row) => ({
+      id: String(row.customVariable2 ?? row.externalName ?? "unknown"),
+      name: row.externalName,
+      visits: Number(row.visits ?? 0),
+      conversions: Number(row.conversions ?? 0),
+      revenue: Number(row.revenue ?? 0),
+      cost: Number(row.cost ?? 0),
+      roi: Number(row.roi ?? 0),
+    }));
+  } catch (err) {
+    console.error("[Voluum] fetchCreativesForCampaign error:", err);
+    return [];
+  }
+}
+
+/**
+ * Main GET handler – campaigns + KPIs (+ zones/creatives for first N campaigns)
+ */
 export async function GET(request: Request) {
   const base = process.env.VOLUUM_API_BASE;
   const accessId = process.env.VOLUUM_ACCESS_ID;
@@ -201,7 +437,12 @@ export async function GET(request: Request) {
 
     const rows: any[] = reportJson.rows || reportJson.data || [];
 
-    const campaigns: DashboardCampaign[] = rows.map((row, index) => {
+    const campaigns: DashboardCampaign[] = [];
+    const maxDetailCampaigns = 10; // only fetch zones/creatives for first N campaigns to keep it fast
+
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index];
+
       const visits = Number(row.visits ?? 0);
       const conversions = Number(row.conversions ?? 0);
       const revenue = Number(row.revenue ?? 0);
@@ -218,8 +459,21 @@ export async function GET(request: Request) {
       const cpa = Number(row.CostPerSignup ?? 0);
       const cpr = Number(row.CPR ?? 0);
 
-      return {
-        id: row.campaignId || row.campaignName || `row-${index}`,
+      const campaignId: string =
+        row.campaignId || row.campaignName || `row-${index}`;
+
+      let zones: DashboardZone[] = [];
+      let creatives: DashboardCreative[] = [];
+
+      if (index < maxDetailCampaigns) {
+        [zones, creatives] = await Promise.all([
+          fetchZonesForCampaign(base, token, fromIso, toIso, campaignId),
+          fetchCreativesForCampaign(base, token, fromIso, toIso, campaignId),
+        ]);
+      }
+
+      campaigns.push({
+        id: campaignId,
         name: row.campaignName || "Unknown campaign",
         trafficSource: row.trafficSourceName || "Unknown source",
         visits,
@@ -232,11 +486,10 @@ export async function GET(request: Request) {
         cost,
         cpa,
         cpr,
-        // NEW: guaranteed to exist in response
-        zones: [],
-        creatives: [],
-      };
-    });
+        zones,
+        creatives,
+      });
+    }
 
     // 3) KPIs
     const totals = campaigns.reduce(
