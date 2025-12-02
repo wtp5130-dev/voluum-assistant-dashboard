@@ -1,65 +1,138 @@
-import OpenAI from "openai";
+import type { NextRequest } from "next/server";
 
-const client = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
+export const runtime = "nodejs"; // or "edge" if you prefer, but node is fine here
 
-// Very simple, generic chat assistant.
-// This does NOT know about kpis/campaigns – it just chats.
-const systemPrompt = `
-You are a helpful AI assistant for the user's app.
-Keep answers concise unless the user asks for detail.
-`;
+type DashboardMessage = {
+  role: "user" | "assistant" | "system";
+  content: string;
+};
 
-export async function POST(req: Request): Promise<Response> {
+type ChatRequestBody = {
+  messages: DashboardMessage[];
+  kpis?: any;
+  campaigns?: any;
+  dateRange?: {
+    label?: string;
+    from?: string;
+    to?: string;
+  };
+};
+
+export async function POST(req: NextRequest) {
   try {
-    const body = await req.json();
+    const body = (await req.json()) as ChatRequestBody;
 
-    // Support two shapes:
-    // 1) { messages: [{ role, content }, ...] }  (e.g. vercel-ai useChat)
-    // 2) { message: "single question string" }
-    let userMessages: { role: "user" | "assistant" | "system"; content: string }[] =
-      [];
+    const { messages = [], kpis, campaigns, dateRange } = body;
 
-    if (Array.isArray(body?.messages)) {
-      userMessages = body.messages;
-    } else if (typeof body?.message === "string") {
-      userMessages = [{ role: "user", content: body.message }];
-    } else {
+    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+
+    // If you haven’t wired your key yet, at least return a helpful reply
+    if (!OPENAI_API_KEY) {
       return new Response(
-        JSON.stringify({ error: "Missing 'messages' or 'message' in request body" }),
-        { status: 400, headers: { "Content-Type": "application/json" } }
+        JSON.stringify({
+          reply:
+            "The chat backend isn’t configured yet. Please set OPENAI_API_KEY in your Vercel / .env.local environment variables.",
+        }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
       );
     }
 
-    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-      { role: "system", content: systemPrompt },
-      ...userMessages,
+    const latestUserMessage =
+      messages[messages.length - 1]?.content || "Help me with my campaigns.";
+
+    // Build a compact summary of context so the model can reason about it
+    const contextSummary = `
+You are an assistant helping to analyze Voluum performance data for ads.
+
+Date range: ${dateRange?.label ?? "custom"} (${dateRange?.from ?? "?"} → ${
+      dateRange?.to ?? "?"
+    })
+
+Key KPIs:
+${Array.isArray(kpis) ? kpis.map((k) => `- ${k.label}: ${k.value}`).join("\n") : "N/A"}
+
+There are ${Array.isArray(campaigns) ? campaigns.length : 0} campaigns loaded.
+For each campaign there may be:
+- zones: zone-level performance
+- creatives: creative-level performance
+Some items may have id="" which means traffic without a tracked zone/creative.
+
+The user’s latest question is: "${latestUserMessage}"
+
+When asked for “automation rules for bad performing zones”, think like a media buyer:
+- Find zones with high spend and no conversions or very low signups/deposits
+- Suggest pausing zone IDs at the traffic source (PropellerAds)
+- Suggest threshold-based rules (e.g., pause zone if spend > X and conversions = 0).
+Respond with clear, concise recommendations and reference zone IDs / campaign names where helpful.
+`.trim();
+
+    // Compose messages for OpenAI
+    const openAIMessages = [
+      {
+        role: "system" as const,
+        content: contextSummary,
+      },
+      // Include prior chat history if provided
+      ...messages.map((m) => ({
+        role: m.role,
+        content: m.content,
+      })),
     ];
 
-    const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages,
-      temperature: 0.5,
-    });
+    const openaiResponse = await fetch(
+      "https://api.openai.com/v1/chat/completions",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${OPENAI_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "gpt-4.1-mini", // good cheap model; change if you want
+          messages: openAIMessages,
+          temperature: 0.3,
+        }),
+      }
+    );
 
-    const answer =
-      completion.choices?.[0]?.message?.content ??
-      "No answer text returned from assistant.";
+    if (!openaiResponse.ok) {
+      const text = await openaiResponse.text();
+      console.error("OpenAI error:", openaiResponse.status, text);
+      return new Response(
+        JSON.stringify({
+          reply:
+            "I couldn’t generate a suggestion right now (OpenAI error). Please try again in a bit.",
+        }),
+        {
+          status: 200, // still 200 so the frontend doesn't treat as network error
+          headers: { "Content-Type": "application/json" },
+        }
+      );
+    }
 
-    // If your frontend expects { answer }, return that.
-    return new Response(JSON.stringify({ answer }), {
+    const completion = await openaiResponse.json();
+    const reply =
+      completion?.choices?.[0]?.message?.content ??
+      "I’m not sure what to say — try asking in a different way?";
+
+    return new Response(JSON.stringify({ reply }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });
-  } catch (err: any) {
-    console.error("/api/chat error:", err);
+  } catch (error) {
+    console.error("Chat API error:", error);
     return new Response(
       JSON.stringify({
-        error: "Chat API error",
-        message: err?.message || String(err),
+        reply:
+          "Something went wrong on the chat backend. Check the `/api/chat` logs in Vercel.",
       }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      {
+        status: 200, // again, so your frontend shows the text instead of a generic error
+        headers: { "Content-Type": "application/json" },
+      }
     );
   }
 }
