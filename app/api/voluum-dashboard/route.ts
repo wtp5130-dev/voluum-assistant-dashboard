@@ -1,7 +1,7 @@
 // app/api/voluum-dashboard/route.ts
 import { NextResponse } from "next/server";
 
-// 🔧 TEST VERSION – just to confirm we're editing the right file.
+// TEST VERSION – just to confirm this file is wired up.
 export async function GET() {
   return NextResponse.json(
     {
