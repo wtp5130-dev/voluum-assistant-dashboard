@@ -1,6 +1,25 @@
 // app/api/voluum-dashboard/route.ts
 import { NextResponse } from "next/server";
 
+type DashboardZone = {
+  id: string;
+  visits: number;
+  conversions: number;
+  revenue: number;
+  cost: number;
+  roi: number;
+};
+
+type DashboardCreative = {
+  id: string;
+  name?: string;
+  visits: number;
+  conversions: number;
+  revenue: number;
+  cost: number;
+  roi: number;
+};
+
 type DashboardCampaign = {
   id: string;
   name: string;
@@ -15,6 +34,9 @@ type DashboardCampaign = {
   cost: number;
   cpa: number; // CostPerSignup
   cpr: number; // CPR
+  // Ready for zone & creative stats
+  zones: DashboardZone[];
+  creatives: DashboardCreative[];
 };
 
 type DateRangeKey = "today" | "yesterday" | "last7days";
@@ -63,7 +85,7 @@ export async function GET(request: Request) {
   const fromIso = from.toISOString();
   const toIso = to.toISOString();
 
-  // --- 2) Get session token (same as before) ---
+  // --- 2) Get session token from Voluum ---
   const authUrl = `${base.replace(/\/$/, "")}/auth/access/session`;
 
   try {
@@ -219,6 +241,9 @@ export async function GET(request: Request) {
         cost,
         cpa,
         cpr,
+        // Zone and creative stats are not fetched yet; ready to be filled later.
+        zones: [],
+        creatives: [],
       };
     });
 
