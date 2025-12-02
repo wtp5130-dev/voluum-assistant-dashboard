@@ -1,53 +1,105 @@
 // app/api/assistant/route.ts
-import { NextResponse } from "next/server";
 import OpenAI from "openai";
 
-type DateRangeKey = "today" | "yesterday" | "last7days";
+const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 /**
- * GET /api/assistant
- *
- * Simple health check so you can open /api/assistant in the browser
- * and verify that OPENAI_API_KEY is detected.
+ * SYSTEM PROMPT
+ * - General Voluum performance assistant (like your previous one)
+ * - PLUS: when user asks about pausing bad zones / automation rules,
+ *   it adds a JSON rules block at the end of the answer.
  */
-export async function GET() {
-  const hasKey = !!process.env.OPENAI_API_KEY;
+const systemPrompt = `
+You are a performance marketing assistant helping the user analyze campaigns from Voluum and PropellerAds.
 
-  return NextResponse.json(
+You receive:
+- A natural-language question from the user.
+- A JSON payload describing the current dashboard view:
+  - kpis[]: id, label, value, delta, positive
+  - campaigns[]: for each campaign
+    - id, name, trafficSource, visits, signups, deposits, revenue, profit, roi, cost, cpa, cpr
+    - zones[] with: id, visits, conversions, revenue, cost, roi
+    - creatives[] with: id, name, visits, conversions, revenue, cost, roi
+  - dateRange: "today" | "yesterday" | "last7days"
+  - trafficSource: currently selected traffic source or "All sources"
+  - country: currently selected country or "All countries"
+
+Your general goals:
+1. Explain what is happening in the data: good campaigns, bad campaigns, trends, and obvious actions (pause, scale, test new angles, etc.).
+2. Answer questions about campaign performance, CPA/CPR, ROI, countries, and traffic sources.
+3. When the user talks about ZONES, BAD ZONES, PLACEMENTS, BLACKLISTS, or AUTOMATION RULES, also act as a "rules brain"
+   to help them design practical rules to auto-pause bad zones.
+
+Be concise, tactical, and data-driven. Always tie your advice back to the actual metrics in the JSON.
+
+IMPORTANT – WHEN TO OUTPUT JSON RULES BLOCK
+------------------------------------------------
+If (and only if) the user's question is clearly about:
+- pausing / blocking / blacklisting bad zones or placements, OR
+- creating rules / automation / auto-pause logic for zones,
+
+then you must output, at the END of your answer, a JSON object in a \`\`\`json code fence with this shape:
+
+\`\`\`json
+{
+  "rules": [
     {
-      status: hasKey ? "ok" : "error",
-      hasOpenAIKey: hasKey,
-      message: hasKey
-        ? "Assistant API is up. Use POST with a question."
-        : "OPENAI_API_KEY is missing. Set it in .env.local and in Vercel.",
-    },
-    { status: hasKey ? 200 : 500 }
-  );
-}
-
-/**
- * POST /api/assistant
- *
- * Called from DashboardVoluumAssistant.tsx
- * Receives: question, kpis, campaigns, dateRange, trafficSource, country
- * Returns: answer (Markdown) + summaryContext
- */
-export async function POST(req: Request) {
-  try {
-    const apiKey = process.env.OPENAI_API_KEY;
-
-    if (!apiKey) {
-      return NextResponse.json(
-        {
-          error:
-            "OPENAI_API_KEY is missing. Set it in .env.local (project root) and in Vercel if deployed.",
-        },
-        { status: 500 }
-      );
+      "name": "short rule name",
+      "scope": "zone",
+      "trafficSource": "string or null if all sources",
+      "country": "string or null if all countries",
+      "condition": "human-readable condition using: visits, conversions, revenue, cost, roi",
+      "suggestedThresholds": {
+        "minVisits": number | null,
+        "minCost": number | null,
+        "maxROI": number | null
+      },
+      "action": "pause_zone",
+      "appliesTo": "description of what it targets (e.g. 'all PropellerAds MX zones in the current view')",
+      "rationale": "why this rule makes sense"
     }
+  ],
+  "zonesToPauseNow": [
+    {
+      "campaignId": "string",
+      "zoneId": "string",
+      "reason": "why this specific zone is bad",
+      "metrics": {
+        "visits": number,
+        "conversions": number,
+        "revenue": number,
+        "cost": number,
+        "roi": number
+      }
+    }
+  ]
+}
+\`\`\`
 
-    const client = new OpenAI({ apiKey });
+Guidelines for rules:
+- Use only fields you actually see in the data: visits, conversions, revenue, cost, roi.
+- Do NOT invent new metric names.
+- If user is filtered to a specific traffic source or country, tailor rules to that scope.
+- Prefer simple and conservative conditions, like:
+  - "IF zone has >= X visits AND 0 conversions"
+  - "IF zone cost >= Y AND ROI <= -100%"
+- Suggest thresholds that roughly match the scale of the data you see.
+- If there is not enough data to safely pause zones, say so and keep rules very conservative.
+- If there are genuinely no clear losers, say that – don’t force rules.
 
+If the question is NOT about pausing zones / rules / automation:
+- DO NOT output the JSON block.
+- Just answer in normal prose.
+
+Answer structure when JSON is required:
+1) Start with a short, friendly explanation in plain English.
+2) Then include the JSON block (and nothing else) inside a \`\`\`json code fence as the last part of the answer.
+`;
+
+export async function POST(req: Request): Promise<Response> {
+  try {
     const body = await req.json();
 
     const {
@@ -59,119 +111,63 @@ export async function POST(req: Request) {
       country,
     } = body || {};
 
-    const safeKpis = kpis || {};
-    const safeDateRange: DateRangeKey | null =
-      dateRange && ["today", "yesterday", "last7days"].includes(dateRange)
-        ? (dateRange as DateRangeKey)
-        : null;
+    if (!question || typeof question !== "string") {
+      return new Response(
+        JSON.stringify({ error: "Missing or invalid 'question' field" }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
-    const topCampaigns = Array.isArray(campaigns)
-      ? campaigns.slice(0, 30)
-      : [];
-
-    // Build a compact context we pass to the model
-    const summaryContext = {
-      dateRange: safeDateRange,
-      trafficSource: trafficSource || null,
-      country: country || null,
-      kpis: safeKpis,
-      campaigns: (topCampaigns || []).map((c: any) => ({
-        id: c.id,
-        name: c.name,
-        trafficSource: c.trafficSource,
-        visits: Number(c.visits ?? 0),
-        signups: Number(c.signups ?? 0),
-        deposits: Number(c.deposits ?? 0),
-        revenue: Number(c.revenue ?? 0),
-        profit: Number(c.profit ?? 0),
-        roi: Number(c.roi ?? 0),
-        cost: Number(c.cost ?? 0),
-        cpa: Number(c.cpa ?? 0),
-        cpr: Number(c.cpr ?? 0),
-
-        // Zones & creatives from /api/voluum-dashboard (if present)
-        zones: (c.zones || []).map((z: any) => ({
-          id: String(z.id ?? z.zoneId ?? "unknown"),
-          visits: Number(z.visits ?? 0),
-          conversions: Number(z.conversions ?? 0),
-          revenue: Number(z.revenue ?? 0),
-          cost: Number(z.cost ?? 0),
-          roi: Number(z.roi ?? 0),
-        })),
-
-        creatives: (c.creatives || []).map((cr: any) => ({
-          id: String(cr.id ?? cr.creativeId ?? "unknown"),
-          name: cr.name,
-          visits: Number(cr.visits ?? 0),
-          conversions: Number(cr.conversions ?? 0),
-          revenue: Number(cr.revenue ?? 0),
-          cost: Number(cr.cost ?? 0),
-          roi: Number(cr.roi ?? 0),
-        })),
-      })),
-    };
-
-    const systemPrompt = `
-You are a senior performance marketing analyst for online casino and sweepstakes offers.
-You analyze Voluum campaign stats and explain what to do in clear, practical language.
-
-Formatting:
-- ALWAYS format the entire answer in Markdown.
-- Start with a short **Summary** section (2–3 bullet points).
-- Then use section headings like:
-  - "### Campaigns to Scale"
-  - "### Campaigns to Pause or Fix"
-  - "### Zone Actions"
-  - "### Creative Actions"
-- Use bullet lists, not long paragraphs.
-- Keep the total answer short enough to fit on one screen.
-
-Rules:
-- When zone data is present, call out specific **zone IDs** to blacklist, bid down, or scale.
-- When creative data is present, call out specific **creative IDs** (and names if available) to pause or scale.
-- Focus on actionable advice: pause, scale, test, adjust bids, change creatives, tweak targeting.
-- Respect the user's current filters: date range, traffic source, country.
-- Use the stats given; don't invent exact numbers that are not in the context.
-- If all campaigns are losing, say that honestly and suggest what to tweak.
-- If there is very little data, say that it's too early to make strong decisions, and suggest minimum data thresholds.
-`.trim();
-
-    const userPrompt = `
-User question:
-${question || "(no question provided)"}
-
-Context (JSON):
-${JSON.stringify(summaryContext, null, 2)}
-`.trim();
+    // Build messages for OpenAI
+    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      {
+        role: "user",
+        content: question,
+      },
+      {
+        role: "user",
+        content:
+          "Here is the JSON data for the current dashboard view:\n\n" +
+          JSON.stringify(
+            {
+              kpis: kpis ?? [],
+              campaigns: campaigns ?? [],
+              dateRange: dateRange ?? null,
+              trafficSource: trafficSource ?? null,
+              country: country ?? null,
+            },
+            null,
+            2
+          ),
+      },
+    ];
 
     const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini",
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_completion_tokens: 400,
+      model: "gpt-4.1-mini", // you can upgrade to "gpt-4.1" later if you want
+      messages,
+      temperature: 0.4,
     });
 
     const answer =
       completion.choices?.[0]?.message?.content ??
-      "Sorry, I couldn't generate an answer based on the data I received.";
+      "No answer text returned from assistant.";
 
-    return NextResponse.json(
-      {
-        answer,
-        summaryContext,
-      },
-      { status: 200 }
-    );
+    return new Response(JSON.stringify({ answer }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    });
   } catch (err: any) {
-    console.error("Assistant API error:", err);
-    return NextResponse.json(
-      {
-        error: "Error calling OpenAI assistant.",
-        message: String(err?.message || err),
-      },
-      { status: 500 }
+    console.error("Assistant error:", err);
+    return new Response(
+      JSON.stringify({
+        error: "Assistant error",
+        message: err?.message || String(err),
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 }
