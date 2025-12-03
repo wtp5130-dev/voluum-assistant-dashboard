@@ -1,9 +1,10 @@
 // app/api/optimizer/preview/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 /**
- * Types – keep in sync with your frontend DashboardData
+ * Types mirrored from your frontend
  */
+
 type KPI = {
   id: string;
   label: string;
@@ -57,10 +58,16 @@ type DashboardData = {
   campaigns: Campaign[];
 };
 
-/**
- * Suggestions types
- */
-type RuleSuggestion = {
+type EnrichedZone = Zone & {
+  campaignId: string;
+  campaignName: string;
+  trafficSource: string;
+  campaignDeposits: number;
+  campaignRevenue: number;
+  campaignROI: number;
+};
+
+type RuleDefinition = {
   name: string;
   scope: "zone";
   trafficSource: string | null;
@@ -76,10 +83,9 @@ type RuleSuggestion = {
   rationale: string;
 };
 
-type ZonePauseSuggestion = {
+type ZonePauseNow = {
   campaignId: string;
   campaignName: string;
-  trafficSource: string;
   zoneId: string;
   reason: string;
   metrics: {
@@ -91,224 +97,453 @@ type ZonePauseSuggestion = {
   };
 };
 
-type PreviewResponse = {
-  rules: RuleSuggestion[];
-  zonesToPauseNow: ZonePauseSuggestion[];
-  meta: {
-    targetCPA: number | null;
-    minVisits: number;
-    minCost: number;
-    maxROI: number;
-    totalCampaigns: number;
-    totalZonesConsidered: number;
-    trafficSourceFilter: string | "all";
-  };
-};
+/**
+ * Helpers
+ */
 
-export async function POST(req: Request) {
+function safeNumber(n: unknown): number {
+  const num = typeof n === "number" ? n : Number(n);
+  if (Number.isNaN(num) || !Number.isFinite(num)) return 0;
+  return num;
+}
+
+function mean(values: number[]): number {
+  const arr = values.filter((v) => Number.isFinite(v));
+  if (!arr.length) return 0;
+  return arr.reduce((a, b) => a + b, 0) / arr.length;
+}
+
+function median(values: number[]): number {
+  const arr = values
+    .filter((v) => Number.isFinite(v))
+    .slice()
+    .sort((a, b) => a - b);
+  const len = arr.length;
+  if (!len) return 0;
+  const mid = Math.floor(len / 2);
+  if (len % 2 === 0) return (arr[mid - 1] + arr[mid]) / 2;
+  return arr[mid];
+}
+
+function percentile(values: number[], p: number): number {
+  const arr = values
+    .filter((v) => Number.isFinite(v))
+    .slice()
+    .sort((a, b) => a - b);
+  if (!arr.length) return 0;
+  const rank = (p / 100) * (arr.length - 1);
+  const lowIndex = Math.floor(rank);
+  const highIndex = Math.ceil(rank);
+  if (lowIndex === highIndex) return arr[lowIndex];
+  const weight = rank - lowIndex;
+  return arr[lowIndex] * (1 - weight) + arr[highIndex] * weight;
+}
+
+/**
+ * Main preview handler
+ */
+
+export async function POST(req: NextRequest): Promise<Response> {
   try {
-    const body = await req.json();
+    const body = await req.json().catch(() => null);
 
-    const dashboard: DashboardData | undefined = body.dashboard;
-    const trafficSourceFilter: string | "all" =
-      body.trafficSourceFilter ?? "all";
-
-    if (!dashboard || !dashboard.campaigns) {
-      return NextResponse.json(
-        { error: "Missing 'dashboard' with campaigns[]" },
-        { status: 400 }
+    if (!body || typeof body !== "object") {
+      return jsonResponse(
+        { error: "Invalid body. Expected JSON." },
+        400
       );
     }
 
-    // 1) Filter campaigns by traffic source if needed
-    const campaigns = dashboard.campaigns.filter((c) => {
-      if (trafficSourceFilter === "all") return true;
-      return c.trafficSource === trafficSourceFilter;
-    });
+    const { dashboard, trafficSourceFilter } = body as {
+      dashboard?: DashboardData;
+      trafficSourceFilter?: string;
+    };
 
-    if (campaigns.length === 0) {
-      const empty: PreviewResponse = {
+    if (!dashboard || !dashboard.campaigns) {
+      return jsonResponse(
+        { error: "Missing 'dashboard' field with campaigns." },
+        400
+      );
+    }
+
+    const dateRange = dashboard.dateRange ?? "custom";
+    const from = dashboard.from;
+    const to = dashboard.to;
+
+    // 1) Filter campaigns by trafficSourceFilter (same logic as frontend)
+    const tsFilter = trafficSourceFilter && trafficSourceFilter !== "all"
+      ? trafficSourceFilter
+      : null;
+
+    const campaigns: Campaign[] = dashboard.campaigns.filter((c) =>
+      tsFilter ? c.trafficSource === tsFilter : true
+    );
+
+    if (!campaigns.length) {
+      return jsonResponse({
         rules: [],
         zonesToPauseNow: [],
         meta: {
-          targetCPA: null,
-          minVisits: 100,
-          minCost: 10,
-          maxROI: -80,
+          generatedAt: new Date().toISOString(),
+          dateRange,
+          from,
+          to,
+          trafficSourceFilter: tsFilter,
           totalCampaigns: 0,
-          totalZonesConsidered: 0,
-          trafficSourceFilter,
+          totalZones: 0,
+          totalZonesFlagged: 0,
+          notes: [
+            "No campaigns found for this traffic source filter.",
+            "Try switching the traffic source in the dashboard and regenerate preview."
+          ],
         },
-      };
-      return NextResponse.json(empty);
-    }
-
-    // 2) Compute a "target CPA" based on campaigns that actually have deposits
-    let totalCostWithDeps = 0;
-    let totalDeposits = 0;
-    let totalCostAll = 0;
-    let totalVisitsAll = 0;
-
-    for (const c of campaigns) {
-      totalCostAll += c.cost ?? 0;
-      totalVisitsAll += c.visits ?? 0;
-
-      if ((c.deposits ?? 0) > 0) {
-        totalCostWithDeps += c.cost ?? 0;
-        totalDeposits += c.deposits ?? 0;
-      }
-    }
-
-    let targetCPA: number | null = null;
-    if (totalDeposits > 0) {
-      targetCPA = totalCostWithDeps / totalDeposits;
-    } else if (totalCostAll > 0 && totalVisitsAll > 0) {
-      // Fallback: cost per visit * 100 as a rough "test budget" per zone
-      const avgCPC = totalCostAll / totalVisitsAll;
-      targetCPA = avgCPC * 100;
-    }
-
-    // 3) Derive conservative thresholds from data
-    //    You can tweak these numbers later.
-    const minVisits = 150; // require at least 150 visits
-    const minCost =
-      targetCPA && targetCPA > 0 ? targetCPA * 0.4 : 10; // 40% of CPA or $10
-    const maxROI = -80; // <= -80% ROI is considered "bad"
-
-    const zonesToPauseNow: ZonePauseSuggestion[] = [];
-    let totalZonesConsidered = 0;
-
-    for (const campaign of campaigns) {
-      const zones = campaign.zones ?? [];
-      for (const z of zones) {
-        totalZonesConsidered += 1;
-
-        const visits = z.visits ?? 0;
-        const conv = z.conversions ?? 0;
-        const cost = z.cost ?? 0;
-        const rev = z.revenue ?? 0;
-        const roi = z.roi ?? 0;
-
-        // Skip zones with literally no spend or traffic
-        if (visits === 0 && cost === 0 && rev === 0 && conv === 0) continue;
-
-        // Rule logic:
-        // A) Strong candidate: enough visits AND 0 conversions AND cost >= minCost
-        const isZeroConvBurner =
-          visits >= minVisits && conv === 0 && cost >= minCost;
-
-        // B) Also consider zones with conversions but very bad ROI and big spend
-        const isNegativeROIBurner =
-          conv > 0 && cost >= (targetCPA ?? 20) && roi <= maxROI;
-
-        if (isZeroConvBurner || isNegativeROIBurner) {
-          const reasonParts: string[] = [];
-
-          if (isZeroConvBurner) {
-            reasonParts.push(
-              `≥ ${minVisits} visits, 0 conversions, cost ${cost.toFixed(2)}`
-            );
-          }
-          if (isNegativeROIBurner) {
-            reasonParts.push(
-              `has conversions but ROI ${roi.toFixed(
-                2
-              )}% at cost ${cost.toFixed(2)}`
-            );
-          }
-
-          zonesToPauseNow.push({
-            campaignId: campaign.id,
-            campaignName: campaign.name,
-            trafficSource: campaign.trafficSource,
-            zoneId: z.id || "(empty-id)",
-            reason: reasonParts.join(" + "),
-            metrics: {
-              visits,
-              conversions: conv,
-              revenue: rev,
-              cost,
-              roi,
-            },
-          });
-        }
-      }
-    }
-
-    // 4) Build rule suggestions (metadata for your UI)
-    const rules: RuleSuggestion[] = [
-      {
-        name: "Zero-conversion zone killer",
-        scope: "zone",
-        trafficSource: trafficSourceFilter === "all" ? null : trafficSourceFilter,
-        country: null,
-        condition: `IF zone has ≥ ${minVisits} visits, 0 conversions AND cost ≥ ${minCost.toFixed(
-          2
-        )}`,
-        suggestedThresholds: {
-          minVisits,
-          minCost,
-          maxROI: null,
-        },
-        action: "pause_zone",
-        appliesTo:
-          trafficSourceFilter === "all"
-            ? "all zones in all traffic sources (current dashboard view)"
-            : `all zones in traffic source "${trafficSourceFilter}" (current dashboard view)`,
-        rationale:
-          "These zones spent a meaningful budget and never converted in this date range. Pausing them typically removes clear waste.",
-      },
-    ];
-
-    // Add a negative-ROI rule only if we actually have a target CPA
-    if (targetCPA && targetCPA > 0) {
-      rules.push({
-        name: "Negative ROI zone protection",
-        scope: "zone",
-        trafficSource:
-          trafficSourceFilter === "all" ? null : trafficSourceFilter,
-        country: null,
-        condition: `IF zone cost ≥ ${targetCPA.toFixed(
-          2
-        )} AND ROI ≤ ${maxROI}%`,
-        suggestedThresholds: {
-          minVisits: null,
-          minCost: targetCPA,
-          maxROI,
-        },
-        action: "pause_zone",
-        appliesTo:
-          trafficSourceFilter === "all"
-            ? "all zones with enough spend in all traffic sources"
-            : `zones with enough spend in traffic source "${trafficSourceFilter}"`,
-        rationale:
-          "Zones that already spent around a full target CPA and still sit at very negative ROI are unlikely to recover, so it's safer to pause them.",
       });
     }
 
-    const response: PreviewResponse = {
+    // 2) Flatten zones
+    const allZones: EnrichedZone[] = [];
+    for (const c of campaigns) {
+      const zones = c.zones ?? [];
+      for (const z of zones) {
+        if (!z) continue;
+        allZones.push({
+          ...z,
+          id: (z.id ?? "").toString(),
+          visits: safeNumber(z.visits),
+          conversions: safeNumber(z.conversions),
+          revenue: safeNumber(z.revenue),
+          cost: safeNumber(z.cost),
+          roi: safeNumber(z.roi),
+          campaignId: c.id,
+          campaignName: c.name,
+          trafficSource: c.trafficSource,
+          campaignDeposits: safeNumber(c.deposits),
+          campaignRevenue: safeNumber(c.revenue),
+          campaignROI: safeNumber(c.roi),
+        });
+      }
+    }
+
+    if (!allZones.length) {
+      return jsonResponse({
+        rules: [],
+        zonesToPauseNow: [],
+        meta: {
+          generatedAt: new Date().toISOString(),
+          dateRange,
+          from,
+          to,
+          trafficSourceFilter: tsFilter,
+          totalCampaigns: campaigns.length,
+          totalZones: 0,
+          totalZonesFlagged: 0,
+          notes: [
+            "No zone-level data found in the current dashboard.",
+            "Make sure your Voluum report includes zone/placement breakdown."
+          ],
+        },
+      });
+    }
+
+    // 3) Compute global stats for adaptive thresholds
+    const visitsArr = allZones.map((z) => z.visits);
+    const costArr = allZones.map((z) => z.cost);
+    const roiArr = allZones.map((z) => z.roi);
+
+    const globalMedianVisits = median(visitsArr);
+    const globalP75Visits = percentile(visitsArr, 75);
+    const globalMedianCost = median(costArr);
+    const globalP75Cost = percentile(costArr, 75);
+    const globalMeanROI = mean(roiArr);
+
+    // Conservative minima
+    const minVisitsForDecision = Math.max(
+      50,
+      Math.round(globalMedianVisits || 0),
+      Math.round(globalP75Visits * 0.5 || 0)
+    );
+
+    const minCostForDecision = Math.max(
+      5,
+      Math.round(globalMedianCost || 0),
+      Math.round(globalP75Cost * 0.5 || 0)
+    );
+
+    // High-spend definition
+    const highSpendNoConvCost = Math.max(
+      minCostForDecision * 2,
+      globalP75Cost || minCostForDecision * 2,
+      10
+    );
+
+    // 4) Campaign-level ROI map (for outlier detection)
+    const campaignStats = new Map<
+      string,
+      {
+        avgROI: number;
+        medianROI: number;
+        medianCost: number;
+      }
+    >();
+
+    for (const c of campaigns) {
+      const zones = allZones.filter((z) => z.campaignId === c.id);
+      if (!zones.length) continue;
+      const rois = zones.map((z) => z.roi);
+      const costs = zones.map((z) => z.cost);
+      campaignStats.set(c.id, {
+        avgROI: mean(rois),
+        medianROI: median(rois),
+        medianCost: median(costs),
+      });
+    }
+
+    // 5) Build Pro-level rules definitions (what user sees)
+    const rules: RuleDefinition[] = [];
+
+    rules.push({
+      name: "High-spend, zero-conversion zones",
+      scope: "zone",
+      trafficSource: tsFilter,
+      country: null,
+      condition:
+        "IF zone has >= minVisits visits AND cost >= minCost AND conversions == 0 AND ROI <= maxROI",
+      suggestedThresholds: {
+        minVisits: minVisitsForDecision,
+        minCost: highSpendNoConvCost,
+        maxROI: -100,
+      },
+      action: "pause_zone",
+      appliesTo:
+        "All zones in the current dashboard view (filtered by traffic source & date range).",
+      rationale:
+        "These zones spend meaningful budget without producing conversions, and are likely pure burn. Thresholds auto-adjust to your traffic scale.",
+    });
+
+    rules.push({
+      name: "Terrible-ROI zones (even with conversions)",
+      scope: "zone",
+      trafficSource: tsFilter,
+      country: null,
+      condition:
+        "IF zone has >= minVisits visits AND cost >= minCost AND conversions > 0 AND ROI <= maxROI",
+      suggestedThresholds: {
+        minVisits: minVisitsForDecision,
+        minCost: minCostForDecision,
+        maxROI: -150,
+      },
+      action: "pause_zone",
+      appliesTo:
+        "Zones that technically convert but are heavily unprofitable in the current report.",
+      rationale:
+        "Some zones bring a few conversions but the CPA is so bad that they destroy ROI. This rule catches those extreme losers.",
+    });
+
+    rules.push({
+      name: "Campaign outlier burn zones",
+      scope: "zone",
+      trafficSource: tsFilter,
+      country: null,
+      condition:
+        "IF zone cost >= campaign median zone cost AND ROI is at least 80 percentage points lower than campaign average ROI.",
+      suggestedThresholds: {
+        minVisits: minVisitsForDecision,
+        minCost: minCostForDecision,
+        maxROI: null,
+      },
+      action: "pause_zone",
+      appliesTo:
+        "Zones that are much worse than siblings in the same campaign, even if the overall campaign is okay.",
+      rationale:
+        "Detects pockets inside a good campaign that quietly burn budget compared to the rest of the zones.",
+    });
+
+    rules.push({
+      name: "Deposit-aware non-contributor zones",
+      scope: "zone",
+      trafficSource: tsFilter,
+      country: null,
+      condition:
+        "IF campaign has deposits > 0 AND zone cost >= 0.8 * high-spend threshold AND zone conversions == 0.",
+      suggestedThresholds: {
+        minVisits: minVisitsForDecision,
+        minCost: Math.round(highSpendNoConvCost * 0.8),
+        maxROI: -80,
+      },
+      action: "pause_zone",
+      appliesTo:
+        "Zones inside campaigns that already generated deposits, but these zones show no conversions so far.",
+      rationale:
+        "Once a campaign proves it can generate deposits, zones that do not contribute and just burn cost can be aggressively trimmed.",
+    });
+
+    // 6) Apply rules to decide which zones to pause NOW
+    const zonesToPauseNow: ZonePauseNow[] = [];
+
+    for (const z of allZones) {
+      const visits = z.visits;
+      const cost = z.cost;
+      const conversions = z.conversions;
+      const roi = z.roi;
+
+      if (!z.id || z.id.trim().length === 0) continue;
+
+      // SKIP very small data (cooldown logic)
+      if (visits < minVisitsForDecision * 0.5 && cost < minCostForDecision) {
+        continue;
+      }
+
+      let reasons: string[] = [];
+
+      // Rule 1: High-spend zero-conversion
+      if (
+        visits >= minVisitsForDecision &&
+        cost >= highSpendNoConvCost &&
+        conversions === 0 &&
+        roi <= -100
+      ) {
+        reasons.push(
+          `High spend with no conversions: visits=${visits}, cost=${cost.toFixed(
+            2
+          )}, ROI=${roi.toFixed(1)}%.`
+        );
+      }
+
+      // Rule 2: Terrible ROI even with conversions
+      if (
+        visits >= minVisitsForDecision &&
+        cost >= minCostForDecision &&
+        conversions > 0 &&
+        roi <= -150
+      ) {
+        reasons.push(
+          `Extremely bad ROI despite conversions: cost=${cost.toFixed(
+            2
+          )}, conversions=${conversions}, ROI=${roi.toFixed(1)}%.`
+        );
+      }
+
+      // Rule 3: Campaign outlier
+      const cStats = campaignStats.get(z.campaignId);
+      if (cStats) {
+        const { avgROI, medianCost } = cStats;
+        if (
+          cost >= medianCost &&
+          roi <= avgROI - 80 && // at least 80 pts worse than campaign avg
+          visits >= minVisitsForDecision * 0.8
+        ) {
+          reasons.push(
+            `Outlier vs campaign peers: zone ROI=${roi.toFixed(
+              1
+            )}% vs campaign avg ROI=${avgROI.toFixed(
+              1
+            )}%, cost>=median zone cost.`
+          );
+        }
+      }
+
+      // Rule 4: Deposit-aware non-contributor
+      if (
+        z.campaignDeposits > 0 &&
+        cost >= highSpendNoConvCost * 0.8 &&
+        conversions === 0
+      ) {
+        reasons.push(
+          `Campaign has deposits (${z.campaignDeposits}) but this zone has 0 conversions and significant cost=${cost.toFixed(
+            2
+          )}.`
+        );
+      }
+
+      // Optional soft check: global ROI disaster vs global mean
+      if (
+        roi <= globalMeanROI - 100 &&
+        cost >= minCostForDecision &&
+        visits >= minVisitsForDecision
+      ) {
+        reasons.push(
+          `Global underperformer: ROI=${roi.toFixed(
+            1
+          )}% vs global mean ROI=${globalMeanROI.toFixed(1)}%.`
+        );
+      }
+
+      // If multiple reasons, join them; if none, skip this zone
+      if (!reasons.length) continue;
+
+      zonesToPauseNow.push({
+        campaignId: z.campaignId,
+        campaignName: z.campaignName,
+        zoneId: z.id,
+        reason: reasons.join(" "),
+        metrics: {
+          visits,
+          conversions,
+          revenue: z.revenue,
+          cost,
+          roi,
+        },
+      });
+    }
+
+    // Sort by worst offenders first: highest cost, then worst ROI
+    zonesToPauseNow.sort((a, b) => {
+      const costDiff = b.metrics.cost - a.metrics.cost;
+      if (Math.abs(costDiff) > 0.01) return costDiff;
+      return a.metrics.roi - b.metrics.roi; // more negative first
+    });
+
+    const metaNotes: string[] = [];
+
+    metaNotes.push(
+      `Dynamic thresholds: minVisitsForDecision=${minVisitsForDecision}, minCostForDecision=${minCostForDecision}, highSpendNoConvCost=${highSpendNoConvCost}.`
+    );
+    metaNotes.push(
+      `Global stats: medianVisits=${globalMedianVisits.toFixed(
+        1
+      )}, medianCost=${globalMedianCost.toFixed(2)}, meanROI=${globalMeanROI.toFixed(
+        1
+      )}%.`
+    );
+    if (!zonesToPauseNow.length) {
+      metaNotes.push(
+        "No zones met the strict criteria. Data might still be early or reasonably balanced."
+      );
+    }
+
+    return jsonResponse({
       rules,
       zonesToPauseNow,
       meta: {
-        targetCPA: targetCPA ?? null,
-        minVisits,
-        minCost,
-        maxROI,
+        generatedAt: new Date().toISOString(),
+        dateRange,
+        from,
+        to,
+        trafficSourceFilter: tsFilter,
         totalCampaigns: campaigns.length,
-        totalZonesConsidered,
-        trafficSourceFilter,
+        totalZones: allZones.length,
+        totalZonesFlagged: zonesToPauseNow.length,
+        notes: metaNotes,
       },
-    };
-
-    return NextResponse.json(response, { status: 200 });
-  } catch (err: any) {
-    console.error("optimizer/preview error:", err);
-    return NextResponse.json(
+    });
+  } catch (error: any) {
+    console.error("Optimizer preview error:", error);
+    return jsonResponse(
       {
-        error: "optimizer_preview_error",
-        message: err?.message ?? String(err),
+        error: "Optimizer preview error",
+        message: error?.message || String(error),
       },
-      { status: 500 }
+      500
     );
   }
+}
+
+/**
+ * Small JSON helper
+ */
+function jsonResponse(payload: any, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
