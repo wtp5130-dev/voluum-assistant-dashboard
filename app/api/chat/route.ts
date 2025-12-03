@@ -1,138 +1,129 @@
-import type { NextRequest } from "next/server";
+// app/api/chat/route.ts
+import { NextRequest, NextResponse } from "next/server";
 
-export const runtime = "nodejs"; // or "edge" if you prefer, but node is fine here
-
-type DashboardMessage = {
-  role: "user" | "assistant" | "system";
-  content: string;
-};
+export const runtime = "edge"; // optional, but good for latency
 
 type ChatRequestBody = {
-  messages: DashboardMessage[];
-  kpis?: any;
-  campaigns?: any;
-  dateRange?: {
-    label?: string;
-    from?: string;
-    to?: string;
-  };
+  message: string;
+  context?: unknown;
 };
+
+// Helper to build JSON responses
+function json(data: any, status = 200) {
+  return new NextResponse(JSON.stringify(data), {
+    status,
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+}
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as ChatRequestBody;
-
-    const { messages = [], kpis, campaigns, dateRange } = body;
-
-    const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
-
-    // If you haven’t wired your key yet, at least return a helpful reply
-    if (!OPENAI_API_KEY) {
-      return new Response(
-        JSON.stringify({
-          reply:
-            "The chat backend isn’t configured yet. Please set OPENAI_API_KEY in your Vercel / .env.local environment variables.",
-        }),
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey) {
+      return json(
         {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }
+          error: "Missing OPENAI_API_KEY on the server.",
+        },
+        500
       );
     }
 
-    const latestUserMessage =
-      messages[messages.length - 1]?.content || "Help me with my campaigns.";
-
-    // Build a compact summary of context so the model can reason about it
-    const contextSummary = `
-You are an assistant helping to analyze Voluum performance data for ads.
-
-Date range: ${dateRange?.label ?? "custom"} (${dateRange?.from ?? "?"} → ${
-      dateRange?.to ?? "?"
-    })
-
-Key KPIs:
-${Array.isArray(kpis) ? kpis.map((k) => `- ${k.label}: ${k.value}`).join("\n") : "N/A"}
-
-There are ${Array.isArray(campaigns) ? campaigns.length : 0} campaigns loaded.
-For each campaign there may be:
-- zones: zone-level performance
-- creatives: creative-level performance
-Some items may have id="" which means traffic without a tracked zone/creative.
-
-The user’s latest question is: "${latestUserMessage}"
-
-When asked for “automation rules for bad performing zones”, think like a media buyer:
-- Find zones with high spend and no conversions or very low signups/deposits
-- Suggest pausing zone IDs at the traffic source (PropellerAds)
-- Suggest threshold-based rules (e.g., pause zone if spend > X and conversions = 0).
-Respond with clear, concise recommendations and reference zone IDs / campaign names where helpful.
-`.trim();
-
-    // Compose messages for OpenAI
-    const openAIMessages = [
-      {
-        role: "system" as const,
-        content: contextSummary,
-      },
-      // Include prior chat history if provided
-      ...messages.map((m) => ({
-        role: m.role,
-        content: m.content,
-      })),
-    ];
-
-    const openaiResponse = await fetch(
-      "https://api.openai.com/v1/chat/completions",
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${OPENAI_API_KEY}`,
-          "Content-Type": "application/json",
+    let body: ChatRequestBody;
+    try {
+      body = (await req.json()) as ChatRequestBody;
+    } catch {
+      return json(
+        {
+          error: "Invalid JSON body.",
         },
-        body: JSON.stringify({
-          model: "gpt-4.1-mini", // good cheap model; change if you want
-          messages: openAIMessages,
-          temperature: 0.3,
-        }),
-      }
-    );
+        400
+      );
+    }
+
+    if (!body.message || typeof body.message !== "string") {
+      return json(
+        {
+          error: "Request body must include a 'message' string.",
+        },
+        400
+      );
+    }
+
+    const systemPrompt = `
+You are a Voluum and PropellerAds performance assistant.
+- You receive a 'message' from the user.
+- Optionally you may receive some 'context' JSON with KPIs, campaigns, zones, creatives.
+- Explain things clearly and make specific, actionable suggestions.
+- The user is running casino / betting offers and wants help improving performance.
+    `.trim();
+
+    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model: "gpt-4.1-mini",
+        messages: [
+          { role: "system", content: systemPrompt },
+          {
+            role: "user",
+            content: [
+              {
+                type: "text",
+                text:
+                  body.context != null
+                    ? `User message:\n${body.message}\n\nContext JSON:\n${JSON.stringify(
+                        body.context,
+                        null,
+                        2
+                      )}`
+                    : body.message,
+              },
+            ],
+          },
+        ],
+      }),
+    });
 
     if (!openaiResponse.ok) {
-      const text = await openaiResponse.text();
-      console.error("OpenAI error:", openaiResponse.status, text);
-      return new Response(
-        JSON.stringify({
-          reply:
-            "I couldn’t generate a suggestion right now (OpenAI error). Please try again in a bit.",
-        }),
+      const errorText = await openaiResponse.text();
+      return json(
         {
-          status: 200, // still 200 so the frontend doesn't treat as network error
-          headers: { "Content-Type": "application/json" },
-        }
+          error: "OpenAI API returned an error.",
+          status: openaiResponse.status,
+          details: errorText,
+        },
+        500
       );
     }
 
-    const completion = await openaiResponse.json();
-    const reply =
-      completion?.choices?.[0]?.message?.content ??
-      "I’m not sure what to say — try asking in a different way?";
+    const data = await openaiResponse.json();
 
-    return new Response(JSON.stringify({ reply }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (error) {
-    console.error("Chat API error:", error);
-    return new Response(
-      JSON.stringify({
-        reply:
-          "Something went wrong on the chat backend. Check the `/api/chat` logs in Vercel.",
-      }),
+    const reply =
+      data?.choices?.[0]?.message?.content ??
+      "Sorry, I couldn't generate a reply from the AI.";
+
+    return json({ reply });
+  } catch (err: any) {
+    console.error("Chat API error:", err);
+    return json(
       {
-        status: 200, // again, so your frontend shows the text instead of a generic error
-        headers: { "Content-Type": "application/json" },
-      }
+        error: "Unexpected server error in /api/chat.",
+        details: err?.message ?? String(err),
+      },
+      500
     );
   }
+}
+
+// Optionally handle GET so you can quickly test in the browser
+export async function GET() {
+  return json({
+    message:
+      "Chat API is alive. Send a POST request with { message: string, context?: any }.",
+  });
 }
