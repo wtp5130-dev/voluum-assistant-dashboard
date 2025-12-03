@@ -61,12 +61,7 @@ type DashboardData = {
   campaigns: Campaign[];
 };
 
-type DateRangeKey =
-  | "today"
-  | "yesterday"
-  | "last7days"
-  | "last30days"
-  | "custom";
+type DateRangeKey = "today" | "yesterday" | "last7days" | "last30days" | "custom";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -80,7 +75,7 @@ type ChatMessage = {
  */
 
 const DASHBOARD_API_URL = "/api/voluum-dashboard";
-const CHAT_API_URL = "/api/assistant";
+const CHAT_API_URL = "/api/chat";
 
 const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
   { key: "today", label: "Today" },
@@ -141,11 +136,8 @@ export default function DashboardPage() {
   const [fromDate, setFromDate] = useState<string>(() => getDaysAgoYMD(7));
   const [toDate, setToDate] = useState<string>(() => getTodayYMD());
 
-  const [trafficSourceFilter, setTrafficSourceFilter] =
-    useState<string>("all");
-  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(
-    null
-  );
+  const [trafficSourceFilter, setTrafficSourceFilter] = useState<string>("all");
+  const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(null);
 
   // Chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -206,9 +198,7 @@ export default function DashboardPage() {
         }
       } catch (err) {
         console.error(err);
-        setError(
-          err instanceof Error ? err.message : "Unknown error fetching data"
-        );
+        setError(err instanceof Error ? err.message : "Unknown error fetching data");
       } finally {
         setLoading(false);
       }
@@ -233,9 +223,7 @@ export default function DashboardPage() {
   const filteredCampaigns: Campaign[] = useMemo(() => {
     if (!data) return [];
     if (trafficSourceFilter === "all") return data.campaigns;
-    return data.campaigns.filter(
-      (c) => c.trafficSource === trafficSourceFilter
-    );
+    return data.campaigns.filter((c) => c.trafficSource === trafficSourceFilter);
   }, [data, trafficSourceFilter]);
 
   /**
@@ -247,9 +235,7 @@ export default function DashboardPage() {
       return;
     }
 
-    const stillExists = filteredCampaigns.some(
-      (c) => c.id === selectedCampaignId
-    );
+    const stillExists = filteredCampaigns.some((c) => c.id === selectedCampaignId);
     if (!stillExists) {
       setSelectedCampaignId(filteredCampaigns[0].id);
     }
@@ -267,7 +253,6 @@ export default function DashboardPage() {
   /**
    * Zones / Creatives for selected campaign
    */
-
   const zones = useMemo<Zone[]>(() => {
     if (!selectedCampaign) return [];
 
@@ -322,14 +307,28 @@ export default function DashboardPage() {
       const res = await fetch(CHAT_API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: newMessages }),
+        body: JSON.stringify({
+          // support backends that expect a single message
+          message: content,
+          // plus full conversation if backend supports it
+          messages: newMessages,
+          // and rich context
+          kpis: data?.kpis,
+          campaigns: data?.campaigns,
+          dateRange: {
+            label: dateRange,
+            from: data?.from,
+            to: data?.to,
+          },
+          selectedCampaignId: selectedCampaign?.id ?? null,
+        }),
       });
 
       if (!res.ok) {
         throw new Error(`Chat failed (${res.status})`);
       }
 
-      const json = (await res.json()) as { reply: string };
+      const json = (await res.json()) as { reply?: string };
       const reply = json.reply ?? "[No reply field in response]";
 
       setChatMessages((prev) => [
@@ -412,9 +411,7 @@ export default function DashboardPage() {
               </label>
               <select
                 value={dateRange}
-                onChange={(e) =>
-                  setDateRange(e.target.value as DateRangeKey)
-                }
+                onChange={(e) => setDateRange(e.target.value as DateRangeKey)}
                 className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs min-w-[140px]"
               >
                 {DATE_RANGE_OPTIONS.map((opt) => (
@@ -432,9 +429,7 @@ export default function DashboardPage() {
               </label>
               <select
                 value={trafficSourceFilter}
-                onChange={(e) =>
-                  setTrafficSourceFilter(e.target.value)
-                }
+                onChange={(e) => setTrafficSourceFilter(e.target.value)}
                 className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs min-w-[160px]"
               >
                 <option value="all">All sources</option>
@@ -523,7 +518,7 @@ export default function DashboardPage() {
                   <th className="text-right p-2">Signups</th>
                   <th className="text-right p-2">Deps</th>
                   <th className="text-right p-2">Rev</th>
-                  <th className="text-right p-2">Cost</th>
+                  <th classNametext-right p-2">Cost</th>
                   <th className="text-right p-2">ROI</th>
                 </tr>
               </thead>
