@@ -429,6 +429,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="flex flex-col gap-3 items-stretch md:items-end">
+          {/* Link to Optimizer page */}
+<a
+  href="/optimizer"
+  className="text-xs px-3 py-1 rounded-md bg-emerald-700 hover:bg-emerald-600 text-white w-fit"
+>
+  Open Optimizer →
+</a>
+
           <div className="flex flex-wrap gap-3 items-center justify-end">
             {/* Date range selector */}
             <div className="flex flex-col gap-1">
