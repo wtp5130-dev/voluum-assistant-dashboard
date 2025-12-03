@@ -6,66 +6,66 @@ const client = new OpenAI({
 });
 
 /**
- * SYSTEM PROMPT
- * - General Voluum performance assistant (like your previous one)
- * - PLUS: when user asks about pausing bad zones / automation rules,
- *   it adds a JSON rules block at the end of the answer.
+ * SYSTEM PROMPT (enhanced with deterministic performance context)
  */
 const systemPrompt = `
 You are a performance marketing assistant helping the user analyze campaigns from Voluum and PropellerAds.
 
-You receive:
-- A natural-language question from the user.
-- A JSON payload describing the current dashboard view:
-  - kpis[]: id, label, value, delta, positive
-  - campaigns[]: for each campaign
-    - id, name, trafficSource, visits, signups, deposits, revenue, profit, roi, cost, cpa, cpr
-    - zones[] with: id, visits, conversions, revenue, cost, roi
-    - creatives[] with: id, name, visits, conversions, revenue, cost, roi
-  - dateRange: "today" | "yesterday" | "last7days"
-  - trafficSource: currently selected traffic source or "All sources"
-  - country: currently selected country or "All countries"
+=== WHAT YOU RECEIVE ===
+You will receive:
+- A user question in natural language.
+- A JSON payload summarizing the dashboard:
+  - kpis[]
+  - campaigns[] with zones[] and creatives[]
+  - dateRange, trafficSource, country
+- PLUS: A COMPUTED PERFORMANCE SUMMARY generated server-side.
+  This summary contains:
+    • A flat list of zones with: campaign name, zoneId, visits, conversions, revenue, cost, roi  
+    • A list of zones with conversions > 0  
+    • A list of top zones by ROI  
+    • A list of worst zones by cost with zero conversions  
+  YOU MUST TRUST this computed summary more than raw JSON.
 
-Your general goals:
-1. Explain what is happening in the data: good campaigns, bad campaigns, trends, and obvious actions (pause, scale, test new angles, etc.).
-2. Answer questions about campaign performance, CPA/CPR, ROI, countries, and traffic sources.
-3. When the user talks about ZONES, BAD ZONES, PLACEMENTS, BLACKLISTS, or AUTOMATION RULES, also act as a "rules brain"
-   to help them design practical rules to auto-pause bad zones.
+=== GENERAL GOALS ===
+1. Always ground your explanation in the ACTUAL numbers provided.  
+2. Do not hallucinate — if summary says some zones have conversions, acknowledge them.  
+3. Provide tactical, data-backed insights.  
+4. If the user asks about:
+   - pausing zones
+   - automation rules
+   - bad placements
+   - blacklists  
+   → THEN output a JSON rules block at the end of your answer.
 
-Be concise, tactical, and data-driven. Always tie your advice back to the actual metrics in the JSON.
+=== RULES BLOCK FORMAT ===
+If the user's question is about pausing zones / rules / automation:
 
-IMPORTANT – WHEN TO OUTPUT JSON RULES BLOCK
-------------------------------------------------
-If (and only if) the user's question is clearly about:
-- pausing / blocking / blacklisting bad zones or placements, OR
-- creating rules / automation / auto-pause logic for zones,
-
-then you must output, at the END of your answer, a JSON object in a \`\`\`json code fence with this shape:
+Output a JSON object inside a code fence as the LAST part of your answer:
 
 \`\`\`json
 {
   "rules": [
     {
-      "name": "short rule name",
+      "name": "Short rule name",
       "scope": "zone",
-      "trafficSource": "string or null if all sources",
-      "country": "string or null if all countries",
-      "condition": "human-readable condition using: visits, conversions, revenue, cost, roi",
+      "trafficSource": "string or null",
+      "country": "string or null",
+      "condition": "human-readable rule condition",
       "suggestedThresholds": {
         "minVisits": number | null,
         "minCost": number | null,
         "maxROI": number | null
       },
       "action": "pause_zone",
-      "appliesTo": "description of what it targets (e.g. 'all PropellerAds MX zones in the current view')",
-      "rationale": "why this rule makes sense"
+      "appliesTo": "Which zones this rule applies to",
+      "rationale": "Why this rule makes sense"
     }
   ],
   "zonesToPauseNow": [
     {
       "campaignId": "string",
       "zoneId": "string",
-      "reason": "why this specific zone is bad",
+      "reason": "why it is bad",
       "metrics": {
         "visits": number,
         "conversions": number,
@@ -78,24 +78,11 @@ then you must output, at the END of your answer, a JSON object in a \`\`\`json c
 }
 \`\`\`
 
-Guidelines for rules:
-- Use only fields you actually see in the data: visits, conversions, revenue, cost, roi.
-- Do NOT invent new metric names.
-- If user is filtered to a specific traffic source or country, tailor rules to that scope.
-- Prefer simple and conservative conditions, like:
-  - "IF zone has >= X visits AND 0 conversions"
-  - "IF zone cost >= Y AND ROI <= -100%"
-- Suggest thresholds that roughly match the scale of the data you see.
-- If there is not enough data to safely pause zones, say so and keep rules very conservative.
-- If there are genuinely no clear losers, say that – don’t force rules.
-
-If the question is NOT about pausing zones / rules / automation:
-- DO NOT output the JSON block.
-- Just answer in normal prose.
-
-Answer structure when JSON is required:
-1) Start with a short, friendly explanation in plain English.
-2) Then include the JSON block (and nothing else) inside a \`\`\`json code fence as the last part of the answer.
+=== VERY IMPORTANT ===
+- NEVER say “none of the zones have conversions” unless ALL zones truly have conversions = 0 in the computed summary.
+- Always use metrics EXACTLY as provided: visits, conversions, revenue, cost, roi.
+- If there is insufficient data for firm rules, recommend conservative thresholds.
+- If the question is NOT about automation/rules/pausing → DO NOT output the JSON block.
 `;
 
 export async function POST(req: Request): Promise<Response> {
@@ -118,20 +105,59 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    // Build messages for OpenAI
-    const messages: OpenAI.Chat.Completions.ChatCompletionMessageParam[] = [
-      {
-        role: "system",
-        content: systemPrompt,
-      },
-      {
-        role: "user",
-        content: question,
-      },
+    /**
+     * ======================================================
+     *  COMPUTE ANALYTICS SUMMARY (NON-LLM, deterministic)
+     * ======================================================
+     */
+    const zonesFlat: any[] = [];
+
+    for (const c of campaigns ?? []) {
+      for (const z of c.zones ?? []) {
+        zonesFlat.push({
+          campaignId: c.id,
+          campaignName: c.name,
+          zoneId: z.id ?? "(unknown)",
+          visits: z.visits ?? 0,
+          conversions: z.conversions ?? 0,
+          revenue: z.revenue ?? 0,
+          cost: z.cost ?? 0,
+          roi: z.roi ?? 0,
+        });
+      }
+    }
+
+    const zonesWithConversions = zonesFlat.filter((z) => z.conversions > 0);
+
+    const topZones = [...zonesFlat]
+      .sort((a, b) => b.roi - a.roi)
+      .slice(0, 5);
+
+    const worstZonesNoConv = [...zonesFlat]
+      .filter((z) => z.conversions === 0)
+      .sort((a, b) => b.cost - a.cost)
+      .slice(0, 5);
+
+    const computedContext = {
+      zoneCount: zonesFlat.length,
+      zonesWithConversions,
+      topZones,
+      worstZonesNoConv,
+      sampleZones: zonesFlat.slice(0, 20),
+    };
+
+    /**
+     * ================================
+     *  BUILD MESSAGES FOR OPENAI
+     * ================================
+     */
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: question },
       {
         role: "user",
         content:
-          "Here is the JSON data for the current dashboard view:\n\n" +
+          "Here is the RAW dashboard JSON:\n\n" +
           JSON.stringify(
             {
               kpis: kpis ?? [],
@@ -144,10 +170,21 @@ export async function POST(req: Request): Promise<Response> {
             2
           ),
       },
+      {
+        role: "user",
+        content:
+          "Here is the COMPUTED performance summary (trust this over raw):\n\n" +
+          JSON.stringify(computedContext, null, 2),
+      },
     ];
 
+    /**
+     * ================================
+     *  CALL OPENAI
+     * ================================
+     */
     const completion = await client.chat.completions.create({
-      model: "gpt-4.1-mini", // you can upgrade to "gpt-4.1" later if you want
+      model: "gpt-4.1-mini",
       messages,
       temperature: 0.4,
     });
