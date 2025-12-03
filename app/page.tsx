@@ -75,53 +75,12 @@ type ChatMessage = {
 
 /**
  * ===========
- * Optimizer types
- * ===========
- */
-
-type OptimizerRule = {
-  name: string;
-  scope: string;
-  trafficSource: string | null;
-  country: string | null;
-  condition: string;
-  suggestedThresholds: {
-    minVisits: number | null;
-    minCost: number | null;
-    maxROI: number | null;
-  };
-  action: string;
-  appliesTo: string;
-  rationale: string;
-};
-
-type ZonePauseCandidate = {
-  campaignId: string;
-  zoneId: string;
-  reason: string;
-  metrics: {
-    visits: number;
-    conversions: number;
-    revenue: number;
-    cost: number;
-    roi: number;
-  };
-};
-
-type OptimizerPreview = {
-  rules: OptimizerRule[];
-  zonesToPauseNow: ZonePauseCandidate[];
-  meta?: any;
-};
-
-/**
- * ===========
  * Config
  * ===========
  */
 
 const DASHBOARD_API_URL = "/api/voluum-dashboard";
-// IMPORTANT: match your real API route + contract
+// Your real chat route:
 const CHAT_API_URL = "/api/chat";
 
 const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
@@ -174,7 +133,12 @@ function getDaysAgoYMD(days: number): string {
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
+
+  // loading = any fetch in progress
   const [loading, setLoading] = useState<boolean>(true);
+  // hasLoadedOnce = did we already get first successful response?
+  const [hasLoadedOnce, setHasLoadedOnce] = useState<boolean>(false);
+
   const [error, setError] = useState<string | null>(null);
 
   const [dateRange, setDateRange] = useState<DateRangeKey>("last7days");
@@ -199,14 +163,6 @@ export default function DashboardPage() {
   ]);
   const [chatInput, setChatInput] = useState<string>("");
   const [chatLoading, setChatLoading] = useState<boolean>(false);
-
-  // Optimizer state
-  const [optimizerPreview, setOptimizerPreview] =
-    useState<OptimizerPreview | null>(null);
-  const [optimizerLoading, setOptimizerLoading] = useState<boolean>(false);
-  const [optimizerApplying, setOptimizerApplying] = useState<boolean>(false);
-  const [optimizerError, setOptimizerError] = useState<string | null>(null);
-  const [optimizerSuccess, setOptimizerSuccess] = useState<string | null>(null);
 
   /**
    * Fetch dashboard data whenever dateRange or custom dates change
@@ -244,6 +200,7 @@ export default function DashboardPage() {
 
         const json = (await res.json()) as DashboardData;
         setData(json);
+        setHasLoadedOnce(true);
 
         if (json.campaigns && json.campaigns.length > 0) {
           setSelectedCampaignId((prev) => {
@@ -254,11 +211,6 @@ export default function DashboardPage() {
         } else {
           setSelectedCampaignId(null);
         }
-
-        // When data changes significantly, clear previous optimizer preview
-        setOptimizerPreview(null);
-        setOptimizerError(null);
-        setOptimizerSuccess(null);
       } catch (err) {
         console.error(err);
         setError(
@@ -374,7 +326,6 @@ export default function DashboardPage() {
     setChatLoading(true);
 
     try {
-      // Build some context for the backend (optional)
       const context = {
         dateRange,
         from: data?.from,
@@ -386,7 +337,7 @@ export default function DashboardPage() {
       const res = await fetch(CHAT_API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Match your /api/chat contract: { message, context? }
+        // matches /api/chat contract: { message, context? }
         body: JSON.stringify({ message: content, context }),
       });
 
@@ -420,93 +371,13 @@ export default function DashboardPage() {
   };
 
   /**
-   * Optimizer: preview rules
-   */
-  const runOptimizerPreview = async () => {
-    if (!data) return;
-    setOptimizerLoading(true);
-    setOptimizerError(null);
-    setOptimizerSuccess(null);
-
-    try {
-      const res = await fetch("/api/optimizer/preview", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          dashboard: data, // DashboardData from /api/voluum-dashboard
-          trafficSourceFilter, // current selector value
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Preview failed (${res.status})`);
-      }
-
-      const json = (await res.json()) as OptimizerPreview;
-      setOptimizerPreview(json);
-    } catch (err) {
-      console.error(err);
-      setOptimizerError(
-        err instanceof Error ? err.message : "Unknown error running preview"
-      );
-    } finally {
-      setOptimizerLoading(false);
-    }
-  };
-
-  /**
-   * Optimizer: apply rules
-   */
-  const applyOptimizerRules = async (dryRun: boolean) => {
-    if (!optimizerPreview) {
-      setOptimizerError("Run a preview first before applying rules.");
-      return;
-    }
-
-    setOptimizerApplying(true);
-    setOptimizerError(null);
-    setOptimizerSuccess(null);
-
-    try {
-      const res = await fetch("/api/optimizer/apply", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          zonesToPauseNow: optimizerPreview.zonesToPauseNow,
-          dryRun,
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Apply failed (${res.status})`);
-      }
-
-      const json = await res.json();
-      const pausedCount =
-        typeof json.pausedCount === "number" ? json.pausedCount : 0;
-
-      setOptimizerSuccess(
-        dryRun
-          ? `Dry-run completed. ${pausedCount} zones would be paused.`
-          : `Rules applied. ${pausedCount} zones paused.`
-      );
-    } catch (err) {
-      console.error(err);
-      setOptimizerError(
-        err instanceof Error ? err.message : "Unknown error applying rules"
-      );
-    } finally {
-      setOptimizerApplying(false);
-    }
-  };
-
-  /**
    * ===========
    * Render
    * ===========
    */
 
-  if (loading) {
+  // Only show full-screen loader BEFORE the first successful load
+  if (!hasLoadedOnce && loading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
         <div className="text-lg font-medium">Loading Voluum data…</div>
@@ -522,8 +393,8 @@ export default function DashboardPage() {
           <p className="text-sm opacity-80 mb-4">{error}</p>
           <p className="text-xs opacity-60">
             Check your API route (`{DASHBOARD_API_URL}`) and make sure it
-            accepts either <code>dateRange</code> or <code>from/to</code> query
-            params.
+            accepts either <code>dateRange</code> or <code>from/to</code>{" "}
+            query params.
           </p>
         </div>
       </main>
@@ -550,6 +421,11 @@ export default function DashboardPage() {
             {data.dateRange} • {new Date(data.from).toLocaleString()} –{" "}
             {new Date(data.to).toLocaleString()}
           </p>
+          {hasLoadedOnce && loading && (
+            <p className="text-[10px] text-emerald-400 mt-1">
+              Refreshing data…
+            </p>
+          )}
         </div>
 
         <div className="flex flex-col gap-3 items-stretch md:items-end">
@@ -650,7 +526,7 @@ export default function DashboardPage() {
         ))}
       </section>
 
-      {/* Main layout: Campaigns + Details + Optimizer + Chat */}
+      {/* Main layout: Campaigns + Details + Chat */}
       <section className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,4fr)]">
         {/* Left: Campaign list */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
@@ -736,7 +612,7 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* Right: Details + Optimizer + Chat */}
+        {/* Right: Details + Chat */}
         <div className="flex flex-col gap-4">
           {/* Campaign details + breakdowns */}
           <div className="space-y-4">
@@ -950,156 +826,6 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Optimizer panel */}
-          <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 space-y-3 text-xs">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                  Optimizer (Preview & Apply)
-                </h3>
-                <p className="text-[11px] text-slate-400 mt-1">
-                  Generate auto-pause suggestions for bad zones, review them,
-                  then optionally apply via API.
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={runOptimizerPreview}
-                  disabled={optimizerLoading || !data}
-                  className="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed text-[11px] font-medium"
-                >
-                  {optimizerLoading ? "Generating…" : "Generate Preview"}
-                </button>
-              </div>
-            </div>
-
-            {optimizerError && (
-              <div className="text-[11px] text-rose-400 bg-rose-950/40 border border-rose-800/70 rounded-md px-3 py-2">
-                {optimizerError}
-              </div>
-            )}
-
-            {optimizerSuccess && (
-              <div className="text-[11px] text-emerald-400 bg-emerald-950/40 border border-emerald-800/70 rounded-md px-3 py-2">
-                {optimizerSuccess}
-              </div>
-            )}
-
-            {optimizerPreview && (
-              <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex flex-wrap gap-3">
-                    <div>
-                      <span className="text-[10px] uppercase tracking-wide text-slate-500">
-                        Rules
-                      </span>
-                      <div className="text-sm font-semibold">
-                        {optimizerPreview.rules.length}
-                      </div>
-                    </div>
-                    <div>
-                      <span className="text-[10px] uppercase tracking-wide text-slate-500">
-                        Zones to pause now
-                      </span>
-                      <div className="text-sm font-semibold">
-                        {optimizerPreview.zonesToPauseNow.length}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => applyOptimizerRules(true)}
-                      disabled={
-                        optimizerApplying ||
-                        optimizerPreview.zonesToPauseNow.length === 0
-                      }
-                      className="px-3 py-1 rounded-md bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed text-[11px]"
-                    >
-                      {optimizerApplying ? "Running…" : "Dry-run Apply"}
-                    </button>
-                    <button
-                      onClick={() => applyOptimizerRules(false)}
-                      disabled={
-                        optimizerApplying ||
-                        optimizerPreview.zonesToPauseNow.length === 0
-                      }
-                      className="px-3 py-1 rounded-md bg-rose-600 hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed text-[11px]"
-                    >
-                      {optimizerApplying ? "Applying…" : "Apply Live"}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Zones to pause table */}
-                {optimizerPreview.zonesToPauseNow.length === 0 ? (
-                  <div className="text-[11px] text-slate-500">
-                    No clear bad zones to pause in this view based on the
-                    current rules.
-                  </div>
-                ) : (
-                  <div className="max-h-60 overflow-auto border border-slate-800 rounded-md">
-                    <table className="w-full border-collapse text-[11px]">
-                      <thead className="bg-slate-900/80 sticky top-0 z-10">
-                        <tr className="text-slate-400">
-                          <th className="text-left p-2">Campaign</th>
-                          <th className="text-left p-2">Zone</th>
-                          <th className="text-right p-2">Visits</th>
-                          <th className="text-right p-2">Conv</th>
-                          <th className="text-right p-2">Cost</th>
-                          <th className="text-right p-2">ROI</th>
-                          <th className="text-left p-2">Reason</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {optimizerPreview.zonesToPauseNow.map(
-                          (z, idx) => (
-                            <tr
-                              key={`${z.campaignId}-${z.zoneId}-${idx}`}
-                              className="border-t border-slate-800/60"
-                            >
-                              <td className="p-2 align-top">
-                                <div className="text-[11px] text-slate-200">
-                                  {z.campaignId}
-                                </div>
-                              </td>
-                              <td className="p-2 align-top">{z.zoneId}</td>
-                              <td className="p-2 text-right align-top">
-                                {z.metrics.visits}
-                              </td>
-                              <td className="p-2 text-right align-top">
-                                {z.metrics.conversions}
-                              </td>
-                              <td className="p-2 text-right align-top">
-                                {formatMoney(z.metrics.cost)}
-                              </td>
-                              <td
-                                className={`p-2 text-right align-top ${
-                                  z.metrics.roi < 0
-                                    ? "text-rose-400"
-                                    : z.metrics.roi > 0
-                                    ? "text-emerald-400"
-                                    : ""
-                                }`}
-                              >
-                                {formatPercent(z.metrics.roi)}
-                              </td>
-                              <td className="p-2 align-top max-w-[200px]">
-                                <span className="text-[11px] text-slate-300">
-                                  {z.reason}
-                                </span>
-                              </td>
-                            </tr>
-                          )
-                        )}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-
           {/* Chat assistant */}
           <div className="rounded-xl border border-slate-800 bg-slate-900/80 flex flex-col h-72">
             <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
@@ -1176,9 +902,7 @@ function DetailStat({
       <div className="text-[10px] uppercase tracking-wide text-slate-500">
         {label}
       </div>
-      <div className={`text-sm font-medium ${valueClass ?? ""}`}>
-        {value}
-      </div>
+      <div className={`text-sm font-medium ${valueClass ?? ""}`}>{value}</div>
     </div>
   );
 }
