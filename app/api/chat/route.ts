@@ -1,159 +1,96 @@
 // app/api/chat/route.ts
-import type { NextRequest } from "next/server";
-
-export const runtime = "nodejs";
-
-type DashboardMessage = {
-  role: "user" | "assistant" | "system";
-  content: string;
-};
-
-type ChatBody = {
-  // Shape A (simple)
-  message?: string;
-  context?: any;
-
-  // Shape B (dashboard)
-  messages?: DashboardMessage[];
-  kpis?: any;
-  campaigns?: any;
-  dateRange?: {
-    label?: string;
-    from?: string;
-    to?: string;
-  };
-};
-
-function json(data: any, status = 200) {
-  return new Response(JSON.stringify(data), {
-    status,
-    headers: { "Content-Type": "application/json" },
-  });
-}
+import { NextRequest, NextResponse } from "next/server";
 
 export async function GET() {
-  return json({
+  return NextResponse.json({
     message:
-      "Chat API is alive. Send a POST request with { message: string, context?: any } or { messages, kpis, campaigns, dateRange }.",
+      "Chat API is alive. Send a POST request with { message: string, context?: any }.",
   });
 }
 
 export async function POST(req: NextRequest) {
   try {
-    const body = (await req.json()) as ChatBody;
+    const body = await req.json().catch(() => null);
+
+    if (!body || typeof body.message !== "string") {
+      return NextResponse.json(
+        { error: "Missing `message` in request body." },
+        { status: 400 }
+      );
+    }
+
+    const { message, context } = body as {
+      message: string;
+      context?: any;
+    };
 
     const apiKey = process.env.OPENAI_API_KEY;
+
+    // If you haven’t set your key yet, we still respond with 200 so the UI doesn’t “network error”
     if (!apiKey) {
-      return json({
+      return NextResponse.json({
         reply:
-          "Backend is missing OPENAI_API_KEY. Set it in your Vercel / .env.local environment variables.",
+          "Your backend is missing OPENAI_API_KEY. Add it in Vercel → Project Settings → Environment Variables.",
       });
     }
 
-    const { message, context, messages, kpis, campaigns, dateRange } = body;
-
-    // Try to figure out the latest user question
-    let latestUserMessage: string | undefined = message;
-
-    if (!latestUserMessage && Array.isArray(messages) && messages.length > 0) {
-      const lastUser = [...messages].reverse().find((m) => m.role === "user");
-      latestUserMessage = lastUser?.content;
-    }
-
-    if (!latestUserMessage) {
-      latestUserMessage = "Help me analyze my Voluum campaigns, zones, and creatives.";
-    }
-
-    // Build a compact context summary for the model
-    const contextSummary = `
-You are an assistant helping to analyze Voluum performance data (PropellerAds traffic, casino / betting offers).
-
-Date range: ${dateRange?.label ?? "custom"} (${
-      dateRange?.from ?? "?"
-    } → ${dateRange?.to ?? "?"})
-
-KPIs:
-${
-  Array.isArray(kpis)
-    ? kpis.map((k: any) => `- ${k.label}: ${k.value}`).join("\n")
-    : "N/A"
-}
-
-Campaigns loaded: ${Array.isArray(campaigns) ? campaigns.length : 0}
-
-Guidelines:
-- Look at zones and creatives with high spend and zero/low signups or deposits.
-- Suggest rules like "pause zone if spend > X and conversions = 0" or "scale zones with good ROI".
-- Be concrete and actionable: reference specific campaign names and zone IDs when possible.
-`.trim();
-
-    // Build OpenAI messages
-    const openAIMessages: { role: "system" | "user" | "assistant"; content: string }[] = [
+    // Call OpenAI (you can change model if you like)
+    const openaiRes = await fetch(
+      "https://api.openai.com/v1/chat/completions",
       {
-        role: "system",
-        content: contextSummary,
-      },
-    ];
-
-    if (Array.isArray(messages) && messages.length > 0) {
-      // Reuse dashboard chat history if present
-      for (const m of messages) {
-        if (m.role === "user" || m.role === "assistant" || m.role === "system") {
-          openAIMessages.push({ role: m.role, content: m.content });
-        }
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model: "gpt-4o-mini",
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are a Voluum / campaign optimization assistant. Be concise and practical.",
+            },
+            {
+              role: "user",
+              content: message,
+            },
+            ...(context
+              ? [
+                  {
+                    role: "system" as const,
+                    content:
+                      "Context JSON (do not echo verbatim, just use it): " +
+                      JSON.stringify(context),
+                  },
+                ]
+              : []),
+          ],
+        }),
       }
-    } else if (latestUserMessage) {
-      // Fallback: just send the latest single message
-      const combined = context
-        ? `User message:\n${latestUserMessage}\n\nExtra context JSON:\n${JSON.stringify(
-            context,
-            null,
-            2
-          )}`
-        : latestUserMessage;
+    );
 
-      openAIMessages.push({
-        role: "user",
-        content: combined,
-      });
+    if (!openaiRes.ok) {
+      const text = await openaiRes.text().catch(() => "");
+      console.error("OpenAI error", openaiRes.status, text);
+
+      return NextResponse.json(
+        { error: "Upstream LLM error. Check server logs for details." },
+        { status: 500 }
+      );
     }
 
-    const openaiResponse = await fetch("https://api.openai.com/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "gpt-4.1-mini",
-        messages: openAIMessages,
-        temperature: 0.3,
-      }),
-    });
+    const data = (await openaiRes.json()) as any;
+    const reply =
+      data.choices?.[0]?.message?.content?.trim() ??
+      "I couldn’t generate a reply.";
 
-    if (!openaiResponse.ok) {
-      const text = await openaiResponse.text();
-      console.error("OpenAI error:", openaiResponse.status, text);
-      return json({
-        reply: `I couldn't generate a suggestion right now (OpenAI error ${openaiResponse.status}). Details: ${text.slice(
-          0,
-          300
-        )}`,
-      });
-    }
-
-    const data = await openaiResponse.json();
-    const reply: string =
-      data?.choices?.[0]?.message?.content ??
-      "I’m not sure what to say — try asking your question another way?";
-
-    return json({ reply });
-  } catch (err: any) {
-    console.error("Chat API error:", err);
-    return json({
-      reply:
-        "Something went wrong inside `/api/chat`. Error: " +
-        (err?.message ?? String(err)),
-    });
+    return NextResponse.json({ reply });
+  } catch (err) {
+    console.error("Chat API POST error", err);
+    return NextResponse.json(
+      { error: "Internal server error in /api/chat." },
+      { status: 500 }
+    );
   }
 }
