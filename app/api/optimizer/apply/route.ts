@@ -1,114 +1,197 @@
 // app/api/optimizer/apply/route.ts
-import { NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
-type ZonePauseSuggestion = {
-  campaignId: string;
-  campaignName: string;
-  trafficSource: string;
-  zoneId: string;
-  reason: string;
-  metrics: {
-    visits: number;
-    conversions: number;
-    revenue: number;
-    cost: number;
-    roi: number;
-  };
+/**
+ * Types
+ */
+
+type ZoneMetrics = {
+  visits: number;
+  conversions: number;
+  revenue: number;
+  cost: number;
+  roi: number;
 };
 
-type ApplyBody = {
-  zonesToPauseNow: ZonePauseSuggestion[];
+type ZoneToPausePayload = {
+  campaignId: string;
+  zoneId: string;
+  reason?: string;
+  metrics?: ZoneMetrics;
+};
+
+type ApplyRequestBody = {
+  zonesToPauseNow: ZoneToPausePayload[];
   dryRun?: boolean;
 };
 
-export async function POST(req: Request) {
+type ZoneApplyResult = {
+  campaignId: string;
+  zoneId: string;
+  status: "success" | "failed" | "skipped";
+  message: string;
+  dryRun: boolean;
+};
+
+/**
+ * Helper – call PropellerAds API for a single zone
+ *
+ * NOTE:
+ * - This is a scaffold based on PropellerAds v5 API style.
+ * - You MUST verify the exact endpoint + payload in their docs and adjust.
+ * - Uses env: PROPELLER_API_TOKEN
+ */
+async function pauseZoneInPropeller(
+  zone: ZoneToPausePayload
+): Promise<{ ok: boolean; message: string }> {
+  const token = process.env.PROPELLER_API_TOKEN;
+
+  if (!token) {
+    return {
+      ok: false,
+      message:
+        "Missing PROPELLER_API_TOKEN env. Skipping real API call, behaving as dry-run.",
+    };
+  }
+
+  // You may want to use a different base URL if Propeller updates their API
+  const baseUrl =
+    process.env.PROPELLER_API_BASE_URL ||
+    "https://ssp-api.propellerads.com/v5";
+
+  // ⚠️ IMPORTANT:
+  // This endpoint + body is an educated example.
+  // Check PropellerAds Swagger/docs and adjust if needed.
+  const url = `${baseUrl}/adv/campaigns/${encodeURIComponent(
+    zone.campaignId
+  )}/zones/blacklist`;
+
   try {
-    const body = (await req.json()) as ApplyBody;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify({
+        // Adjust to whatever Propeller expects, e.g. ["12345"]
+        zone_ids: [zone.zoneId],
+      }),
+    });
 
-    const zonesToPauseNow = body.zonesToPauseNow ?? [];
-    const dryRun = body.dryRun ?? false;
+    if (!res.ok) {
+      const text = await res.text();
+      return {
+        ok: false,
+        message: `Propeller API error (${res.status}): ${text || res.statusText}`,
+      };
+    }
 
-    if (!zonesToPauseNow.length) {
-      return NextResponse.json(
-        { error: "No zonesToPauseNow provided" },
-        { status: 400 }
+    return { ok: true, message: "Zone blacklisted via Propeller API." };
+  } catch (err: any) {
+    console.error("Propeller API call failed:", err);
+    return {
+      ok: false,
+      message: `Propeller API call failed: ${err?.message || String(err)}`,
+    };
+  }
+}
+
+/**
+ * POST /api/optimizer/apply
+ *
+ * Body:
+ * {
+ *   zonesToPauseNow: [
+ *     { campaignId, zoneId, reason?, metrics? }
+ *   ],
+ *   dryRun?: boolean   // default true if not provided
+ * }
+ */
+export async function POST(req: NextRequest): Promise<Response> {
+  try {
+    const body = (await req.json()) as ApplyRequestBody | null;
+
+    if (!body || !Array.isArray(body.zonesToPauseNow)) {
+      return new Response(
+        JSON.stringify({
+          error: "Invalid body. Expected { zonesToPauseNow: Zone[], dryRun?: boolean }",
+        }),
+        { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    // In a real implementation, you would:
-    // 1. Group zones by trafficSource and campaign
-    // 2. For PropellerAds, call their API to add each zone to the blacklist
-    //
-    // NOTE: The exact PropellerAds endpoint/payload can change – always
-    //       confirm in their official API docs. This is pseudocode, NOT
-    //       a guaranteed correct endpoint.
-    //
-    // Example shape (PSEUDOCODE ONLY):
-    //
-    // const token = process.env.PROPELLER_API_TOKEN;
-    // if (!token && !dryRun) {
-    //   throw new Error("Missing PROPELLER_API_TOKEN env var");
-    // }
-    //
-    // for (const zone of zonesToPauseNow) {
-    //   if (zone.trafficSource !== "PropellerAds (API Ready-2)") continue;
-    //
-    //   const payload = {
-    //     // This depends on PropellerAds API schema:
-    //     // e.g. campaign_id, zone_id, action: "blacklist", etc.
-    //     campaign_id: zone.campaignId,
-    //     zone_ids: [zone.zoneId],
-    //   };
-    //
-    //   if (!dryRun) {
-    //     const resp = await fetch("https://api.propellerads.com/.../blacklist", {
-    //       method: "POST",
-    //       headers: {
-    //         "Content-Type": "application/json",
-    //         Authorization: `Bearer ${token}`,
-    //       },
-    //       body: JSON.stringify(payload),
-    //     });
-    //
-    //     if (!resp.ok) {
-    //       const text = await resp.text();
-    //       console.error("Propeller API error:", resp.status, text);
-    //     }
-    //   }
-    // }
+    const { zonesToPauseNow } = body;
+    const dryRun = body.dryRun ?? true;
 
-    // For now, just log what *would* be done:
-    console.log(
-      `[optimizer/apply] ${dryRun ? "DRY RUN" : "APPLYING"} ${
-        zonesToPauseNow.length
-      } zones`,
-      zonesToPauseNow.map((z) => ({
-        campaignId: z.campaignId,
-        zoneId: z.zoneId,
-        cost: z.metrics.cost,
-        visits: z.metrics.visits,
-      }))
-    );
+    if (zonesToPauseNow.length === 0) {
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          dryRun,
+          totalZones: 0,
+          results: [],
+          message: "No zones provided to pause.",
+        }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
 
-    return NextResponse.json(
-      {
+    const results: ZoneApplyResult[] = [];
+
+    for (const zone of zonesToPauseNow) {
+      if (!zone.campaignId || !zone.zoneId) {
+        results.push({
+          campaignId: zone.campaignId || "",
+          zoneId: zone.zoneId || "",
+          status: "skipped",
+          message: "Missing campaignId or zoneId.",
+          dryRun,
+        });
+        continue;
+      }
+
+      if (dryRun) {
+        results.push({
+          campaignId: zone.campaignId,
+          zoneId: zone.zoneId,
+          status: "success",
+          message: `Dry-run only. Would pause zone "${zone.zoneId}" in campaign "${zone.campaignId}".`,
+          dryRun: true,
+        });
+        continue;
+      }
+
+      // Real API mode: attempt to pause via PropellerAds
+      const apiResult = await pauseZoneInPropeller(zone);
+
+      results.push({
+        campaignId: zone.campaignId,
+        zoneId: zone.zoneId,
+        status: apiResult.ok ? "success" : "failed",
+        message: apiResult.message,
+        dryRun: false,
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
         ok: true,
         dryRun,
-        pausedCount: zonesToPauseNow.length,
-        message: dryRun
-          ? "Dry run only – no changes sent to traffic sources."
-          : "Stub: Implement PropellerAds API calls where indicated in the code comments.",
-      },
-      { status: 200 }
+        totalZones: zonesToPauseNow.length,
+        results,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err: any) {
-    console.error("optimizer/apply error:", err);
-    return NextResponse.json(
-      {
-        error: "optimizer_apply_error",
-        message: err?.message ?? String(err),
-      },
-      { status: 500 }
+    console.error("Optimizer apply error:", err);
+    return new Response(
+      JSON.stringify({
+        error: "Optimizer apply error",
+        message: err?.message || String(err),
+      }),
+      { status: 500, headers: { "Content-Type": "application/json" } }
     );
   }
 }
