@@ -73,7 +73,7 @@ type ChatMessage = {
   content: string;
 };
 
-type TabKey = "overview" | "optimizer";
+type TabKey = "overview" | "optimizer" | "creatives";
 
 /**
  * ===========
@@ -130,7 +130,7 @@ type OptimizerPreviewResult = {
  */
 
 const DASHBOARD_API_URL = "/api/voluum-dashboard";
-// IMPORTANT: we are using /api/chat as you said
+// We are using /api/chat as you said
 const CHAT_API_URL = "/api/chat";
 
 const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
@@ -671,30 +671,43 @@ export default function DashboardPage() {
         ))}
       </section>
 
-      {/* Tabs */}
-      <div className="border-b border-slate-800 flex items-center gap-2 text-xs">
-        <button
-          type="button"
-          onClick={() => setActiveTab("overview")}
-          className={`px-3 py-2 border-b-2 ${
-            activeTab === "overview"
-              ? "border-emerald-500 text-emerald-300"
-              : "border-transparent text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          Overview
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("optimizer")}
-          className={`px-3 py-2 border-b-2 ${
-            activeTab === "optimizer"
-              ? "border-emerald-500 text-emerald-300"
-              : "border-transparent text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          Optimizer
-        </button>
+      {/* Tabs – bigger & more noticeable */}
+      <div className="flex justify-start mb-2">
+        <div className="inline-flex items-center gap-2 bg-slate-900/80 border border-slate-800 rounded-full p-1.5 text-sm">
+          <button
+            type="button"
+            onClick={() => setActiveTab("overview")}
+            className={`px-4 py-2 rounded-full font-medium transition-colors ${
+              activeTab === "overview"
+                ? "bg-emerald-600 text-slate-50 shadow-md"
+                : "text-slate-300 hover:bg-slate-800 hover:text-slate-50"
+            }`}
+          >
+            Overview
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("optimizer")}
+            className={`px-4 py-2 rounded-full font-medium transition-colors ${
+              activeTab === "optimizer"
+                ? "bg-emerald-600 text-slate-50 shadow-md"
+                : "text-slate-300 hover:bg-slate-800 hover:text-slate-50"
+            }`}
+          >
+            Optimizer
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("creatives")}
+            className={`px-4 py-2 rounded-full font-medium transition-colors ${
+              activeTab === "creatives"
+                ? "bg-emerald-600 text-slate-50 shadow-md"
+                : "text-slate-300 hover:bg-slate-800 hover:text-slate-50"
+            }`}
+          >
+            Creatives
+          </button>
+        </div>
       </div>
 
       {/* Tab content */}
@@ -934,7 +947,7 @@ export default function DashboardPage() {
                     )}
                   </div>
 
-                  {/* Creatives */}
+                  {/* Creatives summary (still visible on Overview) */}
                   <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
                     <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
                       <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
@@ -1064,7 +1077,7 @@ export default function DashboardPage() {
             </div>
           </section>
         </>
-      ) : (
+      ) : activeTab === "optimizer" ? (
         /* Optimizer tab */
         <section className="space-y-4">
           <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 text-xs">
@@ -1090,7 +1103,7 @@ export default function DashboardPage() {
               </li>
               <li>
                 You can{" "}
-                <span className="text-emerald-400">
+                <span className="text-emerald-400 font-semibold">
                   dry-run before doing anything live
                 </span>
                 .
@@ -1103,7 +1116,7 @@ export default function DashboardPage() {
               type="button"
               onClick={runOptimizerPreview}
               disabled={optimizerPreviewLoading || loading}
-              className="px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               {optimizerPreviewLoading ? "Analyzing…" : "Run Preview"}
             </button>
@@ -1116,7 +1129,7 @@ export default function DashboardPage() {
                 optimizerPreviewLoading ||
                 !optimizerPreview?.zonesToPauseNow?.length
               }
-              className="px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               {optimizerApplyLoading ? "Running…" : "Apply (Dry run)"}
             </button>
@@ -1129,7 +1142,7 @@ export default function DashboardPage() {
                 optimizerPreviewLoading ||
                 !optimizerPreview?.zonesToPauseNow?.length
               }
-              className="px-3 py-1 rounded-md bg-rose-700 hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-4 py-2 rounded-md bg-rose-700 hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
             >
               {optimizerApplyLoading ? "Running…" : "Apply (Live – pause zones)"}
             </button>
@@ -1188,7 +1201,8 @@ export default function DashboardPage() {
                           </div>
                         </div>
                         <div className="text-[11px] text-slate-300">
-                          If <span className="text-emerald-300">
+                          If{" "}
+                          <span className="text-emerald-300">
                             {rule.condition}
                           </span>
                           , then{" "}
@@ -1322,6 +1336,35 @@ export default function DashboardPage() {
               <span className="text-rose-400">Apply (Live)</span>.
             </p>
           )}
+        </section>
+      ) : (
+        /* Creatives tab – placeholder for now */
+        <section className="space-y-4">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 text-sm">
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300 mb-2">
+              Creatives workspace (coming soon)
+            </h2>
+            <p className="text-slate-300 mb-2 text-xs">
+              This tab will become your dedicated{" "}
+              <span className="text-emerald-400 font-semibold">
+                creative performance lab
+              </span>{" "}
+              – think:
+            </p>
+            <ul className="list-disc list-inside text-slate-400 text-xs space-y-1">
+              <li>Best and worst creatives by ROI / deposits.</li>
+              <li>Angle & headline clustering (e.g. “bonus angle”, “fear”).</li>
+              <li>Creative burnout detection over time.</li>
+              <li>Suggestions for what to duplicate, pause, or test next.</li>
+            </ul>
+            <p className="text-slate-400 mt-3 text-xs">
+              For now you can still see creative performance in the{" "}
+              <span className="text-emerald-300 font-semibold">
+                Overview
+              </span>{" "}
+              tab, under “Creatives breakdown”.
+            </p>
+          </div>
         </section>
       )}
     </main>
