@@ -6,85 +6,96 @@ const client = new OpenAI({
 });
 
 /**
- * 🚀 ADVANCED SYSTEM PROMPT
- * Includes:
- * - Zone analytics
- * - Creative analytics
- * - Traffic source intelligence
- * - CPA/CPR guidance
- * - Outlier detection guidelines
- * - Rule-writing engine with JSON block output
- * - Strict grounding on computed data
+ * SYSTEM PROMPT
+ * - General Voluum performance assistant
+ * - PLUS: when user asks about pausing bad zones / automation rules,
+ *   it adds a JSON rules block at the end of the answer.
  */
 const systemPrompt = `
-You are a senior performance marketing strategist specializing in Voluum + PropellerAds push traffic.
+You are a performance marketing assistant helping the user analyze campaigns from Voluum and PropellerAds.
 
 You receive:
-1. A natural-language question from the user.
-2. RAW JSON from the dashboard.
-3. A COMPUTED analytics summary (trust this above everything else).
+- A natural-language question from the user.
+- A JSON payload describing the current dashboard view:
+  - kpis[]: id, label, value, delta, positive
+  - campaigns[]: for each campaign
+    - id, name, trafficSource, visits, signups, deposits, revenue, profit, roi, cost, cpa, cpr
+    - zones[] with: id, visits, conversions, revenue, cost, roi
+    - creatives[] with: id, name, visits, conversions, revenue, cost, roi
+  - dateRange: "today" | "yesterday" | "last7days" | "last30days" | "custom"
+  - trafficSource: currently selected traffic source or "all"
+  - country: currently selected country or "All countries"
 
-==========================================================
-DO NOT HALLUCINATE METRICS — ONLY use the computed summary.
-==========================================================
+Your general goals:
+1. Explain what is happening in the data: good campaigns, bad campaigns, trends, and obvious actions (pause, scale, test new angles, etc.).
+2. Answer questions about campaign performance, CPA/CPR, ROI, countries, and traffic sources.
+3. When the user talks about ZONES, BAD ZONES, PLACEMENTS, BLACKLISTS, or AUTOMATION RULES, also act as a "rules brain"
+   to help them design practical rules to auto-pause bad zones.
 
-Your responsibilities:
-----------------------------------------------------------
-1. Explain what is happening in the data clearly + accurately.
-2. Identify good zones, bad zones, outliers, and profitable pockets.
-3. Recommend tactical actions:
-   - pause
-   - scale
-   - bid adjust
-   - creative rotation
-   - country/zone filtering
-4. Detect patterns across:
-   • traffic sources
-   • creatives
-   • zones
-   • campaigns
-5. Detect OUTLIERS:
-   • zones with cost > avg + 2×stddev
-   • creatives burning disproportionately
-   • zero-conversion zones with high CPC
-6. Detect DEPOSIT-DRIVING zones & creatives.
-7. If user asks about automation / rules / blacklists / pausing:
-   👉 Output a JSON block with machine-readable rules.
-   👉 JSON block must follow the exact shape requested.
-   👉 The JSON block appears as the LAST part of the answer inside \`\`\`json code fences.
+Be concise, tactical, and data-driven. Always tie your advice back to the actual metrics in the JSON.
 
-RULE WRITING GUIDELINES:
-----------------------------------------------------------
-Use ONLY these fields:
-visits, conversions, revenue, cost, roi, signups, deposits (if available)
+IMPORTANT – WHEN TO OUTPUT JSON RULES BLOCK
+------------------------------------------------
+If (and only if) the user's question is clearly about:
+- pausing / blocking / blacklisting bad zones or placements, OR
+- creating rules / automation / auto-pause logic for zones,
 
-Rule types you must be able to generate:
-- ZERO-conversion cost threshold rule
-- Low ROI rule
-- High CPA rule
-- High CPC rule
-- Outlier burn rule (2× stddev)
-- Creative kill rule
-- Zone reactivation rule (cooldown)
-- Whitelist-protected zones (never pause)
-- Multi-traffic-source scoped rules
-- Deposit-priority rule
+then you must output, at the END of your answer, a JSON object in a \`\`\`json code fence with this shape:
 
-Reactivation example:
-"IF zone was paused earlier AND zone receives 1+ signup in last 24h → Reactivate"
+\`\`\`json
+{
+  "rules": [
+    {
+      "name": "short rule name",
+      "scope": "zone",
+      "trafficSource": "string or null if all sources",
+      "country": "string or null if all countries",
+      "condition": "human-readable condition using: visits, conversions, revenue, cost, roi",
+      "suggestedThresholds": {
+        "minVisits": number | null,
+        "minCost": number | null,
+        "maxROI": number | null
+      },
+      "action": "pause_zone",
+      "appliesTo": "description of what it targets (e.g. 'all PropellerAds MX zones in the current view')",
+      "rationale": "why this rule makes sense"
+    }
+  ],
+  "zonesToPauseNow": [
+    {
+      "campaignId": "string",
+      "zoneId": "string",
+      "reason": "why this specific zone is bad",
+      "metrics": {
+        "visits": number,
+        "conversions": number,
+        "revenue": number,
+        "cost": number,
+        "roi": number
+      }
+    }
+  ]
+}
+\`\`\`
 
-Whitelist example:
-"IF zoneId IN ['123', '8811823'] → skip pause evaluation"
+Guidelines for rules:
+- Use only fields you actually see in the data: visits, conversions, revenue, cost, roi.
+- Do NOT invent new metric names.
+- If user is filtered to a specific traffic source or country, tailor rules to that scope.
+- Prefer simple and conservative conditions, like:
+  - "IF zone has >= X visits AND 0 conversions"
+  - "IF zone cost >= Y AND ROI <= -100%"
+- Suggest thresholds that roughly match the scale of the data you see.
+- If there is not enough data to safely pause zones, say so and keep rules very conservative.
+- If there are genuinely no clear losers, say that – don’t force rules.
 
-The JSON block should list:
-- rules[]
-- zonesToPauseNow[]
-- creativesToPauseNow[]
-- reactivationCandidates[]
-- outlierBurners[]
+If the question is NOT about pausing zones / rules / automation:
+- DO NOT output the JSON block.
+- Just answer in normal prose.
 
-REMEMBER:
-If the user question is NOT about pausing/rules/automation → DO NOT output JSON.
+Answer structure when JSON is required:
+1) Start with a short, friendly explanation in plain English.
+2) Then include the JSON block (and nothing else) inside a \`\`\`json code fence as the last part of the answer.
 `;
 
 export async function POST(req: Request): Promise<Response> {
@@ -107,151 +118,43 @@ export async function POST(req: Request): Promise<Response> {
       );
     }
 
-    /**
-     * ========================================================
-     *    🚀 DETerministic Performance Analytics (Backend)
-     * ========================================================
-     */
-
-    const zonesFlat: any[] = [];
-    const creativesFlat: any[] = [];
-
-    for (const c of campaigns ?? []) {
-      // Zones
-      for (const z of c.zones ?? []) {
-        zonesFlat.push({
-          campaignId: c.id,
-          campaignName: c.name,
-          trafficSource: c.trafficSource,
-          zoneId: z.id ?? "(unknown)",
-          visits: z.visits ?? 0,
-          conversions: z.conversions ?? 0,
-          revenue: z.revenue ?? 0,
-          cost: z.cost ?? 0,
-          roi: z.roi ?? 0,
-        });
-      }
-
-      // Creatives
-      for (const cr of c.creatives ?? []) {
-        creativesFlat.push({
-          campaignId: c.id,
-          campaignName: c.name,
-          creativeId: cr.id ?? "(unknown)",
-          name: cr.name || null,
-          visits: cr.visits ?? 0,
-          conversions: cr.conversions ?? 0,
-          revenue: cr.revenue ?? 0,
-          cost: cr.cost ?? 0,
-          roi: cr.roi ?? 0,
-        });
-      }
-    }
-
-    // Zones with conversions
-    const zonesWithConversions = zonesFlat.filter(
-      (z) => z.conversions > 0
-    );
-
-    // Outlier detection (2× stddev over mean cost)
-    const meanCost =
-      zonesFlat.reduce((s, z) => s + z.cost, 0) / (zonesFlat.length || 1);
-
-    const stddev =
-      Math.sqrt(
-        zonesFlat
-          .map((z) => Math.pow(z.cost - meanCost, 2))
-          .reduce((s, x) => s + x, 0) / (zonesFlat.length || 1)
-      ) || 0;
-
-    const outlierThreshold = meanCost + 2 * stddev;
-
-    const outlierBurners = zonesFlat.filter(
-      (z) => z.cost > outlierThreshold && z.conversions === 0
-    );
-
-    const worstZonesNoConv = [...zonesFlat]
-      .filter((z) => z.conversions === 0)
-      .sort((a, b) => b.cost - a.cost)
-      .slice(0, 10);
-
-    const topZones = [...zonesFlat]
-      .sort((a, b) => b.roi - a.roi)
-      .slice(0, 10);
-
-    const topCreatives = [...creativesFlat]
-      .sort((a, b) => b.roi - a.roi)
-      .slice(0, 10);
-
-    const worstCreativesNoConv = [...creativesFlat]
-      .filter((c) => c.conversions === 0)
-      .sort((a, b) => b.cost - a.cost)
-      .slice(0, 10);
-
-    const computedContext = {
-      zoneCount: zonesFlat.length,
-      creativeCount: creativesFlat.length,
-      meanCost,
-      stddev,
-      outlierThreshold,
-      zonesWithConversions,
-      topZones,
-      worstZonesNoConv,
-      worstCreativesNoConv,
-      topCreatives,
-      outlierBurners,
-      sampleZones: zonesFlat.slice(0, 20),
-      sampleCreatives: creativesFlat.slice(0, 20),
-    };
-
-    /**
-     * ========================================================
-     *  🚀 Prepare Messages for OpenAI
-     * ========================================================
-     */
-
-    const messages = [
-      { role: "system", content: systemPrompt },
-      { role: "user", content: question },
+    // Build messages for OpenAI – correctly typed for the new SDK
+    const messages: OpenAI.ChatCompletionMessageParam[] = [
+      {
+        role: "system",
+        content: systemPrompt,
+      },
+      {
+        role: "user",
+        content: question,
+      },
       {
         role: "user",
         content:
-          "RAW DASHBOARD DATA:\n\n" +
+          "Here is the JSON data for the current dashboard view:\n\n" +
           JSON.stringify(
             {
-              kpis,
-              campaigns,
-              dateRange,
-              trafficSource,
-              country,
+              kpis: kpis ?? [],
+              campaigns: campaigns ?? [],
+              dateRange: dateRange ?? null,
+              trafficSource: trafficSource ?? null,
+              country: country ?? null,
             },
             null,
             2
           ),
       },
-      {
-        role: "user",
-        content:
-          "COMPUTED SUMMARY (TRUST THIS):\n\n" +
-          JSON.stringify(computedContext, null, 2),
-      },
     ];
 
-    /**
-     * ========================================================
-     *  🚀 Call OpenAI
-     * ========================================================
-     */
-
     const completion = await client.chat.completions.create({
-      model: "gpt-4.1",
+      model: "gpt-4.1", // or "gpt-4.1-mini" if you prefer cheaper
       messages,
       temperature: 0.4,
     });
 
     const answer =
       completion.choices?.[0]?.message?.content ??
-      "No answer returned from assistant.";
+      "No answer text returned from assistant.";
 
     return new Response(JSON.stringify({ answer }), {
       status: 200,
