@@ -415,7 +415,7 @@ export default function DashboardPage() {
       <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold">
-            Voluum Assistant
+            PropellarAds Dashboard
           </h1>
           <p className="text-xs md:text-sm text-slate-400 mt-1">
             {data.dateRange} • {new Date(data.from).toLocaleString()} –{" "}
