@@ -91,6 +91,46 @@ const OPTIMIZER_PREVIEW_URL = "/api/optimizer/preview";
 const OPTIMIZER_APPLY_URL = "/api/optimizer/apply";
 const CREATIVE_CHAT_API_URL = "/api/creative-doctor";
 const CREATIVE_IMAGE_API_URL = "/api/creative-images";
+const CREATIVE_ASSETS_API_URL = "/api/creative-assets";
+const AD_TYPES: Record<
+  string,
+  {
+    label: string;
+    notes: string;
+    mainImageSize: string;
+    iconSize?: string | null;
+    required: string[];
+  }
+> = {
+  "push-classic": {
+    label: "Propeller Push",
+    notes: "Title + desc + square icon (192px+) + main image (360x240 or square).",
+    mainImageSize: "1024x1024",
+    iconSize: "512x512",
+    required: ["title", "description", "icon", "main image"],
+  },
+  "inpage-push": {
+    label: "In-Page Push",
+    notes: "Title + desc + square icon; image can be square or 3:2.",
+    mainImageSize: "1024x768",
+    iconSize: "512x512",
+    required: ["title", "description", "icon", "main image"],
+  },
+  interstitial: {
+    label: "Interstitial",
+    notes: "Full-screen image; optional title/description.",
+    mainImageSize: "1080x1920",
+    iconSize: null,
+    required: ["main image", "optional copy"],
+  },
+  onclick: {
+    label: "Onclick / Direct Click",
+    notes: "Hero image aimed at CTR (1200x628).",
+    mainImageSize: "1200x628",
+    iconSize: null,
+    required: ["main image"],
+  },
+};
 
 const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
   { key: "today", label: "Today" },
@@ -199,13 +239,23 @@ export default function DashboardPage() {
   const [creativeChatLoading, setCreativeChatLoading] = useState(false);
   const [creativeTokenCount, setCreativeTokenCount] = useState<number>(0);
 
-  // Creative image generator
-  const [imagePrompt, setImagePrompt] = useState(
-    "High-converting casino push banner, bold CTA, mobile-first, 1:1 format."
-  );
-  const [imageLoading, setImageLoading] = useState(false);
-  const [imageError, setImageError] = useState<string | null>(null);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+// Creative image generator
+const [imagePrompt, setImagePrompt] = useState(
+  "High-converting casino push banner, bold CTA, mobile-first, 1:1 format."
+);
+const [adType, setAdType] = useState<string>("push-classic");
+const [assetTitle, setAssetTitle] = useState("");
+const [assetDescription, setAssetDescription] = useState("");
+const [mainImagePrompt, setMainImagePrompt] = useState("");
+const [iconPrompt, setIconPrompt] = useState("");
+const [mainImageSize, setMainImageSize] = useState("1024x1024");
+const [iconSize, setIconSize] = useState("512x512");
+const [imageLoading, setImageLoading] = useState(false);
+const [imageError, setImageError] = useState<string | null>(null);
+const [imageUrl, setImageUrl] = useState<string | null>(null);
+const [iconUrl, setIconUrl] = useState<string | null>(null);
+const [assetsLoading, setAssetsLoading] = useState(false);
+const [assetsError, setAssetsError] = useState<string | null>(null);
 
   /**
    * Fetch dashboard data whenever dateRange or custom dates change
@@ -606,6 +656,133 @@ export default function DashboardPage() {
     }
   };
 
+  const generateImages = async (
+    mainPromptText: string,
+    iconPromptText?: string | null,
+    mainSize?: string,
+    iconSizeOverride?: string | null
+  ) => {
+    setImageLoading(true);
+    setImageError(null);
+    setImageUrl(null);
+    setIconUrl(null);
+
+    try {
+      const mainRes = await fetch(CREATIVE_IMAGE_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: mainPromptText,
+          size: mainSize || mainImageSize,
+        }),
+      });
+
+      if (!mainRes.ok) {
+        const text = await mainRes.text();
+        throw new Error(`Main image failed (${mainRes.status}): ${text}`);
+      }
+
+      const mainJson = await mainRes.json();
+      const mainUrl: string | undefined =
+        mainJson.url ?? mainJson.imageUrl ?? mainJson.data?.[0]?.url;
+      if (!mainUrl) {
+        throw new Error("No main image URL returned from API.");
+      }
+      setImageUrl(mainUrl);
+
+      if (iconPromptText && iconPromptText.trim()) {
+        const iconRes = await fetch(CREATIVE_IMAGE_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: iconPromptText,
+            size: iconSizeOverride || iconSize || "512x512",
+          }),
+        });
+
+        if (!iconRes.ok) {
+          const text = await iconRes.text();
+          throw new Error(`Icon image failed (${iconRes.status}): ${text}`);
+        }
+
+        const iconJson = await iconRes.json();
+        const iconImageUrl: string | undefined =
+          iconJson.url ?? iconJson.imageUrl ?? iconJson.data?.[0]?.url;
+        if (iconImageUrl) {
+          setIconUrl(iconImageUrl);
+        }
+      }
+    } catch (err: any) {
+      console.error("Creative image error:", err);
+      setImageError(
+        err?.message ||
+          "Image generation failed. Check `/api/creative-images` and your OpenAI org verification."
+      );
+    } finally {
+      setImageLoading(false);
+    }
+  };
+
+  const generateCreativeBundle = async () => {
+    const prompt = imagePrompt.trim();
+    if (!prompt || assetsLoading || imageLoading) return;
+
+    setAssetsLoading(true);
+    setAssetsError(null);
+    setImageError(null);
+    setImageUrl(null);
+    setIconUrl(null);
+
+    try {
+      const res = await fetch(CREATIVE_ASSETS_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt, adType }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Assets generation failed (${res.status}): ${text}`);
+      }
+
+      const json = await res.json();
+
+      const newTitle = json.title ?? "";
+      const newDescription = json.description ?? "";
+      const newMainPrompt =
+        json.imagePrompt ?? json.mainImagePrompt ?? prompt;
+      const newIconPrompt = json.iconPrompt ?? "";
+      const newMainSize =
+        json.mainImageSize ?? AD_TYPES[adType]?.mainImageSize ?? "1024x1024";
+      const newIconSize =
+        json.iconSize ??
+        (AD_TYPES[adType]?.iconSize ?? undefined) ??
+        null;
+
+      setAssetTitle(newTitle);
+      setAssetDescription(newDescription);
+      setMainImagePrompt(newMainPrompt);
+      setIconPrompt(newIconPrompt);
+      setMainImageSize(newMainSize);
+      setIconSize(newIconSize || "");
+
+      await generateImages(
+        newMainPrompt,
+        newIconPrompt,
+        newMainSize,
+        newIconSize
+      );
+    } catch (err: any) {
+      console.error("Creative assets error:", err);
+      setAssetsError(
+        err?.message ||
+          "Could not generate assets. Check `/api/creative-assets` and your OpenAI key."
+      );
+    } finally {
+      setAssetsLoading(false);
+    }
+  };
+
   /**
    * ===========
    * Render
@@ -834,10 +1011,21 @@ export default function DashboardPage() {
           creativeTokenCount={creativeTokenCount}
           imagePrompt={imagePrompt}
           setImagePrompt={setImagePrompt}
+          adType={adType}
+          setAdType={setAdType}
+          assetTitle={assetTitle}
+          assetDescription={assetDescription}
+          mainImagePrompt={mainImagePrompt}
+          iconPrompt={iconPrompt}
+          mainImageSize={mainImageSize}
+          iconSize={iconSize}
           imageLoading={imageLoading}
           imageError={imageError}
+          assetsLoading={assetsLoading}
+          assetsError={assetsError}
           imageUrl={imageUrl}
-          generateImage={generateImage}
+          iconUrl={iconUrl}
+          generateCreativeBundle={generateCreativeBundle}
         />
       )}
     </main>
@@ -1481,10 +1669,21 @@ function CreativesTab(props: {
   creativeTokenCount: number;
   imagePrompt: string;
   setImagePrompt: (v: string) => void;
+  adType: string;
+  setAdType: (v: string) => void;
+  assetTitle: string;
+  assetDescription: string;
+  mainImagePrompt: string;
+  iconPrompt: string;
+  mainImageSize: string;
+  iconSize?: string | null;
   imageLoading: boolean;
   imageError: string | null;
+  assetsLoading: boolean;
+  assetsError: string | null;
   imageUrl: string | null;
-  generateImage: () => void;
+  iconUrl: string | null;
+  generateCreativeBundle: () => void;
 }) {
   const {
     creativeChatMessages,
@@ -1495,10 +1694,21 @@ function CreativesTab(props: {
     creativeTokenCount,
     imagePrompt,
     setImagePrompt,
+    adType,
+    setAdType,
+    assetTitle,
+    assetDescription,
+    mainImagePrompt,
+    iconPrompt,
+    mainImageSize,
+    iconSize,
     imageLoading,
     imageError,
+    assetsLoading,
+    assetsError,
     imageUrl,
-    generateImage,
+    iconUrl,
+    generateCreativeBundle,
   } = props;
 
   return (
