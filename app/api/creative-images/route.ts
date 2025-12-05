@@ -51,8 +51,7 @@ export async function POST(req: Request): Promise<Response> {
       prompt,
       n: 1,
       size, // e.g. "1024x1024"
-      // Default response for gpt-image-1 is base64, but our frontend expects a URL
-      response_format: "url",
+      // Some SDK versions reject unknown params; rely on defaults and fallback to base64 below.
     });
 
     const image = (result as any).data?.[0];
@@ -93,4 +92,17 @@ export async function POST(req: Request): Promise<Response> {
       }
     );
   }
+}
+
+// Optional: respond to GET with usage hint instead of 405 page
+export async function GET(): Promise<Response> {
+  return new Response(
+    JSON.stringify({
+      message: "Use POST with JSON body: { prompt: string, size?: '1024x1024' }",
+    }),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }
+  );
 }
