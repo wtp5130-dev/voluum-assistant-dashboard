@@ -56,6 +56,20 @@ type DashboardKpiCard = {
 type DateRangeKey = "today" | "yesterday" | "last7days";
 
 /**
+ * Simple sleep helper (if you ever want to add spacing between calls)
+ */
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * How many campaigns get detailed zones/creatives
+ * You can override via env: VOLUUM_MAX_DETAIL_CAMPAIGNS=3
+ */
+const MAX_DETAIL_CAMPAIGNS =
+  Number(process.env.VOLUUM_MAX_DETAIL_CAMPAIGNS || "3");
+
+/**
  * Fetch zones for a specific campaign
  * Uses your real Voluum URL pattern:
  *   groupBy=custom-variable-1  (V1: zoneid)
@@ -158,8 +172,8 @@ async function fetchZonesForCampaign(
       id: String(row.customVariable1 ?? row.externalName ?? "unknown"),
       visits: Number(row.visits ?? 0),
       conversions: Number(row.conversions ?? 0),
-      signups: Number(row.customConversions1 ?? 0),   // signup events
-      deposits: Number(row.customConversions2 ?? 0),  // deposit events
+      signups: Number(row.customConversions1 ?? 0), // signups
+      deposits: Number(row.customConversions2 ?? 0), // deposits
       revenue: Number(row.revenue ?? 0),
       cost: Number(row.cost ?? 0),
       roi: Number(row.roi ?? 0),
@@ -312,7 +326,7 @@ export async function GET(request: Request) {
 
   // Build from/to
   const to = new Date();
-  to.setUTCMinutes(0, 0, 0);
+  to.setUTCMinutes(0, 0, 0, 0);
 
   const from = new Date(to);
 
@@ -445,7 +459,6 @@ export async function GET(request: Request) {
     const rows: any[] = reportJson.rows || reportJson.data || [];
 
     const campaigns: DashboardCampaign[] = [];
-    const maxDetailCampaigns = 10; // only fetch zones/creatives for first N campaigns
 
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index];
@@ -472,11 +485,15 @@ export async function GET(request: Request) {
       let zones: DashboardZone[] = [];
       let creatives: DashboardCreative[] = [];
 
-      if (index < maxDetailCampaigns) {
+      // Only fetch detailed breakdown for first N campaigns
+      if (index < MAX_DETAIL_CAMPAIGNS) {
         [zones, creatives] = await Promise.all([
           fetchZonesForCampaign(base, token, fromIso, toIso, campaignId),
           fetchCreativesForCampaign(base, token, fromIso, toIso, campaignId),
         ]);
+
+        // If you want to be extra nice to Voluum, you could add:
+        // await sleep(150); // 150ms between campaigns
       }
 
       campaigns.push({
@@ -528,7 +545,6 @@ export async function GET(request: Request) {
     const cpaTotal = depositCount > 0 ? totalCost / depositCount : 0;
     const cprTotal = signupCount > 0 ? totalCost / signupCount : 0;
 
-    // NEW: active campaigns KPI
     const activeCampaigns = campaigns.filter((c) => {
       return (
         (c.visits ?? 0) > 0 ||
