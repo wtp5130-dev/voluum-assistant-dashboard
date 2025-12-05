@@ -546,7 +546,7 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
   };
 
   /**
-   * Creatives Doctor – chat
+   * Creatives Doctor - chat
    */
   const sendCreativeChat = async () => {
     const content = creativeChatInput.trim();
@@ -607,52 +607,11 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
         {
           role: "assistant",
           content:
-            "Creative Doctor error – check `/api/creative-doctor` on your backend.",
+            "Creative Doctor error - check `/api/creative-doctor` on your backend.",
         },
       ]);
     } finally {
       setCreativeChatLoading(false);
-    }
-  };
-
-  /**
-   * Creatives – image generator
-   */
-  const generateImage = async () => {
-    const prompt = imagePrompt.trim();
-    if (!prompt || imageLoading) return;
-
-    setImageLoading(true);
-    setImageError(null);
-    setImageUrl(null);
-
-    try {
-      const res = await fetch(CREATIVE_IMAGE_API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ prompt }),
-      });
-
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Image generation failed (${res.status}): ${text}`);
-      }
-
-      const json = await res.json();
-      const url: string | undefined =
-        json.url ?? json.imageUrl ?? json.data?.[0]?.url;
-      if (!url) {
-        throw new Error("No image URL returned from API.");
-      }
-      setImageUrl(url);
-    } catch (err: any) {
-      console.error("Creative image error:", err);
-      setImageError(
-        err?.message ||
-          "Image generation failed. Check `/api/creative-images` and your OpenAI org verification."
-      );
-    } finally {
-      setImageLoading(false);
     }
   };
 
@@ -1796,12 +1755,20 @@ function CreativesTab(props: {
         />
 
         <button
-          onClick={generateImage}
-          disabled={imageLoading || !imagePrompt.trim()}
+          onClick={generateCreativeBundle}
+          disabled={assetsLoading || imageLoading || !imagePrompt.trim()}
           className="self-start text-xs px-4 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {imageLoading ? "Generating…" : "Generate image"}
+          {assetsLoading || imageLoading
+            ? "Generating..."
+            : "Generate creative bundle"}
         </button>
+
+        {assetsError && (
+          <p className="text-[11px] text-rose-400 whitespace-pre-wrap">
+            {assetsError}
+          </p>
+        )}
 
         {imageError && (
           <p className="text-[11px] text-rose-400 whitespace-pre-wrap">
