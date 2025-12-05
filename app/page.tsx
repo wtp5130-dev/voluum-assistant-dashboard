@@ -20,6 +20,8 @@ type Zone = {
   id: string;
   visits: number;
   conversions: number;
+  signups: number;   // 👈 NEW
+  deposits: number;  // 👈 NEW
   revenue: number;
   cost: number;
   roi: number;
@@ -30,6 +32,8 @@ type Creative = {
   name?: string | null;
   visits: number;
   conversions: number;
+  signups: number;   // 👈 NEW
+  deposits: number;  // 👈 NEW
   revenue: number;
   cost: number;
   roi: number;
@@ -85,8 +89,8 @@ const DASHBOARD_API_URL = "/api/voluum-dashboard";
 const CHAT_API_URL = "/api/chat";
 const OPTIMIZER_PREVIEW_URL = "/api/optimizer/preview";
 const OPTIMIZER_APPLY_URL = "/api/optimizer/apply";
-const CREATIVE_DOCTOR_URL = "/api/creative-doctor";
-const CREATIVE_IMAGES_URL = "/api/creative-images";
+const CREATIVE_CHAT_API_URL = "/api/creative-doctor";
+const CREATIVE_IMAGE_API_URL = "/api/creative-images";
 
 const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
   { key: "today", label: "Today" },
@@ -153,7 +157,7 @@ export default function DashboardPage() {
 
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
 
-  // Chat state (Dashboard tab assistant)
+  // Dashboard chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
@@ -167,35 +171,45 @@ export default function DashboardPage() {
   // Optimizer state
   const [optimizerPreviewLoading, setOptimizerPreviewLoading] =
     useState(false);
-  const [optimizerApplyLoading, setOptimizerApplyLoading] =
-    useState(false);
-  const [optimizerPreview, setOptimizerPreview] = useState<any | null>(
-    null
-  );
-  const [optimizerError, setOptimizerError] = useState<string | null>(
+  const [optimizerApplyLoading, setOptimizerApplyLoading] = useState(false);
+  const [optimizerDryRun, setOptimizerDryRun] = useState(true);
+  const [optimizerPreviewResult, setOptimizerPreviewResult] = useState<
+    | {
+        rules: any[];
+        zonesToPauseNow: any[];
+        meta?: any;
+      }
+    | null
+  >(null);
+  const [optimizerStatus, setOptimizerStatus] = useState<string | null>(
     null
   );
 
-  // Creative Doctor state
-  const [cdQuestion, setCdQuestion] = useState<string>(
-    "What are my top creatives and what new angles should I test next?"
-  );
-  const [cdLoading, setCdLoading] = useState<boolean>(false);
-  const [cdAnswer, setCdAnswer] = useState<string | null>(null);
-  const [cdError, setCdError] = useState<string | null>(null);
-  const [cdTokenCount, setCdTokenCount] = useState<number>(0); // approximate token counter
+  // Creatives doctor chat
+  const [creativeChatMessages, setCreativeChatMessages] = useState<
+    ChatMessage[]
+  >([
+    {
+      role: "assistant",
+      content:
+        "I’m your Creative Doctor. Paste a headline, angle, or campaign context and I’ll help you improve it.",
+    },
+  ]);
+  const [creativeChatInput, setCreativeChatInput] = useState("");
+  const [creativeChatLoading, setCreativeChatLoading] = useState(false);
+  const [creativeTokenCount, setCreativeTokenCount] = useState<number>(0);
 
-  // Creative image generator state
-  const [imagePrompt, setImagePrompt] = useState<string>(
+  // Creative image generator
+  const [imagePrompt, setImagePrompt] = useState(
     "High-converting casino push banner, bold CTA, mobile-first, 1:1 format."
   );
-  const [imageLoading, setImageLoading] = useState<boolean>(false);
-  const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageLoading, setImageLoading] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
+  const [imageUrl, setImageUrl] = useState<string | null>(null);
 
   /**
    * Fetch dashboard data whenever dateRange or custom dates change
-   * (pure client-side, no full-page refresh)
+   * (client-side only, no full page reload)
    */
   useEffect(() => {
     if (dateRange === "custom" && (!fromDate || !toDate)) {
@@ -313,6 +327,8 @@ export default function DashboardPage() {
       const hasMetrics =
         (z.visits ?? 0) > 0 ||
         (z.conversions ?? 0) > 0 ||
+        (z.signups ?? 0) > 0 || // 👈 include
+        (z.deposits ?? 0) > 0 || // 👈 include
         (z.cost ?? 0) > 0 ||
         (z.revenue ?? 0) > 0;
       const hasId = (z.id ?? "").trim().length > 0;
@@ -329,6 +345,8 @@ export default function DashboardPage() {
       const hasMetrics =
         (c.visits ?? 0) > 0 ||
         (c.conversions ?? 0) > 0 ||
+        (c.signups ?? 0) > 0 || // 👈 include
+        (c.deposits ?? 0) > 0 || // 👈 include
         (c.cost ?? 0) > 0 ||
         (c.revenue ?? 0) > 0;
       const hasIdOrName =
@@ -340,7 +358,7 @@ export default function DashboardPage() {
   }, [selectedCampaign]);
 
   /**
-   * DASHBOARD TAB - Chat send
+   * Dashboard chat send
    */
   const sendChat = async () => {
     const content = chatInput.trim();
@@ -399,13 +417,14 @@ export default function DashboardPage() {
   };
 
   /**
-   * OPTIMIZER TAB - Preview
+   * Optimizer – preview & apply
    */
+
   const runOptimizerPreview = async () => {
     if (!data) return;
     try {
-      setOptimizerError(null);
       setOptimizerPreviewLoading(true);
+      setOptimizerStatus(null);
 
       const res = await fetch(OPTIMIZER_PREVIEW_URL, {
         method: "POST",
@@ -417,176 +436,170 @@ export default function DashboardPage() {
       });
 
       if (!res.ok) {
-        throw new Error(`Preview failed (${res.status})`);
+        const text = await res.text();
+        throw new Error(`Preview failed (${res.status}): ${text}`);
       }
 
       const json = await res.json();
-      setOptimizerPreview(json);
-    } catch (err) {
-      console.error(err);
-      setOptimizerError(
-        err instanceof Error ? err.message : "Unknown preview error"
+      setOptimizerPreviewResult({
+        rules: json.rules ?? [],
+        zonesToPauseNow: json.zonesToPauseNow ?? [],
+        meta: json.meta ?? null,
+      });
+      setOptimizerStatus("Preview generated. Review zones before applying.");
+    } catch (err: any) {
+      console.error("Optimizer preview error:", err);
+      setOptimizerStatus(
+        err?.message || "Failed to generate optimizer preview."
       );
     } finally {
       setOptimizerPreviewLoading(false);
     }
   };
 
-  /**
-   * OPTIMIZER TAB - Apply
-   */
-  const runOptimizerApply = async (dryRun: boolean) => {
-    if (!optimizerPreview || !optimizerPreview.zonesToPauseNow) {
-      setOptimizerError("Run preview first – no zonesToPauseNow found.");
+  const runOptimizerApply = async () => {
+    if (!optimizerPreviewResult) {
+      setOptimizerStatus("Run preview first before applying.");
       return;
     }
 
     try {
-      setOptimizerError(null);
       setOptimizerApplyLoading(true);
+      setOptimizerStatus(null);
 
       const res = await fetch(OPTIMIZER_APPLY_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          zonesToPauseNow: optimizerPreview.zonesToPauseNow,
-          dryRun,
+          zonesToPauseNow: optimizerPreviewResult.zonesToPauseNow,
+          dryRun: optimizerDryRun,
         }),
       });
 
       if (!res.ok) {
-        throw new Error(`Apply failed (${res.status})`);
+        const text = await res.text();
+        throw new Error(`Apply failed (${res.status}): ${text}`);
       }
 
       const json = await res.json();
-      console.log("Optimizer apply result:", json);
-      setOptimizerPreview((prev: any) =>
-        prev ? { ...prev, applyResult: json } : prev
+      setOptimizerStatus(
+        optimizerDryRun
+          ? `Dry run completed. ${json.summary ?? "Check logs for details."}`
+          : `Apply completed. ${json.summary ?? "Zones were sent to PropellerAds."}`
       );
-    } catch (err) {
-      console.error(err);
-      setOptimizerError(
-        err instanceof Error ? err.message : "Unknown apply error"
-      );
+    } catch (err: any) {
+      console.error("Optimizer apply error:", err);
+      setOptimizerStatus(err?.message || "Failed to apply optimizer rules.");
     } finally {
       setOptimizerApplyLoading(false);
     }
   };
 
   /**
-   * CREATIVE DOCTOR TAB - Ask /api/creative-doctor with streaming
+   * Creatives Doctor – chat
    */
-  const askCreativeDoctor = async () => {
-    if (!data || !selectedCampaign) {
-      setCdError("No campaign selected or no data loaded.");
-      return;
-    }
+  const sendCreativeChat = async () => {
+    const content = creativeChatInput.trim();
+    if (!content || creativeChatLoading) return;
 
-    const question = cdQuestion.trim();
-    if (!question) {
-      setCdError("Ask a question about your creatives.");
-      return;
-    }
+    const newMessages: ChatMessage[] = [
+      ...creativeChatMessages,
+      { role: "user", content },
+    ];
+    setCreativeChatMessages(newMessages);
+    setCreativeChatInput("");
+    setCreativeChatLoading(true);
 
     try {
-      setCdError(null);
-      setCdLoading(true);
-      setCdAnswer("");
-      setCdTokenCount(0); // reset token counter
-
-      const payload = {
-        question,
-        campaign: selectedCampaign,
-        creatives,
-        dateRange: data.dateRange,
-        from: data.from,
-        to: data.to,
-      };
-
-      const res = await fetch(CREATIVE_DOCTOR_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        throw new Error(`Creative Doctor failed (${res.status})`);
-      }
-
-      if (!res.body) {
-        throw new Error("No response body from Creative Doctor");
-      }
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let fullText = "";
-
-      // Read chunks and update UI live + token counter (approx)
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value, { stream: true });
-
-        fullText += chunk;
-        setCdAnswer(fullText);
-
-        // Approximate "tokens" by splitting on whitespace
-        const approxTokens = chunk.split(/\s+/).filter(Boolean).length;
-        setCdTokenCount((prev) => prev + approxTokens);
-      }
-    } catch (err) {
-      console.error(err);
-      setCdError(
-        err instanceof Error ? err.message : "Unknown creative doctor error"
-      );
-      if (!cdAnswer) {
-        setCdAnswer(
-          "[Creative Doctor could not complete the response due to an error.]"
-        );
-      }
-    } finally {
-      setCdLoading(false);
-    }
-  };
-
-  /**
-   * CREATIVE DOCTOR TAB - Generate image via /api/creative-images
-   */
-  const generateCreativeImage = async () => {
-    const prompt = imagePrompt.trim();
-    if (!prompt) {
-      setImageError("Describe the image / angle you want.");
-      return;
-    }
-
-    try {
-      setImageError(null);
-      setImageLoading(true);
-      setImageUrl(null);
-
-      const res = await fetch(CREATIVE_IMAGES_URL, {
+      const res = await fetch(CREATIVE_CHAT_API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt,
-          size: "1024x1024",
+          messages: newMessages,
+          context: {
+            campaigns: filteredCampaigns,
+            selectedCampaignId,
+          },
         }),
       });
 
       if (!res.ok) {
-        throw new Error(`Image generation failed (${res.status})`);
+        throw new Error(`Creative doctor failed (${res.status})`);
       }
 
-      const json = (await res.json()) as { url?: string; error?: string };
-      if (!json.url) {
-        throw new Error(json.error || "No image URL returned");
+      const json = await res.json();
+      const reply =
+        json.reply ??
+        json.message ??
+        "[No reply field in response from creative doctor API]";
+
+      // tiny token counter (best-effort)
+      const tokensFromServer =
+        json.tokenUsage?.total ??
+        json.tokens ??
+        json.usage?.total_tokens ??
+        null;
+      if (typeof tokensFromServer === "number") {
+        setCreativeTokenCount(tokensFromServer);
+      } else {
+        // fallback: rough estimate
+        setCreativeTokenCount((prev) => prev + Math.ceil(content.length / 4));
       }
 
-      setImageUrl(json.url);
+      setCreativeChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: reply },
+      ]);
     } catch (err) {
       console.error(err);
+      setCreativeChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "Creative Doctor error – check `/api/creative-doctor` on your backend.",
+        },
+      ]);
+    } finally {
+      setCreativeChatLoading(false);
+    }
+  };
+
+  /**
+   * Creatives – image generator
+   */
+  const generateImage = async () => {
+    const prompt = imagePrompt.trim();
+    if (!prompt || imageLoading) return;
+
+    setImageLoading(true);
+    setImageError(null);
+    setImageUrl(null);
+
+    try {
+      const res = await fetch(CREATIVE_IMAGE_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt }),
+      });
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Image generation failed (${res.status}): ${text}`);
+      }
+
+      const json = await res.json();
+      const url: string | undefined =
+        json.url ?? json.imageUrl ?? json.data?.[0]?.url;
+      if (!url) {
+        throw new Error("No image URL returned from API.");
+      }
+      setImageUrl(url);
+    } catch (err: any) {
+      console.error("Creative image error:", err);
       setImageError(
-        err instanceof Error ? err.message : "Unknown image generation error"
+        err?.message ||
+          "Image generation failed. Check `/api/creative-images` and your OpenAI org verification."
       );
     } finally {
       setImageLoading(false);
@@ -633,23 +646,19 @@ export default function DashboardPage() {
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6 space-y-6">
-      {/* Header + Controls */}
+      {/* Header */}
       <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold">
-            For Marketers. By Marketers
+            Voluum Assistant
           </h1>
-          <p className="text-sm text-slate-300 mt-2 max-w-2xl leading-relaxed">
-            Actionable campaign intelligence for paid acquisition — optimize
-            budgets, spot low-performing zones, and discover top creatives
-            with fast, AI-assisted insights built for performance marketers.
-          </p>
           <p className="text-xs md:text-sm text-slate-400 mt-1">
             {data.dateRange} • {new Date(data.from).toLocaleString()} –{" "}
             {new Date(data.to).toLocaleString()}
           </p>
         </div>
 
+        {/* Date + traffic source controls */}
         <div className="flex flex-col gap-3 items-stretch md:items-end">
           <div className="flex flex-wrap gap-3 items-center justify-end">
             {/* Date range selector */}
@@ -724,28 +733,41 @@ export default function DashboardPage() {
         </div>
       </header>
 
-      {/* Tabs */}
-      <div className="flex justify-center">
-        <div className="inline-flex rounded-2xl border border-emerald-600 bg-slate-900/70 p-1 shadow-lg shadow-emerald-900/40">
-          <TabButton
-            label="Dashboard"
-            active={activeTab === "dashboard"}
-            onClick={() => setActiveTab("dashboard")}
-          />
-          <TabButton
-            label="Optimizer"
-            active={activeTab === "optimizer"}
-            onClick={() => setActiveTab("optimizer")}
-          />
-          <TabButton
-            label="Creatives Doctor"
-            active={activeTab === "creatives"}
-            onClick={() => setActiveTab("creatives")}
-          />
-        </div>
+      {/* Big tab buttons */}
+      <div className="flex gap-2 justify-center mb-2">
+        <button
+          onClick={() => setActiveTab("dashboard")}
+          className={`px-6 py-2 rounded-full text-sm font-semibold border ${
+            activeTab === "dashboard"
+              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow-lg"
+              : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
+          }`}
+        >
+          Dashboard
+        </button>
+        <button
+          onClick={() => setActiveTab("optimizer")}
+          className={`px-6 py-2 rounded-full text-sm font-semibold border ${
+            activeTab === "optimizer"
+              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow-lg"
+              : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
+          }`}
+        >
+          Optimizer
+        </button>
+        <button
+          onClick={() => setActiveTab("creatives")}
+          className={`px-6 py-2 rounded-full text-sm font-semibold border ${
+            activeTab === "creatives"
+              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow-lg"
+              : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
+          }`}
+        >
+          Creatives Doctor
+        </button>
       </div>
 
-      {/* KPI cards (shared) */}
+      {/* KPI cards (always visible) */}
       <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
         {data.kpis.map((kpi) => (
           <div
@@ -769,7 +791,7 @@ export default function DashboardPage() {
         ))}
       </section>
 
-      {/* TAB CONTENTS */}
+      {/* Tabs content */}
       {activeTab === "dashboard" && (
         <DashboardTab
           data={data}
@@ -791,32 +813,31 @@ export default function DashboardPage() {
         <OptimizerTab
           data={data}
           trafficSourceFilter={trafficSourceFilter}
-          optimizerPreview={optimizerPreview}
-          optimizerPreviewLoading={optimizerPreviewLoading}
-          optimizerApplyLoading={optimizerApplyLoading}
-          optimizerError={optimizerError}
+          previewLoading={optimizerPreviewLoading}
+          applyLoading={optimizerApplyLoading}
+          previewResult={optimizerPreviewResult}
+          status={optimizerStatus}
+          dryRun={optimizerDryRun}
+          setDryRun={setOptimizerDryRun}
           runPreview={runOptimizerPreview}
           runApply={runOptimizerApply}
         />
       )}
 
       {activeTab === "creatives" && (
-        <CreativesDoctorTab
-          selectedCampaign={selectedCampaign}
-          creatives={creatives}
-          cdQuestion={cdQuestion}
-          setCdQuestion={setCdQuestion}
-          cdLoading={cdLoading}
-          cdAnswer={cdAnswer}
-          cdError={cdError}
-          cdTokenCount={cdTokenCount}
-          askCreativeDoctor={askCreativeDoctor}
+        <CreativesTab
+          creativeChatMessages={creativeChatMessages}
+          creativeChatInput={creativeChatInput}
+          creativeChatLoading={creativeChatLoading}
+          setCreativeChatInput={setCreativeChatInput}
+          sendCreativeChat={sendCreativeChat}
+          creativeTokenCount={creativeTokenCount}
           imagePrompt={imagePrompt}
           setImagePrompt={setImagePrompt}
           imageLoading={imageLoading}
-          imageUrl={imageUrl}
           imageError={imageError}
-          generateCreativeImage={generateCreativeImage}
+          imageUrl={imageUrl}
+          generateImage={generateImage}
         />
       )}
     </main>
@@ -846,48 +867,9 @@ function DetailStat({
 }
 
 /**
- * Tab button
+ * Dashboard tab
  */
-function TabButton({
-  label,
-  active,
-  onClick,
-}: {
-  label: string;
-  active: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className={`px-5 py-2.5 text-sm font-semibold rounded-xl transition-all duration-150 ${
-        active
-          ? "bg-emerald-500 text-slate-950 shadow-md shadow-emerald-800"
-          : "bg-transparent text-slate-300 hover:bg-slate-800/60"
-      }`}
-    >
-      {label}
-    </button>
-  );
-}
-
-/**
- * DASHBOARD TAB COMPONENT
- */
-function DashboardTab({
-  data,
-  filteredCampaigns,
-  selectedCampaign,
-  selectedCampaignId,
-  setSelectedCampaignId,
-  zones,
-  creatives,
-  chatMessages,
-  chatInput,
-  chatLoading,
-  setChatInput,
-  sendChat,
-}: {
+function DashboardTab(props: {
   data: DashboardData;
   filteredCampaigns: Campaign[];
   selectedCampaign: Campaign | null;
@@ -898,9 +880,24 @@ function DashboardTab({
   chatMessages: ChatMessage[];
   chatInput: string;
   chatLoading: boolean;
-  setChatInput: (value: string) => void;
+  setChatInput: (v: string) => void;
   sendChat: () => void;
 }) {
+  const {
+    data,
+    filteredCampaigns,
+    selectedCampaign,
+    selectedCampaignId,
+    setSelectedCampaignId,
+    zones,
+    creatives,
+    chatMessages,
+    chatInput,
+    chatLoading,
+    setChatInput,
+    sendChat,
+  } = props;
+
   return (
     <section className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,4fr)]">
       {/* Left: Campaign list */}
@@ -989,7 +986,7 @@ function DashboardTab({
 
       {/* Right: Details + Chat */}
       <div className="flex flex-col gap-4">
-        {/* Campaign details + breakdowns */}
+        {/* Campaign details */}
         <div className="space-y-4">
           <div className="rounded-xl border border-slate-800 bg-slate-900/60">
             <div className="px-4 py-3 border-b border-slate-800">
@@ -1087,6 +1084,8 @@ function DashboardTab({
                         <th className="text-left p-2">Zone</th>
                         <th className="text-right p-2">Visits</th>
                         <th className="text-right p-2">Conv</th>
+                        <th className="text-right p-2">Signups</th>
+                        <th className="text-right p-2">Deps</th>
                         <th className="text-right p-2">Rev</th>
                         <th className="text-right p-2">Cost</th>
                         <th className="text-right p-2">ROI</th>
@@ -1103,6 +1102,12 @@ function DashboardTab({
                           <td className="p-2 text-right">{z.visits}</td>
                           <td className="p-2 text-right">
                             {z.conversions}
+                          </td>
+                          <td className="p-2 text-right">
+                            {z.signups}
+                          </td>
+                          <td className="p-2 text-right">
+                            {z.deposits}
                           </td>
                           <td className="p-2 text-right">
                             {formatMoney(z.revenue)}
@@ -1152,6 +1157,8 @@ function DashboardTab({
                         <th className="text-left p-2">Creative</th>
                         <th className="text-right p-2">Visits</th>
                         <th className="text-right p-2">Conv</th>
+                        <th className="text-right p-2">Signups</th>
+                        <th className="text-right p-2">Deps</th>
                         <th className="text-right p-2">Rev</th>
                         <th className="text-right p-2">Cost</th>
                         <th className="text-right p-2">ROI</th>
@@ -1169,9 +1176,17 @@ function DashboardTab({
                         return (
                           <tr key={`${c.id}-${c.visits}-${c.cost}`}>
                             <td className="p-2">{label}</td>
-                            <td className="p-2 text-right">{c.visits}</td>
+                            <td className="p-2 text-right">
+                              {c.visits}
+                            </td>
                             <td className="p-2 text-right">
                               {c.conversions}
+                            </td>
+                            <td className="p-2 text-right">
+                              {c.signups}
+                            </td>
+                            <td className="p-2 text-right">
+                              {c.deposits}
                             </td>
                             <td className="p-2 text-right">
                               {formatMoney(c.revenue)}
@@ -1260,151 +1275,192 @@ function DashboardTab({
 }
 
 /**
- * OPTIMIZER TAB COMPONENT
+ * Optimizer tab
  */
-function OptimizerTab({
-  data,
-  trafficSourceFilter,
-  optimizerPreview,
-  optimizerPreviewLoading,
-  optimizerApplyLoading,
-  optimizerError,
-  runPreview,
-  runApply,
-}: {
+function OptimizerTab(props: {
   data: DashboardData;
   trafficSourceFilter: string;
-  optimizerPreview: any | null;
-  optimizerPreviewLoading: boolean;
-  optimizerApplyLoading: boolean;
-  optimizerError: string | null;
+  previewLoading: boolean;
+  applyLoading: boolean;
+  previewResult: { rules: any[]; zonesToPauseNow: any[]; meta?: any } | null;
+  status: string | null;
+  dryRun: boolean;
+  setDryRun: (b: boolean) => void;
   runPreview: () => void;
-  runApply: (dryRun: boolean) => void;
+  runApply: () => void;
 }) {
+  const {
+    data,
+    trafficSourceFilter,
+    previewLoading,
+    applyLoading,
+    previewResult,
+    status,
+    dryRun,
+    setDryRun,
+    runPreview,
+    runApply,
+  } = props;
+
+  const zonesToPause = previewResult?.zonesToPauseNow ?? [];
+
   return (
     <section className="space-y-4">
-      <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 flex flex-col gap-3">
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-              PropellerAds Optimizer
-            </h2>
-            <p className="text-xs text-slate-400 mt-1">
-              Auto-pause bad zones based on deposits, ROI, and burn patterns.
-            </p>
-            <p className="text-[11px] text-slate-500 mt-1">
-              Current traffic source filter:{" "}
-              <span className="font-semibold text-emerald-400">
-                {trafficSourceFilter === "all"
-                  ? "All traffic sources"
-                  : trafficSourceFilter}
-              </span>
-              .
-            </p>
-          </div>
-          <div className="flex gap-2 flex-wrap">
-            <button
-              onClick={runPreview}
-              disabled={optimizerPreviewLoading}
-              className="px-4 py-2 text-xs font-semibold rounded-md bg-slate-800 hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {optimizerPreviewLoading ? "Running preview…" : "1) Preview rules"}
-            </button>
-            <button
-              onClick={() => runApply(true)}
-              disabled={optimizerApplyLoading}
-              className="px-4 py-2 text-xs font-semibold rounded-md bg-amber-500 hover:bg-amber-400 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {optimizerApplyLoading ? "Applying…" : "2) Dry run (no pause)"}
-            </button>
-            <button
-              onClick={() => runApply(false)}
-              disabled={optimizerApplyLoading}
-              className="px-4 py-2 text-xs font-semibold rounded-md bg-rose-600 hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {optimizerApplyLoading ? "Applying…" : "3) Live apply (pause zones)"}
-            </button>
-          </div>
+      <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300 mb-1">
+            Auto-Pause Optimizer
+          </h2>
+          <p className="text-xs text-slate-400 max-w-xl">
+            Generate rules from the current dashboard view and preview which
+            zones would be paused. Then optionally apply them to PropellerAds.
+          </p>
+          <p className="text-[11px] text-slate-500 mt-1">
+            Scope:{" "}
+            <span className="font-medium text-slate-200">
+              {trafficSourceFilter === "all"
+                ? "All traffic sources"
+                : trafficSourceFilter}
+            </span>{" "}
+            • Date:{" "}
+            <span className="font-medium text-slate-200">
+              {data.dateRange}
+            </span>
+          </p>
         </div>
 
-        {optimizerError && (
-          <div className="text-xs text-rose-400">{optimizerError}</div>
-        )}
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={runPreview}
+              disabled={previewLoading}
+              className="px-4 py-2 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {previewLoading ? "Generating…" : "Generate pause plan"}
+            </button>
+            <button
+              onClick={runApply}
+              disabled={applyLoading || !previewResult}
+              className="px-4 py-2 rounded-md text-xs font-semibold bg-slate-800 hover:bg-slate-700 disabled:opacity-40"
+            >
+              {applyLoading
+                ? dryRun
+                  ? "Dry run…"
+                  : "Applying…"
+                : dryRun
+                ? "Run dry-run apply"
+                : "Apply to traffic source"}
+            </button>
+          </div>
+          <label className="flex items-center gap-2 text-[11px] text-slate-400">
+            <input
+              type="checkbox"
+              className="accent-emerald-500"
+              checked={dryRun}
+              onChange={(e) => setDryRun(e.target.checked)}
+            />
+            Dry run only (don’t actually pause zones)
+          </label>
+          {status && (
+            <p className="text-[11px] text-slate-300 max-w-sm text-right">
+              {status}
+            </p>
+          )}
+        </div>
       </div>
 
+      {/* Rules + zones */}
       <div className="grid gap-4 md:grid-cols-2">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 text-xs">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-xs">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300 mb-2">
-            Rules preview
+            Suggested rules
           </h3>
-          {!optimizerPreview?.rules?.length ? (
-            <p className="text-slate-500">
-              Run a preview to see suggested automation rules.
+          {!previewResult || previewResult.rules.length === 0 ? (
+            <p className="text-[11px] text-slate-500">
+              Run a preview to see suggested rules.
             </p>
           ) : (
-            <div className="space-y-2 max-h-80 overflow-auto">
-              {optimizerPreview.rules.map((rule: any, idx: number) => (
-                <div
+            <ul className="space-y-2">
+              {previewResult.rules.map((r, idx) => (
+                <li
                   key={idx}
-                  className="border border-slate-700 rounded-lg p-2 bg-slate-900/80"
+                  className="border border-slate-800 rounded-md p-2 bg-slate-950/40"
                 >
-                  <div className="text-[11px] font-semibold text-emerald-400 mb-1">
-                    {rule.name}
+                  <div className="text-[11px] font-semibold text-slate-200">
+                    {r.name}
                   </div>
-                  <div className="text-[11px] text-slate-300">
-                    <span className="font-semibold">Condition:</span>{" "}
-                    {rule.condition}
+                  <div className="text-[11px] text-slate-400 mt-0.5">
+                    {r.condition}
                   </div>
-                  <div className="text-[11px] text-slate-400 mt-1">
-                    <span className="font-semibold">Action:</span>{" "}
-                    {rule.action}
+                  <div className="text-[10px] text-slate-500 mt-1">
+                    {r.rationale}
                   </div>
-                  {rule.rationale && (
-                    <div className="text-[11px] text-slate-500 mt-1">
-                      {rule.rationale}
-                    </div>
-                  )}
-                </div>
+                </li>
               ))}
-            </div>
+            </ul>
           )}
         </div>
 
-        <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 text-xs">
-          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300 mb-2">
-            Zones to pause (preview)
-          </h3>
-          {!optimizerPreview?.zonesToPauseNow?.length ? (
-            <p className="text-slate-500">
-              After preview, any zones that match the rules will show here
-              with metrics and reasons.
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-xs overflow-hidden">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+              Zones flagged to pause
+            </h3>
+            <span className="text-[10px] text-slate-500">
+              {zonesToPause.length} zones
+            </span>
+          </div>
+
+          {zonesToPause.length === 0 ? (
+            <p className="text-[11px] text-slate-500">
+              Run a preview to see which zones would be paused.
             </p>
           ) : (
-            <div className="space-y-2 max-h-80 overflow-auto">
-              {optimizerPreview.zonesToPauseNow.map(
-                (z: any, idx: number) => (
-                  <div
-                    key={idx}
-                    className="border border-slate-700 rounded-lg p-2 bg-slate-900/80"
-                  >
-                    <div className="text-[11px] font-semibold text-rose-400 mb-1">
-                      Campaign: {z.campaignId} • Zone: {z.zoneId}
-                    </div>
-                    <div className="text-[11px] text-slate-300">
-                      {z.reason}
-                    </div>
-                    {z.metrics && (
-                      <div className="text-[11px] text-slate-400 mt-1 space-x-2">
-                        <span>Visits: {z.metrics.visits}</span>
-                        <span>Conv: {z.metrics.conversions}</span>
-                        <span>Rev: {formatMoney(z.metrics.revenue)}</span>
-                        <span>Cost: {formatMoney(z.metrics.cost)}</span>
-                        <span>ROI: {formatPercent(z.metrics.roi)}</span>
-                      </div>
-                    )}
-                  </div>
-                )
-              )}
+            <div className="max-h-56 overflow-auto">
+              <table className="w-full border-collapse">
+                <thead className="bg-slate-900/80 sticky top-0 z-10">
+                  <tr className="text-slate-400">
+                    <th className="text-left p-2">Campaign</th>
+                    <th className="text-left p-2">Zone</th>
+                    <th className="text-right p-2">Visits</th>
+                    <th className="text-right p-2">Signups</th>
+                    <th className="text-right p-2">Deps</th>
+                    <th className="text-right p-2">Cost</th>
+                    <th className="text-right p-2">ROI</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {zonesToPause.map((z: any, idx: number) => (
+                    <tr key={idx}>
+                      <td className="p-2 text-[11px]">
+                        {z.campaignName ?? z.campaignId}
+                      </td>
+                      <td className="p-2 text-[11px]">
+                        {z.zoneId ?? z.zone ?? "—"}
+                      </td>
+                      <td className="p-2 text-right text-[11px]">
+                        {z.metrics?.visits ?? z.visits ?? 0}
+                      </td>
+                      <td className="p-2 text-right text-[11px]">
+                        {z.metrics?.signups ?? z.signups ?? 0}
+                      </td>
+                      <td className="p-2 text-right text-[11px]">
+                        {z.metrics?.deposits ?? z.deposits ?? 0}
+                      </td>
+                      <td className="p-2 text-right text-[11px]">
+                        {formatMoney(
+                          z.metrics?.cost ?? z.cost ?? 0
+                        )}
+                      </td>
+                      <td className="p-2 text-right text-[11px]">
+                        {formatPercent(
+                          z.metrics?.roi ?? z.roi ?? -100
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
         </div>
@@ -1414,232 +1470,148 @@ function OptimizerTab({
 }
 
 /**
- * CREATIVES DOCTOR TAB COMPONENT
+ * Creatives tab
  */
-function CreativesDoctorTab({
-  selectedCampaign,
-  creatives,
-  cdQuestion,
-  setCdQuestion,
-  cdLoading,
-  cdAnswer,
-  cdError,
-  cdTokenCount,
-  askCreativeDoctor,
-  imagePrompt,
-  setImagePrompt,
-  imageLoading,
-  imageUrl,
-  imageError,
-  generateCreativeImage,
-}: {
-  selectedCampaign: Campaign | null;
-  creatives: Creative[];
-  cdQuestion: string;
-  setCdQuestion: (value: string) => void;
-  cdLoading: boolean;
-  cdAnswer: string | null;
-  cdError: string | null;
-  cdTokenCount: number;
-  askCreativeDoctor: () => void;
+function CreativesTab(props: {
+  creativeChatMessages: ChatMessage[];
+  creativeChatInput: string;
+  creativeChatLoading: boolean;
+  setCreativeChatInput: (v: string) => void;
+  sendCreativeChat: () => void;
+  creativeTokenCount: number;
   imagePrompt: string;
-  setImagePrompt: (value: string) => void;
+  setImagePrompt: (v: string) => void;
   imageLoading: boolean;
-  imageUrl: string | null;
   imageError: string | null;
-  generateCreativeImage: () => void;
+  imageUrl: string | null;
+  generateImage: () => void;
 }) {
+  const {
+    creativeChatMessages,
+    creativeChatInput,
+    creativeChatLoading,
+    setCreativeChatInput,
+    sendCreativeChat,
+    creativeTokenCount,
+    imagePrompt,
+    setImagePrompt,
+    imageLoading,
+    imageError,
+    imageUrl,
+    generateImage,
+  } = props;
+
   return (
-    <section className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,4fr)]">
-      {/* Left: Creatives table */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+    <section className="grid gap-6 lg:grid-cols-2">
+      {/* Creative Doctor chat */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/80 flex flex-col h-[420px]">
         <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
           <div>
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-              Creatives
-            </h2>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+              Creative Doctor
+            </h3>
             <p className="text-[11px] text-slate-400">
-              {selectedCampaign
-                ? selectedCampaign.name
-                : "Select a campaign on the Dashboard tab."}
+              Paste your angles or headlines and I’ll diagnose + improve them.
             </p>
           </div>
-          <span className="text-[10px] text-slate-500">
-            {creatives.length} creatives
-          </span>
+          <div className="text-[10px] text-slate-500">
+            Tokens:{" "}
+            <span className="text-slate-200 font-semibold">
+              {creativeTokenCount}
+            </span>
+          </div>
         </div>
 
-        {creatives.length === 0 ? (
-          <div className="p-4 text-[11px] text-slate-500">
-            No creatives found for the selected campaign / date range.
+        <div className="flex-1 flex flex-col">
+          <div className="flex-1 overflow-auto px-4 py-2 space-y-2 text-xs">
+            {creativeChatMessages.map((m, idx) => (
+              <div
+                key={idx}
+                className={`max-w-[90%] rounded-lg px-3 py-2 ${
+                  m.role === "user"
+                    ? "ml-auto bg-emerald-600/70"
+                    : "mr-auto bg-slate-800/80"
+                }`}
+              >
+                <div className="whitespace-pre-wrap break-words">
+                  {m.content}
+                </div>
+              </div>
+            ))}
           </div>
-        ) : (
-          <div className="max-h-[520px] overflow-auto text-[11px]">
-            <table className="w-full border-collapse">
-              <thead className="bg-slate-900/80 sticky top-0 z-10">
-                <tr className="text-slate-400">
-                  <th className="text-left p-2">Creative</th>
-                  <th className="text-right p-2">Visits</th>
-                  <th className="text-right p-2">Conv</th>
-                  <th className="text-right p-2">Rev</th>
-                  <th className="text-right p-2">Cost</th>
-                  <th className="text-right p-2">ROI</th>
-                </tr>
-              </thead>
-              <tbody>
-                {creatives.map((c, index) => {
-                  const label =
-                    c.name && c.name.toString().trim().length > 0
-                      ? c.name
-                      : c.id && c.id.trim().length > 0
-                      ? `Creative ${c.id}`
-                      : `Unknown creative #${index + 1}`;
 
-                  return (
-                    <tr key={`${c.id}-${c.visits}-${c.cost}`}>
-                      <td className="p-2">{label}</td>
-                      <td className="p-2 text-right">{c.visits}</td>
-                      <td className="p-2 text-right">
-                        {c.conversions}
-                      </td>
-                      <td className="p-2 text-right">
-                        {formatMoney(c.revenue)}
-                      </td>
-                      <td className="p-2 text-right">
-                        {formatMoney(c.cost)}
-                      </td>
-                      <td
-                        className={`p-2 text-right ${
-                          c.roi < 0
-                            ? "text-rose-400"
-                            : c.roi > 0
-                            ? "text-emerald-400"
-                            : ""
-                        }`}
-                      >
-                        {formatPercent(c.roi)}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="border-t border-slate-800 px-3 py-2 flex items-center gap-2">
+            <textarea
+              rows={2}
+              className="flex-1 resize-none bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              placeholder="Eg. Telegram casino MX – I want a more aggressive push title and description…"
+              value={creativeChatInput}
+              onChange={(e) => setCreativeChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendCreativeChat();
+                }
+              }}
+            />
+            <button
+              onClick={sendCreativeChat}
+              disabled={creativeChatLoading || !creativeChatInput.trim()}
+              className="text-xs px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {creativeChatLoading ? "..." : "Send"}
+            </button>
           </div>
-        )}
+        </div>
       </div>
 
-      {/* Right: Creative Doctor + Image generator */}
-      <div className="flex flex-col gap-4">
-        {/* Creative Doctor */}
-        <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 flex flex-col gap-3 text-xs">
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex flex-col">
-              <div className="flex items-center gap-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                  Creative Doctor
-                </h3>
-                {cdTokenCount > 0 && (
-                  <span className="text-[10px] text-slate-500">
-                    ~{cdTokenCount} tokens
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-slate-400 mt-1">
-                Ask about winners, angles, fatigue, and new tests.
-              </p>
-            </div>
-            {cdLoading && (
-              <span className="text-[10px] text-emerald-400 animate-pulse">
-                Streaming…
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-2">
-            <textarea
-              className="w-full min-h-[60px] bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              value={cdQuestion}
-              onChange={(e) => setCdQuestion(e.target.value)}
-            />
-            <div className="flex justify-between items-center gap-2">
-              <button
-                onClick={askCreativeDoctor}
-                disabled={cdLoading}
-                className="px-3 py-1.5 text-xs font-semibold rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {cdLoading ? "Streaming answer…" : "Ask Creative Doctor"}
-              </button>
-              {cdError && (
-                <span className="text-[11px] text-rose-400">{cdError}</span>
-              )}
-            </div>
-          </div>
-
-          <div className="mt-2 max-h-64 overflow-auto rounded-md bg-slate-950/70 border border-slate-800 px-3 py-2">
-            {cdAnswer ? (
-              <div className="whitespace-pre-wrap text-[11px] text-slate-100">
-                {cdAnswer}
-              </div>
-            ) : (
-              <div className="text-[11px] text-slate-500">
-                The doctor will summarize your best creatives, weak ones,
-                and suggest new ideas once you ask a question.  
-                When it’s running you’ll see the answer stream live here.
-              </div>
-            )}
+      {/* Creative image generator */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+              Creative Image Generator
+            </h3>
+            <p className="text-[11px] text-slate-400">
+              Turn your angles into ready-to-use banner images.
+            </p>
           </div>
         </div>
 
-        {/* Image Generator */}
-        <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 flex flex-col gap-3 text-xs">
-          <div className="flex items-center justify-between gap-2">
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                Creative Image Generator
-              </h3>
-              <p className="text-[11px] text-slate-400 mt-1">
-                Turn your angles into ready-to-use banner images.
-              </p>
-            </div>
-          </div>
+        <textarea
+          rows={3}
+          className="w-full resize-none bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+          value={imagePrompt}
+          onChange={(e) => setImagePrompt(e.target.value)}
+        />
 
-          <div className="flex flex-col gap-2">
-            <textarea
-              className="w-full min-h-[60px] bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              value={imagePrompt}
-              onChange={(e) => setImagePrompt(e.target.value)}
-              placeholder="Describe the image: offer angle, colors, text, style, format (e.g. 1:1 push banner)."
+        <button
+          onClick={generateImage}
+          disabled={imageLoading || !imagePrompt.trim()}
+          className="self-start text-xs px-4 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {imageLoading ? "Generating…" : "Generate image"}
+        </button>
+
+        {imageError && (
+          <p className="text-[11px] text-rose-400 whitespace-pre-wrap">
+            {imageError}
+          </p>
+        )}
+
+        {imageUrl && (
+          <div className="mt-2">
+            <div className="text-[11px] text-slate-400 mb-1">
+              Preview (click-save to download):
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageUrl}
+              alt="Generated creative"
+              className="max-h-64 rounded-lg border border-slate-800 object-contain"
             />
-            <div className="flex justify-between items-center gap-2">
-              <button
-                onClick={generateCreativeImage}
-                disabled={imageLoading}
-                className="px-3 py-1.5 text-xs font-semibold rounded-md bg-indigo-500 hover:bg-indigo-400 disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {imageLoading ? "Generating…" : "Generate image"}
-              </button>
-              {imageError && (
-                <span className="text-[11px] text-rose-400">{imageError}</span>
-              )}
-            </div>
           </div>
-
-          <div className="mt-2 flex justify-center">
-            {imageUrl ? (
-              <div className="border border-slate-700 rounded-xl overflow-hidden bg-slate-950 p-2">
-                <img
-                  src={imageUrl}
-                  alt="Generated creative"
-                  className="max-h-64 max-w-full object-contain rounded-lg"
-                />
-              </div>
-            ) : (
-              <div className="text-[11px] text-slate-500 text-center w-full border border-dashed border-slate-700 rounded-lg py-6">
-                Generated images will appear here as a live preview.
-              </div>
-            )}
-          </div>
-        </div>
+        )}
       </div>
     </section>
   );

@@ -7,9 +7,9 @@ import { NextResponse } from "next/server";
 type DashboardZone = {
   id: string;
   visits: number;
-  conversions: number; // total conversions (main OR signups+deposits)
-  signups: number;
-  deposits: number;
+  conversions: number;
+  signups: number;   // 👈 NEW
+  deposits: number;  // 👈 NEW
   revenue: number;
   cost: number;
   roi: number;
@@ -19,9 +19,9 @@ type DashboardCreative = {
   id: string;
   name?: string;
   visits: number;
-  conversions: number; // total conversions (main OR signups+deposits)
-  signups: number;
-  deposits: number;
+  conversions: number;
+  signups: number;   // 👈 NEW
+  deposits: number;  // 👈 NEW
   revenue: number;
   cost: number;
   roi: number;
@@ -105,9 +105,9 @@ async function fetchZonesForCampaign(
       "ConversionRate",
       "CostPerFTD",
       "CostPerSignup",
-      "customConversions1", // signups
+      "customConversions1",
       "customRevenue1",
-      "customConversions2", // deposits
+      "customConversions2",
       "customRevenue2",
       "customConversions3",
       "customRevenue3",
@@ -125,7 +125,7 @@ async function fetchZonesForCampaign(
 
     columns.forEach((c) => params.append("column", c));
 
-    // Filter by campaign (matches your URL: filter1=campaign&filter1Value=...)
+    // Filter by campaign
     params.append("filter1", "campaign");
     params.append("filter1Value", campaignId);
 
@@ -144,7 +144,7 @@ async function fetchZonesForCampaign(
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
-      // ignore JSON parse errors
+      // ignore
     }
 
     if (!res.ok || !json?.rows) {
@@ -154,31 +154,16 @@ async function fetchZonesForCampaign(
 
     const rows: any[] = json.rows || json.data || [];
 
-    return rows.map((row) => {
-      const visits = Number(row.visits ?? 0);
-      const cost = Number(row.cost ?? 0);
-      const revenue = Number(row.revenue ?? 0);
-      const roi = Number(row.roi ?? 0);
-
-      const signups = Number(row.customConversions1 ?? 0);
-      const deposits = Number(row.customConversions2 ?? 0);
-      const baseConversions = Number(row.conversions ?? 0);
-      // If Voluum's main "conversions" is 0 (because everything is custom),
-      // fall back to signups + deposits so it matches the UI Conversions column.
-      const conversions =
-        baseConversions > 0 ? baseConversions : signups + deposits;
-
-      return {
-        id: String(row.customVariable1 ?? row.externalName ?? "unknown"),
-        visits,
-        conversions,
-        signups,
-        deposits,
-        revenue,
-        cost,
-        roi,
-      };
-    });
+    return rows.map((row) => ({
+      id: String(row.customVariable1 ?? row.externalName ?? "unknown"),
+      visits: Number(row.visits ?? 0),
+      conversions: Number(row.conversions ?? 0),
+      signups: Number(row.customConversions1 ?? 0),   // 👈 signup events
+      deposits: Number(row.customConversions2 ?? 0),  // 👈 deposit events
+      revenue: Number(row.revenue ?? 0),
+      cost: Number(row.cost ?? 0),
+      roi: Number(row.roi ?? 0),
+    }));
   } catch (err) {
     console.error("[Voluum] fetchZonesForCampaign error:", err);
     return [];
@@ -235,9 +220,9 @@ async function fetchCreativesForCampaign(
       "ConversionRate",
       "CostPerFTD",
       "CostPerSignup",
-      "customConversions1", // signups
+      "customConversions1",
       "customRevenue1",
-      "customConversions2", // deposits
+      "customConversions2",
       "customRevenue2",
       "customConversions3",
       "customRevenue3",
@@ -272,7 +257,7 @@ async function fetchCreativesForCampaign(
     try {
       json = text ? JSON.parse(text) : null;
     } catch {
-      // ignore JSON parse errors
+      // ignore
     }
 
     if (!res.ok || !json?.rows) {
@@ -286,30 +271,17 @@ async function fetchCreativesForCampaign(
 
     const rows: any[] = json.rows || json.data || [];
 
-    return rows.map((row) => {
-      const visits = Number(row.visits ?? 0);
-      const cost = Number(row.cost ?? 0);
-      const revenue = Number(row.revenue ?? 0);
-      const roi = Number(row.roi ?? 0);
-
-      const signups = Number(row.customConversions1 ?? 0);
-      const deposits = Number(row.customConversions2 ?? 0);
-      const baseConversions = Number(row.conversions ?? 0);
-      const conversions =
-        baseConversions > 0 ? baseConversions : signups + deposits;
-
-      return {
-        id: String(row.customVariable2 ?? row.externalName ?? "unknown"),
-        name: row.externalName,
-        visits,
-        conversions,
-        signups,
-        deposits,
-        revenue,
-        cost,
-        roi,
-      };
-    });
+    return rows.map((row) => ({
+      id: String(row.customVariable2 ?? row.externalName ?? "unknown"),
+      name: row.externalName,
+      visits: Number(row.visits ?? 0),
+      conversions: Number(row.conversions ?? 0),
+      signups: Number(row.customConversions1 ?? 0),   // 👈 signup events
+      deposits: Number(row.customConversions2 ?? 0),  // 👈 deposit events
+      revenue: Number(row.revenue ?? 0),
+      cost: Number(row.cost ?? 0),
+      roi: Number(row.roi ?? 0),
+    }));
   } catch (err) {
     console.error("[Voluum] fetchCreativesForCampaign error:", err);
     return [];
@@ -421,8 +393,8 @@ export async function GET(request: Request) {
       "CostPerSignup",
       "CPR",
       "CostPerFTD",
-      "customConversions1", // signups
-      "customConversions2", // deposits
+      "customConversions1",
+      "customConversions2",
       "customConversions3",
       "customRevenue1",
       "customRevenue2",
@@ -453,7 +425,7 @@ export async function GET(request: Request) {
     try {
       reportJson = reportText ? JSON.parse(reportText) : null;
     } catch {
-      // ignore JSON parse errors
+      // ignore
     }
 
     if (!reportRes.ok || !reportJson) {
