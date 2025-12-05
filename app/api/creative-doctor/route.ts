@@ -1,3 +1,4 @@
+// app/api/creative-doctor/route.ts
 import OpenAI from "openai";
 
 const client = new OpenAI({
@@ -5,92 +6,107 @@ const client = new OpenAI({
 });
 
 const systemPrompt = `
-You are a "Creative Doctor" for performance marketing.
+You are "Creative Doctor" for performance marketing creatives.
 
 You receive:
-- A user question about creatives, angles, ads, burn, or testing.
-- A JSON context with:
-  - creatives[]: flattened rows with
-    - creativeId, name, campaignName, trafficSource, visits, conversions, cost, revenue, roi, health (winner|at_risk|loser|neutral)
-  - campaigns[]: campaign-level stats (signups, deposits, revenue, ROI, cost, etc.)
-  - dateRange, from, to, trafficSourceFilter
+- A natural-language QUESTION from the user.
+- A JSON payload with:
+  - campaign: id, name, trafficSource, visits, signups, deposits, revenue, profit, roi, cost, cpa, cpr
+  - creatives[]: id, name, visits, conversions, revenue, cost, roi
+  - dateRange, from, to
 
-Your goals:
-1. Analyze which creatives are:
-   - top winners (high ROI / conversions)
-   - at risk (was good but now weaker or low margin)
-   - burners (spend but no conversions / very negative ROI)
-2. Give extremely practical suggestions:
-   - which creatives to scale, pause, or rotate
-   - which angles are working (e.g. bonus, FOMO, casino luck, scarcity, social proof, etc.)
-3. When user asks for IDEAS or NEW CREATIVES:
-   - generate specific, punchy examples:
-     - push notifications: title + message + optional icon suggestion
-     - banner angles: headline + value prop + CTA
-   - always tie them back to what is working in the data (if possible).
+Goals:
+1. Summarize which creatives are top performers vs weak ones.
+2. Explain WHY (click intent, funnel, angle, fatigue, etc.), using the metrics.
+3. Suggest concrete next actions:
+   - which creatives to scale
+   - which to pause
+   - which angles / hooks / variations to test next
+4. When the user asks for ideas, include:
+   - 3–5 specific angle ideas (hook + benefit + twist)
+   - Optional image prompt suggestions they can feed into an image generator.
 
-Style:
-- Be concise, tactical, and data-driven.
-- Reference specific creatives by name / ID and key metrics (visits, conversions, ROI, cost).
-- Use bullet points a lot.
-- If data is very thin, be conservative and say so.
-
-DO NOT invent metrics that are not present. Only use: visits, conversions, cost, revenue, roi, health, signups, deposits at campaign level.
+Rules:
+- Always tie your reasoning to the actual metrics: visits, conversions, revenue, cost, roi.
+- If the data is thin, be conservative and say so.
+- Format your answer in short sections and bullet points, not long walls of text.
 `;
 
 export async function POST(req: Request): Promise<Response> {
   try {
     const body = await req.json();
-    const { message, context } = body || {};
+    const { question, campaign, creatives, dateRange, from, to } = body || {};
 
-    if (!message || typeof message !== "string") {
+    if (!question || typeof question !== "string") {
       return new Response(
-        JSON.stringify({ error: "Missing or invalid 'message' field" }),
+        JSON.stringify({ error: "Missing or invalid 'question' field" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    const contextText =
-      context != null
-        ? JSON.stringify(context, null, 2)
-        : "{}";
+    const context = {
+      campaign: campaign ?? null,
+      creatives: creatives ?? [],
+      dateRange: dateRange ?? null,
+      from: from ?? null,
+      to: to ?? null,
+    };
 
     const messages = [
-      {
-        role: "system" as const,
-        content: systemPrompt,
-      },
-      {
-        role: "user" as const,
-        content: message,
-      },
+      { role: "system" as const, content: systemPrompt },
+      { role: "user" as const, content: question },
       {
         role: "user" as const,
         content:
-          "Here is the JSON context with creatives and campaigns:\n\n" +
-          contextText,
+          "Here is the JSON data for the selected campaign and creatives:\n\n" +
+          JSON.stringify(context, null, 2),
       },
     ];
 
-    const completion = await client.chat.completions.create({
-      model: "gpt-4.1",
-      messages,
-      temperature: 0.5,
+    // Create a streaming response
+    const stream = new ReadableStream({
+      async start(controller) {
+        const encoder = new TextEncoder();
+
+        try {
+          const completion = await client.chat.completions.create({
+            model: "gpt-4.1-mini",
+            messages,
+            temperature: 0.5,
+            stream: true,
+          });
+
+          for await (const chunk of completion) {
+            const delta = chunk.choices?.[0]?.delta?.content || "";
+            if (delta) {
+              controller.enqueue(encoder.encode(delta));
+            }
+          }
+
+          controller.close();
+        } catch (err: any) {
+          console.error("creative-doctor stream error:", err);
+          const errorMsg =
+            "\n\n[Creative Doctor error: " +
+            (err?.message || "Unknown error") +
+            "]";
+          controller.enqueue(encoder.encode(errorMsg));
+          controller.close();
+        }
+      },
     });
 
-    const reply =
-      completion.choices?.[0]?.message?.content ??
-      "No reply text returned from Creative Doctor.";
-
-    return new Response(JSON.stringify({ reply }), {
+    return new Response(stream, {
       status: 200,
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "text/plain; charset=utf-8",
+      },
     });
   } catch (err: any) {
-    console.error("Creative Doctor error:", err);
+    console.error("creative-doctor error (setup):", err);
     return new Response(
       JSON.stringify({
-        error: "Creative Doctor error",
+        error: "creative-doctor error",
         message: err?.message || String(err),
       }),
       { status: 500, headers: { "Content-Type": "application/json" } }
