@@ -1736,57 +1736,147 @@ function CreativesTab(props: {
 
       {/* Creative image generator */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 flex flex-col gap-3">
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
               Creative Image Generator
             </h3>
             <p className="text-[11px] text-slate-400">
-              Turn your angles into ready-to-use banner images.
+              Generate copy + visuals tailored to each Propeller ad type.
             </p>
+          </div>
+          <div className="text-[11px] text-slate-400">
+            Ad type:{" "}
+            <select
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+              value={adType}
+              onChange={(e) => setAdType(e.target.value)}
+            >
+              {Object.entries(AD_TYPES).map(([key, meta]) => (
+                <option key={key} value={key}>
+                  {meta.label}
+                </option>
+              ))}
+            </select>
           </div>
         </div>
 
-        <textarea
-          rows={3}
-          className="w-full resize-none bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-          value={imagePrompt}
-          onChange={(e) => setImagePrompt(e.target.value)}
-        />
+        <p className="text-[11px] text-slate-400">
+          Required: {(AD_TYPES[adType]?.required || []).join(", ")}.{" "}
+          <span className="text-slate-500">{AD_TYPES[adType]?.notes}</span>
+        </p>
 
-        <button
-          onClick={generateCreativeBundle}
-          disabled={assetsLoading || imageLoading || !imagePrompt.trim()}
-          className="self-start text-xs px-4 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {assetsLoading || imageLoading
-            ? "Generating..."
-            : "Generate creative bundle"}
-        </button>
-
-        {assetsError && (
-          <p className="text-[11px] text-rose-400 whitespace-pre-wrap">
-            {assetsError}
-          </p>
-        )}
-
-        {imageError && (
-          <p className="text-[11px] text-rose-400 whitespace-pre-wrap">
-            {imageError}
-          </p>
-        )}
-
-        {imageUrl && (
-          <div className="mt-2">
-            <div className="text-[11px] text-slate-400 mb-1">
-              Preview (click-save to download):
-            </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={imageUrl}
-              alt="Generated creative"
-              className="max-h-64 rounded-lg border border-slate-800 object-contain"
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-2">
+            <label className="text-[11px] text-slate-300 font-semibold">
+              Brief / angle
+            </label>
+            <textarea
+              rows={3}
+              className="w-full resize-none bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              value={imagePrompt}
+              onChange={(e) => setImagePrompt(e.target.value)}
+              placeholder="Eg. High-converting casino push banner, bold CTA, mobile-first..."
             />
+            <small className="text-[11px] text-slate-500">
+              We'll craft the title, description, icon prompt, and the main image prompt
+              so you can run both copy and visuals.
+            </small>
+          </div>
+
+          <div className="grid gap-2 text-[11px]">
+            <div className="grid gap-1">
+              <div className="text-slate-400 uppercase tracking-wide text-[10px]">
+                Title
+              </div>
+              <div className="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 min-h-[38px]">
+                {assetTitle || "—"}
+              </div>
+            </div>
+            <div className="grid gap-1">
+              <div className="text-slate-400 uppercase tracking-wide text-[10px]">
+                Description
+              </div>
+              <div className="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 min-h-[38px]">
+                {assetDescription || "—"}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div className="grid gap-1">
+                <div className="text-slate-400 uppercase tracking-wide text-[10px]">
+                  Main image prompt ({mainImageSize || "1024x1024"})
+                </div>
+                <div className="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 min-h-[38px]">
+                  {mainImagePrompt || "—"}
+                </div>
+              </div>
+              {iconSize && (
+                <div className="grid gap-1">
+                  <div className="text-slate-400 uppercase tracking-wide text-[10px]">
+                    Icon prompt ({iconSize})
+                  </div>
+                  <div className="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 min-h-[38px]">
+                    {iconPrompt || "—"}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            onClick={generateCreativeBundle}
+            disabled={
+              assetsLoading || imageLoading || !imagePrompt.trim()
+            }
+            className="text-xs px-4 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {assetsLoading || imageLoading
+              ? "Generating assets…"
+              : "Generate copy + visuals"}
+          </button>
+          {(assetsLoading || imageLoading) && (
+            <span className="text-[11px] text-slate-400">
+              Building copy + images...
+            </span>
+          )}
+        </div>
+
+        {(assetsError || imageError) && (
+          <p className="text-[11px] text-rose-400 whitespace-pre-wrap">
+            {assetsError || imageError}
+          </p>
+        )}
+
+        {(imageUrl || iconUrl) && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {imageUrl && (
+              <div>
+                <div className="text-[11px] text-slate-400 mb-1">
+                  Main image preview (click-save):
+                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={imageUrl}
+                  alt="Generated creative"
+                  className="max-h-64 rounded-lg border border-slate-800 object-contain w-full"
+                />
+              </div>
+            )}
+            {iconUrl && (
+              <div>
+                <div className="text-[11px] text-slate-400 mb-1">
+                  Icon preview:
+                </div>
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={iconUrl}
+                  alt="Generated icon"
+                  className="max-h-64 rounded-lg border border-slate-800 object-contain w-full bg-slate-950"
+                />
+              </div>
+            )}
           </div>
         )}
       </div>
