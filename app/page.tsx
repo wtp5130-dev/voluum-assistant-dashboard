@@ -183,6 +183,7 @@ export default function DashboardPage() {
   const [cdLoading, setCdLoading] = useState<boolean>(false);
   const [cdAnswer, setCdAnswer] = useState<string | null>(null);
   const [cdError, setCdError] = useState<string | null>(null);
+  const [cdTokenCount, setCdTokenCount] = useState<number>(0); // approximate token counter
 
   // Creative image generator state
   const [imagePrompt, setImagePrompt] = useState<string>(
@@ -490,7 +491,8 @@ export default function DashboardPage() {
     try {
       setCdError(null);
       setCdLoading(true);
-      setCdAnswer(""); // start empty so we can stream into it
+      setCdAnswer("");
+      setCdTokenCount(0); // reset token counter
 
       const payload = {
         question,
@@ -519,13 +521,18 @@ export default function DashboardPage() {
       const decoder = new TextDecoder();
       let fullText = "";
 
-      // Read chunks and update UI live
+      // Read chunks and update UI live + token counter (approx)
       while (true) {
         const { value, done } = await reader.read();
         if (done) break;
         const chunk = decoder.decode(value, { stream: true });
+
         fullText += chunk;
         setCdAnswer(fullText);
+
+        // Approximate "tokens" by splitting on whitespace
+        const approxTokens = chunk.split(/\s+/).filter(Boolean).length;
+        setCdTokenCount((prev) => prev + approxTokens);
       }
     } catch (err) {
       console.error(err);
@@ -797,6 +804,7 @@ export default function DashboardPage() {
           cdLoading={cdLoading}
           cdAnswer={cdAnswer}
           cdError={cdError}
+          cdTokenCount={cdTokenCount}
           askCreativeDoctor={askCreativeDoctor}
           imagePrompt={imagePrompt}
           setImagePrompt={setImagePrompt}
@@ -1411,6 +1419,7 @@ function CreativesDoctorTab({
   cdLoading,
   cdAnswer,
   cdError,
+  cdTokenCount,
   askCreativeDoctor,
   imagePrompt,
   setImagePrompt,
@@ -1426,6 +1435,7 @@ function CreativesDoctorTab({
   cdLoading: boolean;
   cdAnswer: string | null;
   cdError: string | null;
+  cdTokenCount: number;
   askCreativeDoctor: () => void;
   imagePrompt: string;
   setImagePrompt: (value: string) => void;
@@ -1518,17 +1528,24 @@ function CreativesDoctorTab({
         {/* Creative Doctor */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 flex flex-col gap-3 text-xs">
           <div className="flex items-center justify-between gap-2">
-            <div>
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                Creative Doctor
-              </h3>
+            <div className="flex flex-col">
+              <div className="flex items-center gap-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                  Creative Doctor
+                </h3>
+                {cdTokenCount > 0 && (
+                  <span className="text-[10px] text-slate-500">
+                    ~{cdTokenCount} tokens
+                  </span>
+                )}
+              </div>
               <p className="text-[11px] text-slate-400 mt-1">
                 Ask about winners, angles, fatigue, and new tests.
               </p>
             </div>
             {cdLoading && (
               <span className="text-[10px] text-emerald-400 animate-pulse">
-                Thinking live…
+                Streaming…
               </span>
             )}
           </div>
