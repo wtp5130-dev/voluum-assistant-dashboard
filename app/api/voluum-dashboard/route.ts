@@ -8,8 +8,8 @@ type DashboardZone = {
   id: string;
   visits: number;
   conversions: number;
-  signups: number;   // 👈 NEW
-  deposits: number;  // 👈 NEW
+  signups: number;
+  deposits: number;
   revenue: number;
   cost: number;
   roi: number;
@@ -20,8 +20,8 @@ type DashboardCreative = {
   name?: string;
   visits: number;
   conversions: number;
-  signups: number;   // 👈 NEW
-  deposits: number;  // 👈 NEW
+  signups: number;
+  deposits: number;
   revenue: number;
   cost: number;
   roi: number;
@@ -158,8 +158,8 @@ async function fetchZonesForCampaign(
       id: String(row.customVariable1 ?? row.externalName ?? "unknown"),
       visits: Number(row.visits ?? 0),
       conversions: Number(row.conversions ?? 0),
-      signups: Number(row.customConversions1 ?? 0),   // 👈 signup events
-      deposits: Number(row.customConversions2 ?? 0),  // 👈 deposit events
+      signups: Number(row.customConversions1 ?? 0),   // signup events
+      deposits: Number(row.customConversions2 ?? 0),  // deposit events
       revenue: Number(row.revenue ?? 0),
       cost: Number(row.cost ?? 0),
       roi: Number(row.roi ?? 0),
@@ -276,8 +276,8 @@ async function fetchCreativesForCampaign(
       name: row.externalName,
       visits: Number(row.visits ?? 0),
       conversions: Number(row.conversions ?? 0),
-      signups: Number(row.customConversions1 ?? 0),   // 👈 signup events
-      deposits: Number(row.customConversions2 ?? 0),  // 👈 deposit events
+      signups: Number(row.customConversions1 ?? 0),
+      deposits: Number(row.customConversions2 ?? 0),
       revenue: Number(row.revenue ?? 0),
       cost: Number(row.cost ?? 0),
       roi: Number(row.roi ?? 0),
@@ -528,7 +528,25 @@ export async function GET(request: Request) {
     const cpaTotal = depositCount > 0 ? totalCost / depositCount : 0;
     const cprTotal = signupCount > 0 ? totalCost / signupCount : 0;
 
+    // NEW: active campaigns KPI
+    const activeCampaigns = campaigns.filter((c) => {
+      return (
+        (c.visits ?? 0) > 0 ||
+        (c.cost ?? 0) > 0 ||
+        (c.signups ?? 0) > 0 ||
+        (c.deposits ?? 0) > 0 ||
+        (c.conversions ?? 0) > 0
+      );
+    }).length;
+
     const kpis: DashboardKpiCard[] = [
+      {
+        id: "activeCampaigns",
+        label: "Active campaigns",
+        value: activeCampaigns.toString(),
+        delta: "–",
+        positive: true,
+      },
       {
         id: "visits",
         label: "Visits",
