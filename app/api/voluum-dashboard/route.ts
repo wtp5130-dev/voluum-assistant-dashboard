@@ -326,7 +326,8 @@ export async function GET(request: Request) {
 
   // Build from/to
   const to = new Date();
-  to.setUTCMinutes(0, 0, 0, 0);
+  // FIX: setUTCMinutes only takes (minutes, seconds, ms)
+  to.setUTCMinutes(0, 0, 0);
 
   const from = new Date(to);
 
@@ -492,8 +493,8 @@ export async function GET(request: Request) {
           fetchCreativesForCampaign(base, token, fromIso, toIso, campaignId),
         ]);
 
-        // If you want to be extra nice to Voluum, you could add:
-        // await sleep(150); // 150ms between campaigns
+        // Optional throttle if you still hit 429:
+        // await sleep(150);
       }
 
       campaigns.push({
