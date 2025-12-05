@@ -98,36 +98,31 @@ const AD_TYPES: Record<
     label: string;
     notes: string;
     mainImageSize: string;
-    iconSize?: string | null;
     required: string[];
   }
 > = {
   "push-classic": {
     label: "Propeller Push",
-    notes: "Title + desc + square icon (192px+) + main image (360x240 or square).",
+    notes: "Title + description + main image (360x240 or square).",
     mainImageSize: "1024x1024",
-    iconSize: "512x512",
-    required: ["title", "description", "icon", "main image"],
+    required: ["title", "description", "main image"],
   },
   "inpage-push": {
     label: "In-Page Push",
-    notes: "Title + desc + square icon; image can be square or 3:2.",
+    notes: "Title + description + main image (square or 3:2).",
     mainImageSize: "1024x768",
-    iconSize: "512x512",
-    required: ["title", "description", "icon", "main image"],
+    required: ["title", "description", "main image"],
   },
   interstitial: {
     label: "Interstitial",
     notes: "Full-screen image; optional title/description.",
     mainImageSize: "1080x1920",
-    iconSize: null,
     required: ["main image", "optional copy"],
   },
   onclick: {
     label: "Onclick / Direct Click",
     notes: "Hero image aimed at CTR (1200x628).",
     mainImageSize: "1200x628",
-    iconSize: null,
     required: ["main image"],
   },
 };
@@ -247,13 +242,10 @@ const [adType, setAdType] = useState<string>("push-classic");
 const [assetTitle, setAssetTitle] = useState("");
 const [assetDescription, setAssetDescription] = useState("");
 const [mainImagePrompt, setMainImagePrompt] = useState("");
-const [iconPrompt, setIconPrompt] = useState("");
 const [mainImageSize, setMainImageSize] = useState("1024x1024");
-const [iconSize, setIconSize] = useState("512x512");
 const [imageLoading, setImageLoading] = useState(false);
 const [imageError, setImageError] = useState<string | null>(null);
 const [imageUrl, setImageUrl] = useState<string | null>(null);
-const [iconUrl, setIconUrl] = useState<string | null>(null);
 const [assetsLoading, setAssetsLoading] = useState(false);
 const [assetsError, setAssetsError] = useState<string | null>(null);
 
@@ -615,62 +607,33 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
     }
   };
 
-  const generateImages = async (
-    mainPromptText: string,
-    iconPromptText?: string | null,
-    mainSize?: string,
-    iconSizeOverride?: string | null
-  ) => {
+const generateImage = async (promptText: string, sizeOverride?: string) => {
     setImageLoading(true);
     setImageError(null);
     setImageUrl(null);
-    setIconUrl(null);
 
     try {
-      const mainRes = await fetch(CREATIVE_IMAGE_API_URL, {
+      const imageRes = await fetch(CREATIVE_IMAGE_API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          prompt: mainPromptText,
-          size: mainSize || mainImageSize,
+          prompt: promptText,
+          size: sizeOverride || mainImageSize,
         }),
       });
 
-      if (!mainRes.ok) {
-        const text = await mainRes.text();
-        throw new Error(`Main image failed (${mainRes.status}): ${text}`);
+      if (!imageRes.ok) {
+        const text = await imageRes.text();
+        throw new Error(`Image generation failed (${imageRes.status}): ${text}`);
       }
 
-      const mainJson = await mainRes.json();
-      const mainUrl: string | undefined =
-        mainJson.url ?? mainJson.imageUrl ?? mainJson.data?.[0]?.url;
-      if (!mainUrl) {
-        throw new Error("No main image URL returned from API.");
+      const imageJson = await imageRes.json();
+      const imageResultUrl: string | undefined =
+        imageJson.url ?? imageJson.imageUrl ?? imageJson.data?.[0]?.url;
+      if (!imageResultUrl) {
+        throw new Error("No image URL returned from API.");
       }
-      setImageUrl(mainUrl);
-
-      if (iconPromptText && iconPromptText.trim()) {
-        const iconRes = await fetch(CREATIVE_IMAGE_API_URL, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            prompt: iconPromptText,
-            size: iconSizeOverride || iconSize || "512x512",
-          }),
-        });
-
-        if (!iconRes.ok) {
-          const text = await iconRes.text();
-          throw new Error(`Icon image failed (${iconRes.status}): ${text}`);
-        }
-
-        const iconJson = await iconRes.json();
-        const iconImageUrl: string | undefined =
-          iconJson.url ?? iconJson.imageUrl ?? iconJson.data?.[0]?.url;
-        if (iconImageUrl) {
-          setIconUrl(iconImageUrl);
-        }
-      }
+      setImageUrl(imageResultUrl);
     } catch (err: any) {
       console.error("Creative image error:", err);
       setImageError(
@@ -690,7 +653,6 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
     setAssetsError(null);
     setImageError(null);
     setImageUrl(null);
-    setIconUrl(null);
 
     try {
       const res = await fetch(CREATIVE_ASSETS_API_URL, {
@@ -710,27 +672,15 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
       const newDescription = json.description ?? "";
       const newMainPrompt =
         json.imagePrompt ?? json.mainImagePrompt ?? prompt;
-      const newIconPrompt = json.iconPrompt ?? "";
       const newMainSize =
         json.mainImageSize ?? AD_TYPES[adType]?.mainImageSize ?? "1024x1024";
-      const newIconSize =
-        json.iconSize ??
-        (AD_TYPES[adType]?.iconSize ?? undefined) ??
-        null;
 
       setAssetTitle(newTitle);
       setAssetDescription(newDescription);
       setMainImagePrompt(newMainPrompt);
-      setIconPrompt(newIconPrompt);
       setMainImageSize(newMainSize);
-      setIconSize(newIconSize || "");
 
-      await generateImages(
-        newMainPrompt,
-        newIconPrompt,
-        newMainSize,
-        newIconSize
-      );
+      await generateImage(newMainPrompt, newMainSize);
     } catch (err: any) {
       console.error("Creative assets error:", err);
       setAssetsError(
@@ -975,15 +925,12 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
           assetTitle={assetTitle}
           assetDescription={assetDescription}
           mainImagePrompt={mainImagePrompt}
-          iconPrompt={iconPrompt}
           mainImageSize={mainImageSize}
-          iconSize={iconSize}
           imageLoading={imageLoading}
           imageError={imageError}
           assetsLoading={assetsLoading}
           assetsError={assetsError}
           imageUrl={imageUrl}
-          iconUrl={iconUrl}
           generateCreativeBundle={generateCreativeBundle}
         />
       )}
@@ -1633,15 +1580,12 @@ function CreativesTab(props: {
   assetTitle: string;
   assetDescription: string;
   mainImagePrompt: string;
-  iconPrompt: string;
   mainImageSize: string;
-  iconSize?: string | null;
   imageLoading: boolean;
   imageError: string | null;
   assetsLoading: boolean;
   assetsError: string | null;
   imageUrl: string | null;
-  iconUrl: string | null;
   generateCreativeBundle: () => void;
 }) {
   const {
@@ -1658,15 +1602,12 @@ function CreativesTab(props: {
     assetTitle,
     assetDescription,
     mainImagePrompt,
-    iconPrompt,
     mainImageSize,
-    iconSize,
     imageLoading,
     imageError,
     assetsLoading,
     assetsError,
     imageUrl,
-    iconUrl,
     generateCreativeBundle,
   } = props;
 
@@ -1778,10 +1719,10 @@ function CreativesTab(props: {
               onChange={(e) => setImagePrompt(e.target.value)}
               placeholder="Eg. High-converting casino push banner, bold CTA, mobile-first..."
             />
-            <small className="text-[11px] text-slate-500">
-              We'll craft the title, description, icon prompt, and the main image prompt
-              so you can run both copy and visuals.
-            </small>
+              <small className="text-[11px] text-slate-500">
+                We'll craft the title, description, and the main image prompt
+                so you can run both copy and visuals.
+              </small>
           </div>
 
           <div className="grid gap-2 text-[11px]">
@@ -1790,7 +1731,7 @@ function CreativesTab(props: {
                 Title
               </div>
               <div className="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 min-h-[38px]">
-                {assetTitle || "—"}
+                {assetTitle || "-"}
               </div>
             </div>
             <div className="grid gap-1">
@@ -1798,28 +1739,16 @@ function CreativesTab(props: {
                 Description
               </div>
               <div className="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 min-h-[38px]">
-                {assetDescription || "—"}
+                {assetDescription || "-"}
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-2">
-              <div className="grid gap-1">
-                <div className="text-slate-400 uppercase tracking-wide text-[10px]">
-                  Main image prompt ({mainImageSize || "1024x1024"})
-                </div>
-                <div className="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 min-h-[38px]">
-                  {mainImagePrompt || "—"}
-                </div>
+            <div className="grid gap-1">
+              <div className="text-slate-400 uppercase tracking-wide text-[10px]">
+                Main image prompt ({mainImageSize || "1024x1024"})
               </div>
-              {iconSize && (
-                <div className="grid gap-1">
-                  <div className="text-slate-400 uppercase tracking-wide text-[10px]">
-                    Icon prompt ({iconSize})
-                  </div>
-                  <div className="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 min-h-[38px]">
-                    {iconPrompt || "—"}
-                  </div>
-                </div>
-              )}
+              <div className="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 min-h-[38px]">
+                {mainImagePrompt || "-"}
+              </div>
             </div>
           </div>
         </div>
@@ -1849,34 +1778,17 @@ function CreativesTab(props: {
           </p>
         )}
 
-        {(imageUrl || iconUrl) && (
-          <div className="grid gap-3 sm:grid-cols-2">
-            {imageUrl && (
-              <div>
-                <div className="text-[11px] text-slate-400 mb-1">
-                  Main image preview (click-save):
-                </div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={imageUrl}
-                  alt="Generated creative"
-                  className="max-h-64 rounded-lg border border-slate-800 object-contain w-full"
-                />
-              </div>
-            )}
-            {iconUrl && (
-              <div>
-                <div className="text-[11px] text-slate-400 mb-1">
-                  Icon preview:
-                </div>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={iconUrl}
-                  alt="Generated icon"
-                  className="max-h-64 rounded-lg border border-slate-800 object-contain w-full bg-slate-950"
-                />
-              </div>
-            )}
+        {imageUrl && (
+          <div>
+            <div className="text-[11px] text-slate-400 mb-1">
+              Main image preview (click-save):
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={imageUrl}
+              alt="Generated creative"
+              className="max-h-64 rounded-lg border border-slate-800 object-contain w-full"
+            />
           </div>
         )}
       </div>
