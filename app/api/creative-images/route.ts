@@ -51,10 +51,16 @@ export async function POST(req: Request): Promise<Response> {
       prompt,
       n: 1,
       size, // e.g. "1024x1024"
+      // Default response for gpt-image-1 is base64, but our frontend expects a URL
+      response_format: "url",
     });
 
     const image = (result as any).data?.[0];
-    const url: string | undefined = image?.url;
+    const url: string | undefined =
+      image?.url ||
+      (image?.b64_json
+        ? `data:image/png;base64,${image.b64_json}`
+        : undefined);
 
     if (!url) {
       return new Response(
