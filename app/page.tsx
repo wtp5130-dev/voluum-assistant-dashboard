@@ -3,9 +3,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 /**
- * ===========
+ * =============
  * Types
- * ===========
+ * =============
  */
 
 type KPI = {
@@ -73,65 +73,31 @@ type ChatMessage = {
   content: string;
 };
 
-type TabKey = "overview" | "optimizer" | "creatives";
-
-/**
- * ===========
- * Optimizer types (client view)
- * ===========
- */
-
-type OptimizerRule = {
-  name: string;
-  scope?: string;
-  trafficSource?: string | null;
-  country?: string | null;
-  condition: string;
-  suggestedThresholds?: {
-    minVisits?: number | null;
-    minCost?: number | null;
-    maxROI?: number | null;
-  };
-  action?: string;
-  appliesTo?: string;
-  rationale?: string;
-};
-
-type OptimizerZoneMetrics = {
-  visits: number;
-  conversions: number;
-  revenue: number;
-  cost: number;
-  roi: number;
-  signups?: number;
-  deposits?: number;
-};
-
-type OptimizerZoneToPause = {
-  campaignId: string;
-  campaignName?: string;
-  zoneId: string;
-  reason: string;
-  trafficSource?: string;
-  country?: string;
-  metrics: OptimizerZoneMetrics;
-};
-
 type OptimizerPreviewResult = {
-  rules?: OptimizerRule[];
-  zonesToPauseNow?: OptimizerZoneToPause[];
+  rules?: any[];
+  zonesToPauseNow?: any[];
   meta?: any;
 };
 
+type OptimizerApplyResult = {
+  dryRun: boolean;
+  ts: string;
+  totalZones?: number;
+  pausedZones?: number;
+  details?: any;
+};
+
 /**
- * ===========
+ * =============
  * Config
- * ===========
+ * =============
  */
 
 const DASHBOARD_API_URL = "/api/voluum-dashboard";
-// We are using /api/chat as you said
 const CHAT_API_URL = "/api/chat";
+const OPTIMIZER_PREVIEW_API_URL = "/api/optimizer/preview";
+const OPTIMIZER_APPLY_API_URL = "/api/optimizer/apply";
+const CREATIVE_DOCTOR_API_URL = "/api/creative-doctor";
 
 const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
   { key: "today", label: "Today" },
@@ -142,9 +108,9 @@ const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
 ];
 
 /**
- * ===========
+ * =============
  * Helpers
- * ===========
+ * =============
  */
 
 function formatMoney(value: number | string): string {
@@ -176,9 +142,9 @@ function getDaysAgoYMD(days: number): string {
 }
 
 /**
- * ===========
+ * =============
  * Main page
- * ===========
+ * =============
  */
 
 export default function DashboardPage() {
@@ -187,8 +153,6 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [dateRange, setDateRange] = useState<DateRangeKey>("last7days");
-
-  // Custom date state (default to last 7 days)
   const [fromDate, setFromDate] = useState<string>(() => getDaysAgoYMD(7));
   const [toDate, setToDate] = useState<string>(() => getTodayYMD());
 
@@ -198,9 +162,11 @@ export default function DashboardPage() {
     null
   );
 
-  const [activeTab, setActiveTab] = useState<TabKey>("overview");
+  const [selectedTab, setSelectedTab] = useState<"dashboard" | "optimizer" | "creatives">(
+    "dashboard"
+  );
 
-  // Chat state
+  // Main assistant chat (Dashboard tab)
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
     {
       role: "assistant",
@@ -211,26 +177,33 @@ export default function DashboardPage() {
   const [chatInput, setChatInput] = useState<string>("");
   const [chatLoading, setChatLoading] = useState<boolean>(false);
 
-  // Optimizer state
-  const [optimizerPreview, setOptimizerPreview] =
-    useState<OptimizerPreviewResult | null>(null);
-  const [optimizerPreviewLoading, setOptimizerPreviewLoading] =
-    useState<boolean>(false);
-  const [optimizerPreviewError, setOptimizerPreviewError] = useState<
-    string | null
-  >(null);
-
-  const [optimizerApplyLoading, setOptimizerApplyLoading] =
-    useState<boolean>(false);
-  const [optimizerApplyError, setOptimizerApplyError] = useState<
-    string | null
-  >(null);
-  const [optimizerApplyResult, setOptimizerApplyResult] = useState<any | null>(
+  // Optimizer tab state
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [applyLoading, setApplyLoading] = useState(false);
+  const [previewResult, setPreviewResult] = useState<OptimizerPreviewResult | null>(
     null
   );
+  const [applyResult, setApplyResult] = useState<OptimizerApplyResult | null>(
+    null
+  );
+  const [optimizerError, setOptimizerError] = useState<string | null>(null);
+  const [optimizerDryRun, setOptimizerDryRun] = useState<boolean>(true);
+
+  // Creative Doctor tab state
+  const [creativeChatMessages, setCreativeChatMessages] =
+    useState<ChatMessage[]>([
+      {
+        role: "assistant",
+        content:
+          "Hi, I’m your Creative Doctor. Ask me which creatives are winning, burning, or what new angles to test.",
+      },
+    ]);
+  const [creativeChatInput, setCreativeChatInput] = useState<string>("");
+  const [creativeChatLoading, setCreativeChatLoading] = useState<boolean>(false);
 
   /**
    * Fetch dashboard data whenever dateRange or custom dates change
+   * (client-side only, no full page reload)
    */
   useEffect(() => {
     if (dateRange === "custom" && (!fromDate || !toDate)) {
@@ -275,11 +248,6 @@ export default function DashboardPage() {
         } else {
           setSelectedCampaignId(null);
         }
-
-        // Any time the dashboard re-fetches, reset optimizer preview
-        setOptimizerPreview(null);
-        setOptimizerApplyResult(null);
-        setOptimizerApplyError(null);
       } catch (err) {
         console.error(err);
         setError(
@@ -341,9 +309,8 @@ export default function DashboardPage() {
   }, [filteredCampaigns, selectedCampaignId]);
 
   /**
-   * Zones / Creatives for selected campaign
+   * Zones / Creatives for selected campaign (Dashboard tab)
    */
-
   const zones = useMemo<Zone[]>(() => {
     if (!selectedCampaign) return [];
 
@@ -360,7 +327,7 @@ export default function DashboardPage() {
     });
   }, [selectedCampaign]);
 
-  const creatives = useMemo<Creative[]>(() => {
+  const creativesForSelectedCampaign = useMemo<Creative[]>(() => {
     if (!selectedCampaign) return [];
 
     const raw = selectedCampaign.creatives ?? [];
@@ -380,7 +347,48 @@ export default function DashboardPage() {
   }, [selectedCampaign]);
 
   /**
-   * Chat send
+   * Flatten creatives across all filtered campaigns for Creative Doctor
+   */
+  const creativeRows = useMemo(
+    () =>
+      filteredCampaigns.flatMap((campaign) => {
+        const list = campaign.creatives ?? [];
+        return list.map((c) => {
+          const labelBase =
+            c.name && c.name.toString().trim().length > 0
+              ? c.name.toString().trim()
+              : c.id && c.id.trim().length > 0
+              ? `Creative ${c.id}`
+              : "Unnamed creative";
+
+          // Simple health classification
+          let health: "winner" | "at_risk" | "loser" | "neutral" = "neutral";
+          if (c.conversions > 0 && c.roi > 30) health = "winner";
+          else if (c.cost > 0 && c.conversions === 0 && c.roi <= -50)
+            health = "loser";
+          else if (c.conversions > 0 && c.roi < 0) health = "at_risk";
+
+          return {
+            key: `${campaign.id}-${c.id}`,
+            creativeId: c.id,
+            name: labelBase,
+            campaignId: campaign.id,
+            campaignName: campaign.name,
+            trafficSource: campaign.trafficSource,
+            visits: c.visits,
+            conversions: c.conversions,
+            cost: c.cost,
+            revenue: c.revenue,
+            roi: c.roi,
+            health,
+          };
+        });
+      }),
+    [filteredCampaigns]
+  );
+
+  /**
+   * Main dashboard assistant chat send
    */
   const sendChat = async () => {
     const content = chatInput.trim();
@@ -395,7 +403,6 @@ export default function DashboardPage() {
     setChatLoading(true);
 
     try {
-      // Context for backend
       const context = {
         dateRange,
         from: data?.from,
@@ -416,9 +423,7 @@ export default function DashboardPage() {
 
       const json = (await res.json()) as { reply?: string; message?: string };
       const reply =
-        json.reply ??
-        json.message ??
-        "[No reply field in response from chat API]";
+        json.reply ?? json.message ?? "[No reply field in response from chat API]";
 
       setChatMessages((prev) => [
         ...prev,
@@ -440,17 +445,17 @@ export default function DashboardPage() {
   };
 
   /**
-   * Optimizer: preview
+   * Optimizer tab: preview
    */
-  const runOptimizerPreview = async () => {
+  const handlePreviewOptimizer = async () => {
     if (!data) return;
-    setOptimizerPreviewLoading(true);
-    setOptimizerPreviewError(null);
-    setOptimizerApplyResult(null);
-    setOptimizerApplyError(null);
-
     try {
-      const res = await fetch("/api/optimizer/preview", {
+      setPreviewLoading(true);
+      setOptimizerError(null);
+      setPreviewResult(null);
+      setApplyResult(null);
+
+      const res = await fetch(OPTIMIZER_PREVIEW_API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -464,39 +469,37 @@ export default function DashboardPage() {
       }
 
       const json = (await res.json()) as OptimizerPreviewResult;
-      setOptimizerPreview(json);
+      setPreviewResult(json);
     } catch (err) {
       console.error(err);
-      setOptimizerPreviewError(
-        err instanceof Error ? err.message : "Unknown error during preview"
+      setOptimizerError(
+        err instanceof Error ? err.message : "Unknown error in preview"
       );
     } finally {
-      setOptimizerPreviewLoading(false);
+      setPreviewLoading(false);
     }
   };
 
   /**
-   * Optimizer: apply (dry run or live)
+   * Optimizer tab: apply
    */
-  const applyOptimizer = async (dryRun: boolean) => {
-    if (!optimizerPreview || !optimizerPreview.zonesToPauseNow?.length) {
-      setOptimizerApplyError(
-        "No zonesToPauseNow from preview. Run a preview first."
-      );
+  const handleApplyOptimizer = async () => {
+    if (!previewResult || !previewResult.zonesToPauseNow) {
+      setOptimizerError("Run a preview first – no zones selected yet.");
       return;
     }
 
-    setOptimizerApplyLoading(true);
-    setOptimizerApplyError(null);
-    setOptimizerApplyResult(null);
-
     try {
-      const res = await fetch("/api/optimizer/apply", {
+      setApplyLoading(true);
+      setOptimizerError(null);
+      setApplyResult(null);
+
+      const res = await fetch(OPTIMIZER_APPLY_API_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          zonesToPauseNow: optimizerPreview.zonesToPauseNow,
-          dryRun,
+          zonesToPauseNow: previewResult.zonesToPauseNow,
+          dryRun: optimizerDryRun,
         }),
       });
 
@@ -504,25 +507,95 @@ export default function DashboardPage() {
         throw new Error(`Apply failed (${res.status})`);
       }
 
-      const json = await res.json();
-      setOptimizerApplyResult(json);
+      const json = (await res.json()) as OptimizerApplyResult;
+      setApplyResult(json);
     } catch (err) {
       console.error(err);
-      setOptimizerApplyError(
-        err instanceof Error ? err.message : "Unknown error during apply"
+      setOptimizerError(
+        err instanceof Error ? err.message : "Unknown error in apply"
       );
     } finally {
-      setOptimizerApplyLoading(false);
+      setApplyLoading(false);
     }
   };
 
   /**
-   * ===========
+   * Creative Doctor chat send
+   */
+  const sendCreativeChat = async () => {
+    const content = creativeChatInput.trim();
+    if (!content || creativeChatLoading) return;
+
+    const newMessages: ChatMessage[] = [
+      ...creativeChatMessages,
+      { role: "user", content },
+    ];
+    setCreativeChatMessages(newMessages);
+    setCreativeChatInput("");
+    setCreativeChatLoading(true);
+
+    try {
+      const context = {
+        dateRange,
+        from: data?.from,
+        to: data?.to,
+        trafficSourceFilter,
+        creatives: creativeRows,
+        campaigns: filteredCampaigns.map((c) => ({
+          id: c.id,
+          name: c.name,
+          trafficSource: c.trafficSource,
+          signups: c.signups,
+          deposits: c.deposits,
+          revenue: c.revenue,
+          profit: c.profit,
+          roi: c.roi,
+          cost: c.cost,
+        })),
+      };
+
+      const res = await fetch(CREATIVE_DOCTOR_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: content, context }),
+      });
+
+      if (!res.ok) {
+        throw new Error(`Creative doctor failed (${res.status})`);
+      }
+
+      const json = (await res.json()) as { reply?: string; message?: string };
+      const reply =
+        json.reply ??
+        json.message ??
+        "[No reply field in response from creative doctor API]";
+
+      setCreativeChatMessages((prev) => [
+        ...prev,
+        { role: "assistant", content: reply },
+      ]);
+    } catch (err) {
+      console.error(err);
+      setCreativeChatMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          content:
+            "Sorry, I couldn’t reach the creative doctor API. Check `/api/creative-doctor` on your backend.",
+        },
+      ]);
+    } finally {
+      setCreativeChatLoading(false);
+    }
+  };
+
+  /**
+   * =============
    * Render
-   * ===========
+   * =============
    */
 
-  if (loading && !data) {
+  if (loading) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
         <div className="text-lg font-medium">Loading Voluum data…</div>
@@ -566,11 +639,6 @@ export default function DashboardPage() {
             {data.dateRange} • {new Date(data.from).toLocaleString()} –{" "}
             {new Date(data.to).toLocaleString()}
           </p>
-          {loading && (
-            <p className="text-[10px] text-emerald-400 mt-1">
-              Refreshing data…
-            </p>
-          )}
         </div>
 
         <div className="flex flex-col gap-3 items-stretch md:items-end">
@@ -585,7 +653,7 @@ export default function DashboardPage() {
                 onChange={(e) =>
                   setDateRange(e.target.value as DateRangeKey)
                 }
-                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs min-w-[140px]"
+                className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-xs min-w-[160px]"
               >
                 {DATE_RANGE_OPTIONS.map((opt) => (
                   <option key={opt.key} value={opt.key}>
@@ -605,7 +673,7 @@ export default function DashboardPage() {
                 onChange={(e) =>
                   setTrafficSourceFilter(e.target.value)
                 }
-                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs min-w-[160px]"
+                className="bg-slate-900 border border-slate-700 rounded-md px-3 py-2 text-xs min-w-[180px]"
               >
                 <option value="all">All sources</option>
                 {trafficSources.map((src) => (
@@ -671,703 +739,779 @@ export default function DashboardPage() {
         ))}
       </section>
 
-      {/* Tabs – bigger & more noticeable */}
-      <div className="flex justify-start mb-2">
-        <div className="inline-flex items-center gap-2 bg-slate-900/80 border border-slate-800 rounded-full p-1.5 text-sm">
+      {/* Tabs */}
+      <section className="space-y-4">
+        <div className="flex gap-2 border-b border-slate-800 pb-2">
           <button
-            type="button"
-            onClick={() => setActiveTab("overview")}
-            className={`px-4 py-2 rounded-full font-medium transition-colors ${
-              activeTab === "overview"
-                ? "bg-emerald-600 text-slate-50 shadow-md"
-                : "text-slate-300 hover:bg-slate-800 hover:text-slate-50"
+            onClick={() => setSelectedTab("dashboard")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold border ${
+              selectedTab === "dashboard"
+                ? "bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-500/30"
+                : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
             }`}
           >
-            Overview
+            Dashboard
           </button>
           <button
-            type="button"
-            onClick={() => setActiveTab("optimizer")}
-            className={`px-4 py-2 rounded-full font-medium transition-colors ${
-              activeTab === "optimizer"
-                ? "bg-emerald-600 text-slate-50 shadow-md"
-                : "text-slate-300 hover:bg-slate-800 hover:text-slate-50"
+            onClick={() => setSelectedTab("optimizer")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold border ${
+              selectedTab === "optimizer"
+                ? "bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-500/30"
+                : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
             }`}
           >
             Optimizer
           </button>
           <button
-            type="button"
-            onClick={() => setActiveTab("creatives")}
-            className={`px-4 py-2 rounded-full font-medium transition-colors ${
-              activeTab === "creatives"
-                ? "bg-emerald-600 text-slate-50 shadow-md"
-                : "text-slate-300 hover:bg-slate-800 hover:text-slate-50"
+            onClick={() => setSelectedTab("creatives")}
+            className={`px-4 py-2 rounded-lg text-sm font-semibold border ${
+              selectedTab === "creatives"
+                ? "bg-emerald-600 text-white border-emerald-500 shadow-lg shadow-emerald-500/30"
+                : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
             }`}
           >
-            Creatives
+            Creatives (Doctor)
           </button>
+        </div>
+
+        {/* Tab content */}
+        {selectedTab === "dashboard" && (
+          <DashboardTabContent
+            filteredCampaigns={filteredCampaigns}
+            data={data}
+            selectedCampaign={selectedCampaign}
+            selectedCampaignId={selectedCampaignId}
+            setSelectedCampaignId={setSelectedCampaignId}
+            zones={zones}
+            creatives={creativesForSelectedCampaign}
+            chatMessages={chatMessages}
+            chatInput={chatInput}
+            setChatInput={setChatInput}
+            chatLoading={chatLoading}
+            sendChat={sendChat}
+          />
+        )}
+
+        {selectedTab === "optimizer" && (
+          <OptimizerTabContent
+            previewLoading={previewLoading}
+            applyLoading={applyLoading}
+            previewResult={previewResult}
+            applyResult={applyResult}
+            optimizerError={optimizerError}
+            optimizerDryRun={optimizerDryRun}
+            setOptimizerDryRun={setOptimizerDryRun}
+            onPreview={handlePreviewOptimizer}
+            onApply={handleApplyOptimizer}
+          />
+        )}
+
+        {selectedTab === "creatives" && (
+          <CreativesTabContent
+            creativeRows={creativeRows}
+            creativeChatMessages={creativeChatMessages}
+            creativeChatInput={creativeChatInput}
+            setCreativeChatInput={setCreativeChatInput}
+            creativeChatLoading={creativeChatLoading}
+            sendCreativeChat={sendCreativeChat}
+          />
+        )}
+      </section>
+    </main>
+  );
+}
+
+/**
+ * =============
+ * Dashboard Tab
+ * =============
+ */
+function DashboardTabContent({
+  filteredCampaigns,
+  data,
+  selectedCampaign,
+  selectedCampaignId,
+  setSelectedCampaignId,
+  zones,
+  creatives,
+  chatMessages,
+  chatInput,
+  setChatInput,
+  chatLoading,
+  sendChat,
+}: {
+  filteredCampaigns: Campaign[];
+  data: DashboardData;
+  selectedCampaign: Campaign | null;
+  selectedCampaignId: string | null;
+  setSelectedCampaignId: (id: string | null) => void;
+  zones: Zone[];
+  creatives: Creative[];
+  chatMessages: ChatMessage[];
+  chatInput: string;
+  setChatInput: (v: string) => void;
+  chatLoading: boolean;
+  sendChat: () => void;
+}) {
+  return (
+    <section className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,4fr)]">
+      {/* Left: Campaign list */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+            Campaigns
+          </h2>
+          <span className="text-xs text-slate-500">
+            Showing {filteredCampaigns.length} of {data.campaigns.length}
+          </span>
+        </div>
+
+        <div className="max-h-[520px] overflow-auto text-xs">
+          <table className="w-full border-collapse">
+            <thead className="bg-slate-900/80 sticky top-0 z-10">
+              <tr className="text-slate-400">
+                <th className="text-left p-2">Name</th>
+                <th className="text-right p-2">Visits</th>
+                <th className="text-right p-2">Signups</th>
+                <th className="text-right p-2">Deps</th>
+                <th className="text-right p-2">Rev</th>
+                <th className="text-right p-2">Cost</th>
+                <th className="text-right p-2">ROI</th>
+              </tr>
+            </thead>
+            <tbody>
+              {filteredCampaigns.map((c) => {
+                const isSelected = c.id === selectedCampaignId;
+                return (
+                  <tr
+                    key={c.id}
+                    className={`cursor-pointer ${
+                      isSelected
+                        ? "bg-slate-800/80"
+                        : "hover:bg-slate-900/60"
+                    }`}
+                    onClick={() => setSelectedCampaignId(c.id)}
+                  >
+                    <td className="p-2 align-top">
+                      <div className="font-medium text-slate-100 line-clamp-2">
+                        {c.name}
+                      </div>
+                      <div className="text-[10px] text-slate-500 mt-0.5">
+                        {c.trafficSource}
+                      </div>
+                    </td>
+                    <td className="p-2 text-right">{c.visits}</td>
+                    <td className="p-2 text-right">{c.signups}</td>
+                    <td className="p-2 text-right">{c.deposits}</td>
+                    <td className="p-2 text-right">
+                      {formatMoney(c.revenue)}
+                    </td>
+                    <td className="p-2 text-right">
+                      {formatMoney(c.cost)}
+                    </td>
+                    <td
+                      className={`p-2 text-right ${
+                        c.roi < 0
+                          ? "text-rose-400"
+                          : c.roi > 0
+                          ? "text-emerald-400"
+                          : "text-slate-200"
+                      }`}
+                    >
+                      {formatPercent(c.roi)}
+                    </td>
+                  </tr>
+                );
+              })}
+
+              {!filteredCampaigns.length && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="p-3 text-center text-slate-500 text-xs"
+                  >
+                    No campaigns for this traffic source / date range.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
-      {/* Tab content */}
-      {activeTab === "overview" ? (
-        <>
-          {/* Main layout: Campaigns + Details + Chat */}
-          <section className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,4fr)]">
-            {/* Left: Campaign list */}
+      {/* Right: Details + Chat */}
+      <div className="flex flex-col gap-4">
+        {/* Campaign details + breakdowns */}
+        <div className="space-y-4">
+          <div className="rounded-xl border border-slate-800 bg-slate-900/60">
+            <div className="px-4 py-3 border-b border-slate-800">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+                Campaign details
+              </h2>
+              {selectedCampaign && (
+                <p className="text-xs text-slate-400 mt-1">
+                  {selectedCampaign.name}
+                </p>
+              )}
+            </div>
+
+            {selectedCampaign ? (
+              <div className="p-4 space-y-4 text-xs">
+                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                  <DetailStat label="Visits" value={selectedCampaign.visits} />
+                  <DetailStat
+                    label="Signups"
+                    value={selectedCampaign.signups}
+                  />
+                  <DetailStat
+                    label="Deposits"
+                    value={selectedCampaign.deposits}
+                  />
+                  <DetailStat
+                    label="Revenue"
+                    value={formatMoney(selectedCampaign.revenue)}
+                  />
+                  <DetailStat
+                    label="Cost"
+                    value={formatMoney(selectedCampaign.cost)}
+                  />
+                  <DetailStat
+                    label="Profit"
+                    value={formatMoney(selectedCampaign.profit)}
+                    valueClass={
+                      selectedCampaign.profit < 0
+                        ? "text-rose-400"
+                        : selectedCampaign.profit > 0
+                        ? "text-emerald-400"
+                        : undefined
+                    }
+                  />
+                  <DetailStat
+                    label="CPA / deposit"
+                    value={
+                      selectedCampaign.deposits > 0
+                        ? formatMoney(selectedCampaign.cpa)
+                        : "—"
+                    }
+                  />
+                  <DetailStat
+                    label="CPR / signup"
+                    value={
+                      selectedCampaign.signups > 0
+                        ? formatMoney(selectedCampaign.cpr)
+                        : "—"
+                    }
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="p-4 text-xs text-slate-400">
+                Select a campaign to see details.
+              </div>
+            )}
+          </div>
+
+          {/* Zones + creatives */}
+          <div className="grid gap-4 md:grid-cols-2">
+            {/* Zones */}
             <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
               <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
-                <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-                  Campaigns
-                </h2>
-                <span className="text-xs text-slate-500">
-                  Showing {filteredCampaigns.length} of{" "}
-                  {data.campaigns.length}
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                  Zones breakdown
+                </h3>
+                <span className="text-[10px] text-slate-500">
+                  {zones.length} zones
                 </span>
               </div>
 
-              <div className="max-h-[520px] overflow-auto text-xs">
-                <table className="w-full border-collapse">
-                  <thead className="bg-slate-900/80 sticky top-0 z-10">
-                    <tr className="text-slate-400">
-                      <th className="text-left p-2">Name</th>
-                      <th className="text-right p-2">Visits</th>
-                      <th className="text-right p-2">Signups</th>
-                      <th className="text-right p-2">Deps</th>
-                      <th className="text-right p-2">Rev</th>
-                      <th className="text-right p-2">Cost</th>
-                      <th className="text-right p-2">ROI</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredCampaigns.map((c) => {
-                      const isSelected = c.id === selectedCampaignId;
-                      return (
-                        <tr
-                          key={c.id}
-                          className={`cursor-pointer ${
-                            isSelected
-                              ? "bg-slate-800/80"
-                              : "hover:bg-slate-900/60"
-                          }`}
-                          onClick={() => setSelectedCampaignId(c.id)}
-                        >
-                          <td className="p-2 align-top">
-                            <div className="font-medium text-slate-100 line-clamp-2">
-                              {c.name}
-                            </div>
-                            <div className="text-[10px] text-slate-500 mt-0.5">
-                              {c.trafficSource}
-                            </div>
+              {zones.length === 0 ? (
+                <div className="p-4 text-[11px] text-slate-500">
+                  No zone data for this campaign in this range.
+                </div>
+              ) : (
+                <div className="max-h-64 overflow-auto text-[11px]">
+                  <table className="w-full border-collapse">
+                    <thead className="bg-slate-900/80 sticky top-0 z-10">
+                      <tr className="text-slate-400">
+                        <th className="text-left p-2">Zone</th>
+                        <th className="text-right p-2">Visits</th>
+                        <th className="text-right p-2">Conv</th>
+                        <th className="text-right p-2">Rev</th>
+                        <th className="text-right p-2">Cost</th>
+                        <th className="text-right p-2">ROI</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {zones.map((z) => (
+                        <tr key={`${z.id}-${z.visits}-${z.cost}`}>
+                          <td className="p-2">
+                            {z.id && z.id.trim().length > 0
+                              ? z.id
+                              : "Unknown zone"}
                           </td>
-                          <td className="p-2 text-right">{c.visits}</td>
-                          <td className="p-2 text-right">{c.signups}</td>
+                          <td className="p-2 text-right">{z.visits}</td>
                           <td className="p-2 text-right">
-                            {c.deposits}
+                            {z.conversions}
                           </td>
                           <td className="p-2 text-right">
-                            {formatMoney(c.revenue)}
+                            {formatMoney(z.revenue)}
                           </td>
                           <td className="p-2 text-right">
-                            {formatMoney(c.cost)}
+                            {formatMoney(z.cost)}
                           </td>
                           <td
                             className={`p-2 text-right ${
-                              c.roi < 0
+                              z.roi < 0
                                 ? "text-rose-400"
-                                : c.roi > 0
+                                : z.roi > 0
                                 ? "text-emerald-400"
-                                : "text-slate-200"
+                                : ""
                             }`}
                           >
-                            {formatPercent(c.roi)}
+                            {formatPercent(z.roi)}
                           </td>
                         </tr>
-                      );
-                    })}
-
-                    {!filteredCampaigns.length && (
-                      <tr>
-                        <td
-                          colSpan={7}
-                          className="p-3 text-center text-slate-500 text-xs"
-                        >
-                          No campaigns for this traffic source / date
-                          range.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
-            {/* Right: Details + Chat */}
-            <div className="flex flex-col gap-4">
-              {/* Campaign details + breakdowns */}
-              <div className="space-y-4">
-                <div className="rounded-xl border border-slate-800 bg-slate-900/60">
-                  <div className="px-4 py-3 border-b border-slate-800">
-                    <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
-                      Campaign details
-                    </h2>
-                    {selectedCampaign && (
-                      <p className="text-xs text-slate-400 mt-1">
-                        {selectedCampaign.name}
-                      </p>
-                    )}
-                  </div>
-
-                  {selectedCampaign ? (
-                    <div className="p-4 space-y-4 text-xs">
-                      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                        <DetailStat
-                          label="Visits"
-                          value={selectedCampaign.visits}
-                        />
-                        <DetailStat
-                          label="Signups"
-                          value={selectedCampaign.signups}
-                        />
-                        <DetailStat
-                          label="Deposits"
-                          value={selectedCampaign.deposits}
-                        />
-                        <DetailStat
-                          label="Revenue"
-                          value={formatMoney(selectedCampaign.revenue)}
-                        />
-                        <DetailStat
-                          label="Cost"
-                          value={formatMoney(selectedCampaign.cost)}
-                        />
-                        <DetailStat
-                          label="Profit"
-                          value={formatMoney(selectedCampaign.profit)}
-                          valueClass={
-                            selectedCampaign.profit < 0
-                              ? "text-rose-400"
-                              : selectedCampaign.profit > 0
-                              ? "text-emerald-400"
-                              : undefined
-                          }
-                        />
-                        <DetailStat
-                          label="CPA / deposit"
-                          value={
-                            selectedCampaign.deposits > 0
-                              ? formatMoney(selectedCampaign.cpa)
-                              : "—"
-                          }
-                        />
-                        <DetailStat
-                          label="CPR / signup"
-                          value={
-                            selectedCampaign.signups > 0
-                              ? formatMoney(selectedCampaign.cpr)
-                              : "—"
-                          }
-                        />
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="p-4 text-xs text-slate-400">
-                      Select a campaign to see details.
-                    </div>
-                  )}
-                </div>
-
-                {/* Zones + creatives */}
-                <div className="grid gap-4 md:grid-cols-2">
-                  {/* Zones */}
-                  <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                        Zones breakdown
-                      </h3>
-                      <span className="text-[10px] text-slate-500">
-                        {zones.length} zones
-                      </span>
-                    </div>
-
-                    {zones.length === 0 ? (
-                      <div className="p-4 text-[11px] text-slate-500">
-                        No zone data for this campaign in this range.
-                      </div>
-                    ) : (
-                      <div className="max-h-64 overflow-auto text-[11px]">
-                        <table className="w-full border-collapse">
-                          <thead className="bg-slate-900/80 sticky top-0 z-10">
-                            <tr className="text-slate-400">
-                              <th className="text-left p-2">Zone</th>
-                              <th className="text-right p-2">Visits</th>
-                              <th className="text-right p-2">Conv</th>
-                              <th className="text-right p-2">Rev</th>
-                              <th className="text-right p-2">Cost</th>
-                              <th className="text-right p-2">ROI</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {zones.map((z) => (
-                              <tr key={`${z.id}-${z.visits}-${z.cost}`}>
-                                <td className="p-2">
-                                  {z.id && z.id.trim().length > 0
-                                    ? z.id
-                                    : "Unknown zone"}
-                                </td>
-                                <td className="p-2 text-right">
-                                  {z.visits}
-                                </td>
-                                <td className="p-2 text-right">
-                                  {z.conversions}
-                                </td>
-                                <td className="p-2 text-right">
-                                  {formatMoney(z.revenue)}
-                                </td>
-                                <td className="p-2 text-right">
-                                  {formatMoney(z.cost)}
-                                </td>
-                                <td
-                                  className={`p-2 text-right ${
-                                    z.roi < 0
-                                      ? "text-rose-400"
-                                      : z.roi > 0
-                                      ? "text-emerald-400"
-                                      : ""
-                                  }`}
-                                >
-                                  {formatPercent(z.roi)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Creatives summary (still visible on Overview) */}
-                  <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
-                    <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
-                      <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                        Creatives breakdown
-                      </h3>
-                      <span className="text-[10px] text-slate-500">
-                        {creatives.length} creatives
-                      </span>
-                    </div>
-
-                    {creatives.length === 0 ? (
-                      <div className="p-4 text-[11px] text-slate-500">
-                        No creative data for this campaign in this range.
-                      </div>
-                    ) : (
-                      <div className="max-h-64 overflow-auto text-[11px]">
-                        <table className="w-full border-collapse">
-                          <thead className="bg-slate-900/80 sticky top-0 z-10">
-                            <tr className="text-slate-400">
-                              <th className="text-left p-2">Creative</th>
-                              <th className="text-right p-2">Visits</th>
-                              <th className="text-right p-2">Conv</th>
-                              <th className="text-right p-2">Rev</th>
-                              <th className="text-right p-2">Cost</th>
-                              <th className="text-right p-2">ROI</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {creatives.map((c, index) => {
-                              const label =
-                                c.name && c.name.toString().trim().length > 0
-                                  ? c.name
-                                  : c.id && c.id.trim().length > 0
-                                  ? `Creative ${c.id}`
-                                  : `Unknown creative #${index + 1}`;
-
-                              return (
-                                <tr key={`${c.id}-${c.visits}-${c.cost}`}>
-                                  <td className="p-2">{label}</td>
-                                  <td className="p-2 text-right">
-                                    {c.visits}
-                                  </td>
-                                  <td className="p-2 text-right">
-                                    {c.conversions}
-                                  </td>
-                                  <td className="p-2 text-right">
-                                    {formatMoney(c.revenue)}
-                                  </td>
-                                  <td className="p-2 text-right">
-                                    {formatMoney(c.cost)}
-                                  </td>
-                                  <td
-                                    className={`p-2 text-right ${
-                                      c.roi < 0
-                                        ? "text-rose-400"
-                                        : c.roi > 0
-                                        ? "text-emerald-400"
-                                        : ""
-                                    }`}
-                                  >
-                                    {formatPercent(c.roi)}
-                                  </td>
-                                </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Chat assistant */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/80 flex flex-col h-72">
-                <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
-                  <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-                    Assistant
-                  </h3>
-                  <span className="text-[10px] text-slate-500">
-                    Ask about zones, creatives, or optimization ideas
-                  </span>
-                </div>
-
-                <div className="flex-1 flex flex-col">
-                  <div className="flex-1 overflow-auto px-4 py-2 space-y-2 text-xs">
-                    {chatMessages.map((m, idx) => (
-                      <div
-                        key={idx}
-                        className={`max-w-[90%] rounded-lg px-3 py-2 ${
-                          m.role === "user"
-                            ? "ml-auto bg-emerald-600/70"
-                            : "mr-auto bg-slate-800/80"
-                        }`}
-                      >
-                        <div className="whitespace-pre-wrap break-words">
-                          {m.content}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="border-t border-slate-800 px-3 py-2 flex items-center gap-2">
-                    <textarea
-                      rows={1}
-                      className="flex-1 resize-none bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-                      placeholder='Ask something like “Which zones are burning budget?”'
-                      value={chatInput}
-                      onChange={(e) => setChatInput(e.target.value)}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && !e.shiftKey) {
-                          e.preventDefault();
-                          sendChat();
-                        }
-                      }}
-                    />
-                    <button
-                      onClick={sendChat}
-                      disabled={chatLoading || !chatInput.trim()}
-                      className="text-xs px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {chatLoading ? "..." : "Send"}
-                    </button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-        </>
-      ) : activeTab === "optimizer" ? (
-        /* Optimizer tab */
-        <section className="space-y-4">
-          <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 text-xs">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300 mb-2">
-              Optimizer – Zone Auto-Pause Brain
-            </h2>
-            <p className="text-slate-300 mb-2">
-              This tab analyzes your current Voluum data and proposes{" "}
-              <span className="text-emerald-400">deposit-aware rules</span>{" "}
-              and a list of{" "}
-              <span className="text-rose-400">zones to pause</span>. You
-              always run a preview first, then optionally apply rules in
-              dry-run or live mode.
-            </p>
-            <ul className="list-disc list-inside text-slate-400 space-y-1">
-              <li>
-                Uses current <strong>date range</strong> and{" "}
-                <strong>traffic source filter</strong>.
-              </li>
-              <li>
-                Considers <strong>signups</strong>, <strong>deposits</strong>,
-                ROI, and cost.
-              </li>
-              <li>
-                You can{" "}
-                <span className="text-emerald-400 font-semibold">
-                  dry-run before doing anything live
+            {/* Creatives */}
+            <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+              <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+                  Creatives breakdown
+                </h3>
+                <span className="text-[10px] text-slate-500">
+                  {creatives.length} creatives
                 </span>
-                .
-              </li>
-            </ul>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-3 text-xs">
-            <button
-              type="button"
-              onClick={runOptimizerPreview}
-              disabled={optimizerPreviewLoading || loading}
-              className="px-4 py-2 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              {optimizerPreviewLoading ? "Analyzing…" : "Run Preview"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => applyOptimizer(true)}
-              disabled={
-                optimizerApplyLoading ||
-                optimizerPreviewLoading ||
-                !optimizerPreview?.zonesToPauseNow?.length
-              }
-              className="px-4 py-2 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              {optimizerApplyLoading ? "Running…" : "Apply (Dry run)"}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => applyOptimizer(false)}
-              disabled={
-                optimizerApplyLoading ||
-                optimizerPreviewLoading ||
-                !optimizerPreview?.zonesToPauseNow?.length
-              }
-              className="px-4 py-2 rounded-md bg-rose-700 hover:bg-rose-600 disabled:opacity-50 disabled:cursor-not-allowed font-medium"
-            >
-              {optimizerApplyLoading ? "Running…" : "Apply (Live – pause zones)"}
-            </button>
-
-            <span className="text-[11px] text-slate-500">
-              Current filter:{" "}
-              <span className="text-slate-200">
-                {trafficSourceFilter === "all"
-                  ? "All traffic sources"
-                  : trafficSourceFilter}
-              </span>{" "}
-              • Date:{" "}
-              <span className="text-slate-200">
-                {data.dateRange} ({data.from} → {data.to})
-              </span>
-            </span>
-          </div>
-
-          {/* Preview status */}
-          {optimizerPreviewError && (
-            <div className="text-xs text-rose-400">
-              Preview error: {optimizerPreviewError}
-            </div>
-          )}
-
-          {optimizerPreview && (
-            <div className="grid gap-4 lg:grid-cols-[2fr_minmax(0,2fr)]">
-              {/* Rules summary */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs space-y-2">
-                <div className="flex justify-between items-center mb-1">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
-                    Suggested Rules
-                  </h3>
-                  <span className="text-[10px] text-slate-500">
-                    {optimizerPreview.rules?.length ?? 0} rules
-                  </span>
-                </div>
-
-                {optimizerPreview.rules &&
-                optimizerPreview.rules.length > 0 ? (
-                  <div className="space-y-2 max-h-72 overflow-auto pr-1">
-                    {optimizerPreview.rules.map((rule, idx) => (
-                      <div
-                        key={idx}
-                        className="border border-slate-800 rounded-lg px-2 py-2 bg-slate-950/60"
-                      >
-                        <div className="flex justify-between items-center mb-1">
-                          <div className="font-semibold text-slate-200 text-[11px]">
-                            {rule.name}
-                          </div>
-                          <div className="text-[9px] text-slate-500">
-                            {rule.scope ?? "zone"}
-                            {rule.trafficSource
-                              ? ` • ${rule.trafficSource}`
-                              : ""}
-                          </div>
-                        </div>
-                        <div className="text-[11px] text-slate-300">
-                          If{" "}
-                          <span className="text-emerald-300">
-                            {rule.condition}
-                          </span>
-                          , then{" "}
-                          <span className="text-rose-300">
-                            {rule.action ?? "pause_zone"}
-                          </span>
-                          .
-                        </div>
-                        {rule.appliesTo && (
-                          <div className="text-[10px] text-slate-500 mt-1">
-                            Scope: {rule.appliesTo}
-                          </div>
-                        )}
-                        {rule.rationale && (
-                          <div className="text-[10px] text-slate-400 mt-1">
-                            Why: {rule.rationale}
-                          </div>
-                        )}
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-[11px] text-slate-500">
-                    No rules returned yet. Run a preview to generate rules.
-                  </div>
-                )}
               </div>
 
-              {/* Zones to pause */}
-              <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-3 text-xs space-y-2">
-                <div className="flex justify-between items-center mb-1">
-                  <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">
-                    Zones to pause (preview)
-                  </h3>
-                  <span className="text-[10px] text-slate-500">
-                    {optimizerPreview.zonesToPauseNow?.length ?? 0} zones
-                  </span>
+              {creatives.length === 0 ? (
+                <div className="p-4 text-[11px] text-slate-500">
+                  No creative data for this campaign in this range.
                 </div>
+              ) : (
+                <div className="max-h-64 overflow-auto text-[11px]">
+                  <table className="w-full border-collapse">
+                    <thead className="bg-slate-900/80 sticky top-0 z-10">
+                      <tr className="text-slate-400">
+                        <th className="text-left p-2">Creative</th>
+                        <th className="text-right p-2">Visits</th>
+                        <th className="text-right p-2">Conv</th>
+                        <th className="text-right p-2">Rev</th>
+                        <th className="text-right p-2">Cost</th>
+                        <th className="text-right p-2">ROI</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {creatives.map((c, index) => {
+                        const label =
+                          c.name && c.name.toString().trim().length > 0
+                            ? c.name
+                            : c.id && c.id.trim().length > 0
+                            ? `Creative ${c.id}`
+                            : `Unknown creative #${index + 1}`;
 
-                {optimizerPreview.zonesToPauseNow &&
-                optimizerPreview.zonesToPauseNow.length > 0 ? (
-                  <div className="max-h-72 overflow-auto pr-1">
-                    <table className="w-full border-collapse text-[11px]">
-                      <thead className="bg-slate-900/80 sticky top-0 z-10">
-                        <tr className="text-slate-400">
-                          <th className="text-left p-1.5">Campaign</th>
-                          <th className="text-left p-1.5">Zone</th>
-                          <th className="text-right p-1.5">Visits</th>
-                          <th className="text-right p-1.5">Deps</th>
-                          <th className="text-right p-1.5">Rev</th>
-                          <th className="text-right p-1.5">Cost</th>
-                          <th className="text-right p-1.5">ROI</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {optimizerPreview.zonesToPauseNow.map((z, idx) => (
-                          <tr key={`${z.campaignId}-${z.zoneId}-${idx}`}>
-                            <td className="p-1.5 align-top">
-                              <div className="text-slate-100 line-clamp-2">
-                                {z.campaignName ?? z.campaignId}
-                              </div>
-                              <div className="text-[9px] text-slate-500 mt-0.5">
-                                {z.reason}
-                              </div>
+                        return (
+                          <tr key={`${c.id}-${c.visits}-${c.cost}`}>
+                            <td className="p-2">{label}</td>
+                            <td className="p-2 text-right">{c.visits}</td>
+                            <td className="p-2 text-right">
+                              {c.conversions}
                             </td>
-                            <td className="p-1.5 align-top text-slate-200">
-                              {z.zoneId}
+                            <td className="p-2 text-right">
+                              {formatMoney(c.revenue)}
                             </td>
-                            <td className="p-1.5 text-right">
-                              {z.metrics.visits}
-                            </td>
-                            <td className="p-1.5 text-right">
-                              {z.metrics.deposits ?? 0}
-                            </td>
-                            <td className="p-1.5 text-right">
-                              {formatMoney(z.metrics.revenue)}
-                            </td>
-                            <td className="p-1.5 text-right">
-                              {formatMoney(z.metrics.cost)}
+                            <td className="p-2 text-right">
+                              {formatMoney(c.cost)}
                             </td>
                             <td
-                              className={`p-1.5 text-right ${
-                                z.metrics.roi < 0
+                              className={`p-2 text-right ${
+                                c.roi < 0
                                   ? "text-rose-400"
-                                  : z.metrics.roi > 0
+                                  : c.roi > 0
                                   ? "text-emerald-400"
                                   : ""
                               }`}
                             >
-                              {formatPercent(z.metrics.roi)}
+                              {formatPercent(c.roi)}
                             </td>
                           </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <div className="text-[11px] text-slate-500">
-                    No zones flagged yet. Run a preview to see suggested
-                    pauses.
-                  </div>
-                )}
-
-                {optimizerApplyError && (
-                  <div className="text-[11px] text-rose-400 mt-1">
-                    Apply error: {optimizerApplyError}
-                  </div>
-                )}
-
-                {optimizerApplyResult && (
-                  <div className="mt-2 text-[10px] text-slate-400">
-                    <div className="font-semibold text-slate-200 mb-1">
-                      Apply response:
-                    </div>
-                    <pre className="bg-slate-950/60 border border-slate-800 rounded-md p-2 overflow-x-auto">
-                      {JSON.stringify(optimizerApplyResult, null, 2)}
-                    </pre>
-                  </div>
-                )}
-              </div>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
-          )}
+          </div>
+        </div>
 
-          {!optimizerPreview && !optimizerPreviewLoading && (
-            <p className="text-[11px] text-slate-500">
-              Tip: Start by running a{" "}
-              <span className="text-emerald-400 font-medium">
-                Preview
-              </span>{" "}
-              – no zones will be paused until you explicitly click{" "}
-              <span className="text-rose-400">Apply (Live)</span>.
+        {/* Chat assistant */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900/80 flex flex-col h-72">
+          <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+              Assistant
+            </h3>
+            <span className="text-[10px] text-slate-500">
+              Ask about zones, creatives, or optimization ideas
+            </span>
+          </div>
+
+          <div className="flex-1 flex flex-col">
+            <div className="flex-1 overflow-auto px-4 py-2 space-y-2 text-xs">
+              {chatMessages.map((m, idx) => (
+                <div
+                  key={idx}
+                  className={`max-w-[90%] rounded-lg px-3 py-2 ${
+                    m.role === "user"
+                      ? "ml-auto bg-emerald-600/70"
+                      : "mr-auto bg-slate-800/80"
+                  }`}
+                >
+                  <div className="whitespace-pre-wrap break-words">
+                    {m.content}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="border-t border-slate-800 px-3 py-2 flex items-center gap-2">
+              <textarea
+                rows={1}
+                className="flex-1 resize-none bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                placeholder='Ask something like “Which zones are burning budget?”'
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    sendChat();
+                  }
+                }}
+              />
+              <button
+                onClick={sendChat}
+                disabled={chatLoading || !chatInput.trim()}
+                className="text-xs px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {chatLoading ? "..." : "Send"}
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * =============
+ * Optimizer Tab
+ * =============
+ */
+function OptimizerTabContent({
+  previewLoading,
+  applyLoading,
+  previewResult,
+  applyResult,
+  optimizerError,
+  optimizerDryRun,
+  setOptimizerDryRun,
+  onPreview,
+  onApply,
+}: {
+  previewLoading: boolean;
+  applyLoading: boolean;
+  previewResult: OptimizerPreviewResult | null;
+  applyResult: OptimizerApplyResult | null;
+  optimizerError: string | null;
+  optimizerDryRun: boolean;
+  setOptimizerDryRun: (v: boolean) => void;
+  onPreview: () => void;
+  onApply: () => void;
+}) {
+  return (
+    <section className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 space-y-4">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+            Zone Optimizer
+          </h2>
+          <p className="text-xs text-slate-400 mt-1">
+            Preview what zones would be auto-paused based on signups, deposits,
+            ROI and spend — then apply with or without dry-run.
+          </p>
+        </div>
+
+        <div className="flex flex-col md:items-end gap-2">
+          <div className="flex items-center gap-2 text-xs">
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={optimizerDryRun}
+                onChange={(e) => setOptimizerDryRun(e.target.checked)}
+              />
+              <span className="text-slate-300">
+                Dry run (no real API calls)
+              </span>
+            </label>
+          </div>
+          <div className="flex gap-2">
+            <button
+              onClick={onPreview}
+              disabled={previewLoading}
+              className="px-3 py-1.5 rounded-md text-xs font-medium bg-slate-800 hover:bg-slate-700 disabled:opacity-50"
+            >
+              {previewLoading ? "Previewing…" : "Preview zones"}
+            </button>
+            <button
+              onClick={onApply}
+              disabled={applyLoading}
+              className="px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50"
+            >
+              {applyLoading
+                ? "Applying…"
+                : optimizerDryRun
+                ? "Apply (Dry Run)"
+                : "Apply (Live)"}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {optimizerError && (
+        <div className="text-xs text-rose-400 bg-rose-950/40 border border-rose-700/50 rounded-md px-3 py-2">
+          {optimizerError}
+        </div>
+      )}
+
+      <div className="grid md:grid-cols-2 gap-4 text-xs">
+        <div className="rounded-md border border-slate-800 bg-slate-950/60 p-3">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300 mb-2">
+            Preview Result
+          </h3>
+          {previewResult ? (
+            <pre className="text-[10px] whitespace-pre-wrap break-words text-slate-200 max-h-72 overflow-auto">
+              {JSON.stringify(previewResult, null, 2)}
+            </pre>
+          ) : (
+            <p className="text-slate-500">
+              No preview yet. Click{" "}
+              <span className="font-semibold">“Preview zones”</span> to see
+              which zones would be paused.
             </p>
           )}
-        </section>
-      ) : (
-        /* Creatives tab – placeholder for now */
-        <section className="space-y-4">
-          <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 text-sm">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300 mb-2">
-              Creatives workspace (coming soon)
-            </h2>
-            <p className="text-slate-300 mb-2 text-xs">
-              This tab will become your dedicated{" "}
-              <span className="text-emerald-400 font-semibold">
-                creative performance lab
-              </span>{" "}
-              – think:
+        </div>
+
+        <div className="rounded-md border border-slate-800 bg-slate-950/60 p-3">
+          <h3 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300 mb-2">
+            Apply Result
+          </h3>
+          {applyResult ? (
+            <pre className="text-[10px] whitespace-pre-wrap break-words text-slate-200 max-h-72 overflow-auto">
+              {JSON.stringify(applyResult, null, 2)}
+            </pre>
+          ) : (
+            <p className="text-slate-500">
+              Nothing applied yet. Run a preview, then click{" "}
+              <span className="font-semibold">Apply</span>.
             </p>
-            <ul className="list-disc list-inside text-slate-400 text-xs space-y-1">
-              <li>Best and worst creatives by ROI / deposits.</li>
-              <li>Angle & headline clustering (e.g. “bonus angle”, “fear”).</li>
-              <li>Creative burnout detection over time.</li>
-              <li>Suggestions for what to duplicate, pause, or test next.</li>
-            </ul>
-            <p className="text-slate-400 mt-3 text-xs">
-              For now you can still see creative performance in the{" "}
-              <span className="text-emerald-300 font-semibold">
-                Overview
-              </span>{" "}
-              tab, under “Creatives breakdown”.
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/**
+ * ==================
+ * Creatives Tab (Doctor)
+ * ==================
+ */
+function CreativesTabContent({
+  creativeRows,
+  creativeChatMessages,
+  creativeChatInput,
+  setCreativeChatInput,
+  creativeChatLoading,
+  sendCreativeChat,
+}: {
+  creativeRows: {
+    key: string;
+    creativeId: string;
+    name: string;
+    campaignId: string;
+    campaignName: string;
+    trafficSource: string;
+    visits: number;
+    conversions: number;
+    cost: number;
+    revenue: number;
+    roi: number;
+    health: "winner" | "at_risk" | "loser" | "neutral";
+  }[];
+  creativeChatMessages: ChatMessage[];
+  creativeChatInput: string;
+  setCreativeChatInput: (v: string) => void;
+  creativeChatLoading: boolean;
+  sendCreativeChat: () => void;
+}) {
+  return (
+    <section className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,3fr)]">
+      {/* Left: Creative leaderboard */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
+          <div>
+            <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
+              Creative leaderboard
+            </h2>
+            <p className="text-[11px] text-slate-400 mt-1">
+              See which creatives are winners, at risk, or burning.
             </p>
           </div>
-        </section>
-      )}
-    </main>
+          <span className="text-[10px] text-slate-500">
+            {creativeRows.length} creatives
+          </span>
+        </div>
+
+        {creativeRows.length === 0 ? (
+          <div className="p-4 text-[11px] text-slate-500">
+            No creative data in this view yet. Try changing date range or
+            traffic source.
+          </div>
+        ) : (
+          <div className="max-h-[540px] overflow-auto text-[11px]">
+            <table className="w-full border-collapse">
+              <thead className="bg-slate-900/80 sticky top-0 z-10">
+                <tr className="text-slate-400">
+                  <th className="text-left p-2">Creative</th>
+                  <th className="text-right p-2">Visits</th>
+                  <th className="text-right p-2">Conv</th>
+                  <th className="text-right p-2">Cost</th>
+                  <th className="text-right p-2">Rev</th>
+                  <th className="text-right p-2">ROI</th>
+                  <th className="text-right p-2">Health</th>
+                </tr>
+              </thead>
+              <tbody>
+                {creativeRows.map((row) => {
+                  let healthLabel = "Neutral";
+                  let healthClass = "text-slate-300";
+                  if (row.health === "winner") {
+                    healthLabel = "Winner";
+                    healthClass = "text-emerald-400";
+                  } else if (row.health === "at_risk") {
+                    healthLabel = "At risk";
+                    healthClass = "text-amber-300";
+                  } else if (row.health === "loser") {
+                    healthLabel = "Burner";
+                    healthClass = "text-rose-400";
+                  }
+
+                  return (
+                    <tr key={row.key} className="hover:bg-slate-900/60">
+                      <td className="p-2 align-top">
+                        <div className="font-medium text-slate-100 line-clamp-2">
+                          {row.name}
+                        </div>
+                        <div className="text-[10px] text-slate-500 mt-0.5">
+                          {row.campaignName} • {row.trafficSource}
+                        </div>
+                      </td>
+                      <td className="p-2 text-right">{row.visits}</td>
+                      <td className="p-2 text-right">
+                        {row.conversions}
+                      </td>
+                      <td className="p-2 text-right">
+                        {formatMoney(row.cost)}
+                      </td>
+                      <td className="p-2 text-right">
+                        {formatMoney(row.revenue)}
+                      </td>
+                      <td
+                        className={`p-2 text-right ${
+                          row.roi < 0
+                            ? "text-rose-400"
+                            : row.roi > 0
+                            ? "text-emerald-400"
+                            : "text-slate-200"
+                        }`}
+                      >
+                        {formatPercent(row.roi)}
+                      </td>
+                      <td className={`p-2 text-right ${healthClass}`}>
+                        {healthLabel}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+
+      {/* Right: Creative Doctor chat */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/80 flex flex-col">
+        <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
+          <div>
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+              Creative Doctor
+            </h3>
+            <p className="text-[11px] text-slate-400 mt-1">
+              Ask for best creatives, burners, angle ideas, or new push/banner
+              concepts.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex-1 flex flex-col h-80">
+          <div className="flex-1 overflow-auto px-4 py-2 space-y-2 text-xs">
+            {creativeChatMessages.map((m, idx) => (
+              <div
+                key={idx}
+                className={`max-w-[90%] rounded-lg px-3 py-2 ${
+                  m.role === "user"
+                    ? "ml-auto bg-emerald-600/70"
+                    : "mr-auto bg-slate-800/80"
+                }`}
+              >
+                <div className="whitespace-pre-wrap break-words">
+                  {m.content}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="border-t border-slate-800 px-3 py-2 flex items-center gap-2">
+            <textarea
+              rows={2}
+              className="flex-1 resize-none bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
+              placeholder='Try: "Which creatives are my top winners today?" or "Give me 5 new headlines based on my best creative."'
+              value={creativeChatInput}
+              onChange={(e) => setCreativeChatInput(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  sendCreativeChat();
+                }
+              }}
+            />
+            <button
+              onClick={sendCreativeChat}
+              disabled={creativeChatLoading || !creativeChatInput.trim()}
+              className="text-xs px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {creativeChatLoading ? "..." : "Send"}
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
   );
 }
 
