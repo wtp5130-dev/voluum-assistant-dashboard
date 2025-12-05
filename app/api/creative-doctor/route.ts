@@ -113,3 +113,17 @@ export async function POST(req: Request): Promise<Response> {
     );
   }
 }
+
+// Optional helper: respond to GET with usage hint instead of 405
+export async function GET(): Promise<Response> {
+  return new Response(
+    JSON.stringify({
+      message:
+        "POST JSON to this endpoint: { question: string, campaign?: object, creatives?: array, dateRange?: string, from?: string, to?: string }",
+    }),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }
+  );
+}
