@@ -556,7 +556,18 @@ export async function GET(request: Request) {
     const cpaTotal = depositCount > 0 ? totalCost / depositCount : 0;
     const cprTotal = signupCount > 0 ? totalCost / signupCount : 0;
 
+    const activeCampaigns = campaigns.filter(
+      (c) => c.visits > 0 || c.cost > 0 || c.revenue > 0
+    ).length;
+
     const kpis: DashboardKpiCard[] = [
+      {
+        id: "activeCampaigns",
+        label: "Active Campaigns",
+        value: activeCampaigns.toLocaleString(),
+        delta: "–",
+        positive: true,
+      },
       {
         id: "visits",
         label: "Visits",
