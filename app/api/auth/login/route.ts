@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { kv } from "@vercel/kv";
 
 function b64url(input: string) {
   return Buffer.from(input).toString("base64").replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
@@ -14,8 +15,24 @@ export async function POST(req: Request) {
     const expectedPass = process.env.AUTH_PASSWORD || "password";
     const secret = process.env.AUTH_SECRET || "dev-secret";
 
-    if (username !== expectedUser || password !== expectedPass) {
-      return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+    // 1) Try KV users
+    const list = (await kv.get("auth:users")) as any[] | null;
+    let ok = false;
+    if (Array.isArray(list)) {
+      const urec = list.find((u) => u.username === username);
+      if (urec && urec.hash) {
+        const enc = new TextEncoder();
+        const hashBuf = await crypto.subtle.digest("SHA-256", enc.encode(`${secret}:${password}`));
+        const hashB64 = Buffer.from(new Uint8Array(hashBuf)).toString("base64");
+        if (hashB64 === urec.hash) ok = true;
+      }
+    }
+
+    // 2) Fallback to env admin
+    if (!ok) {
+      if (!(username === expectedUser && password === expectedPass)) {
+        return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
+      }
     }
 
     // Create signed token: base64url(payload).base64(signature)
