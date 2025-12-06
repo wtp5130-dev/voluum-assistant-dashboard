@@ -1194,7 +1194,6 @@ function DashboardTab(props: {
                       <tr className="text-slate-400">
                         <th className="text-left p-2">Zone</th>
                         <th className="text-right p-2">Visits</th>
-                        <th className="text-right p-2">Conv</th>
                         <th className="text-right p-2">Signups</th>
                         <th className="text-right p-2">Deps</th>
                         <th className="text-right p-2">Rev</th>
@@ -1211,9 +1210,6 @@ function DashboardTab(props: {
                               : "Unknown zone"}
                           </td>
                           <td className="p-2 text-right">{z.visits}</td>
-                          <td className="p-2 text-right">
-                            {z.conversions}
-                          </td>
                           <td className="p-2 text-right">
                             {z.signups}
                           </td>
@@ -1267,7 +1263,6 @@ function DashboardTab(props: {
                       <tr className="text-slate-400">
                         <th className="text-left p-2">Creative</th>
                         <th className="text-right p-2">Visits</th>
-                        <th className="text-right p-2">Conv</th>
                         <th className="text-right p-2">Signups</th>
                         <th className="text-right p-2">Deps</th>
                         <th className="text-right p-2">Rev</th>
@@ -1289,9 +1284,6 @@ function DashboardTab(props: {
                             <td className="p-2">{label}</td>
                             <td className="p-2 text-right">
                               {c.visits}
-                            </td>
-                            <td className="p-2 text-right">
-                              {c.conversions}
                             </td>
                             <td className="p-2 text-right">
                               {c.signups}

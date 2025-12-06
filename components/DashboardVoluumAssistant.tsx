@@ -631,9 +631,6 @@ export default function DashboardVoluumAssistant() {
                                                 Visits
                                               </th>
                                               <th className="text-right px-2 py-1">
-                                                Conv
-                                              </th>
-                                              <th className="text-right px-2 py-1">
                                                 Rev
                                               </th>
                                               <th className="text-right px-2 py-1">
@@ -655,9 +652,6 @@ export default function DashboardVoluumAssistant() {
                                                 </td>
                                                 <td className="px-2 py-1 text-right">
                                                   {z.visits.toLocaleString()}
-                                                </td>
-                                                <td className="px-2 py-1 text-right">
-                                                  {z.conversions.toLocaleString()}
                                                 </td>
                                                 <td className="px-2 py-1 text-right">
                                                   ${z.revenue.toFixed(2)}
@@ -711,9 +705,6 @@ export default function DashboardVoluumAssistant() {
                                                 Visits
                                               </th>
                                               <th className="text-right px-2 py-1">
-                                                Conv
-                                              </th>
-                                              <th className="text-right px-2 py-1">
                                                 Rev
                                               </th>
                                               <th className="text-right px-2 py-1">
@@ -737,9 +728,6 @@ export default function DashboardVoluumAssistant() {
                                                 </td>
                                                 <td className="px-2 py-1 text-right">
                                                   {cr.visits.toLocaleString()}
-                                                </td>
-                                                <td className="px-2 py-1 text-right">
-                                                  {cr.conversions.toLocaleString()}
                                                 </td>
                                                 <td className="px-2 py-1 text-right">
                                                   ${cr.revenue.toFixed(2)}
