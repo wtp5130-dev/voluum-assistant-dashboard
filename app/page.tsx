@@ -1728,7 +1728,7 @@ function CreativesTab(props: {
               }}
             />
             <button
-              onClick={sendCreativeChat}
+              onClick={() => sendCreativeChat()}
               disabled={creativeChatLoading || !creativeChatInput.trim()}
               className="text-xs px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
             >
