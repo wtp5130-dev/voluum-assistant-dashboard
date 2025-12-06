@@ -844,28 +844,6 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
 
         {/* Date + traffic source controls */}
         <div className="flex flex-col gap-3 items-stretch md:items-end">
-          <div className="flex items-center justify-end gap-2">
-            {currentUser?.role === "admin" && (
-              <a
-                href="/admin"
-                className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
-              >
-                Admin
-              </a>
-            )}
-            <button
-              onClick={async () => {
-                try {
-                  await fetch("/api/auth/logout", { method: "POST" });
-                } finally {
-                  window.location.href = "/login";
-                }
-              }}
-              className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
-            >
-              Sign out
-            </button>
-          </div>
           <div className="flex flex-wrap gap-3 items-center justify-end">
             {/* Date range selector */}
             <div className="flex flex-col gap-1">
