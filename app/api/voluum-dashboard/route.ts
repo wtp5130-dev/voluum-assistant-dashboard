@@ -556,11 +556,18 @@ export async function GET(request: Request) {
       );
     }).length;
 
+    const usd = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
     const kpis: DashboardKpiCard[] = [
       {
         id: "activeCampaigns",
         label: "Active campaigns",
-        value: activeCampaigns.toString(),
+        value: activeCampaigns.toLocaleString(),
         delta: "–",
         positive: true,
       },
@@ -588,14 +595,14 @@ export async function GET(request: Request) {
       {
         id: "revenue",
         label: "Revenue",
-        value: `$${totals.revenue.toFixed(2)}`,
+        value: usd.format(totals.revenue),
         delta: "–",
         positive: true,
       },
       {
         id: "profit",
         label: "Profit",
-        value: `$${totals.profit.toFixed(2)}`,
+        value: usd.format(totals.profit),
         delta: "–",
         positive: totals.profit >= 0,
       },
@@ -604,10 +611,10 @@ export async function GET(request: Request) {
         label: "CPA (per deposit)",
         value:
           depositCount > 0
-            ? `$${cpaTotal.toFixed(2)}`
+            ? usd.format(cpaTotal)
             : totalCost > 0
             ? "No deposits"
-            : "$0.00",
+            : usd.format(0),
         delta: "–",
         positive: cpaTotal > 0 ? cpaTotal < 1000000 : true,
       },
@@ -616,10 +623,10 @@ export async function GET(request: Request) {
         label: "CPR (per signup)",
         value:
           signupCount > 0
-            ? `$${cprTotal.toFixed(2)}`
+            ? usd.format(cprTotal)
             : totalCost > 0
             ? "No signups"
-            : "$0.00",
+            : usd.format(0),
         delta: "–",
         positive: cprTotal > 0 ? cprTotal < 1000000 : true,
       },
