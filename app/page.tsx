@@ -238,20 +238,31 @@ export default function DashboardPage() {
     null
   );
 
-  // Optimizer blacklist history (client-side)
+  // Optimizer blacklist history (server via KV, with graceful fallback)
   type BlacklistedZone = { zoneId: string; campaignId: string; timestamp: string };
   const [blacklistedZones, setBlacklistedZones] = useState<BlacklistedZone[]>([]);
-  useEffect(() => {
+  const refreshBlacklist = useCallback(async () => {
     try {
-      const raw = localStorage.getItem("blacklistedZones");
-      if (raw) setBlacklistedZones(JSON.parse(raw));
-    } catch {}
+      const res = await fetch("/api/optimizer/blacklist-log", { cache: "no-store" });
+      if (!res.ok) throw new Error(String(res.status));
+      const json = await res.json();
+      const items = Array.isArray(json?.items) ? json.items : [];
+      setBlacklistedZones(items.map((i: any) => ({
+        zoneId: String(i.zoneId),
+        campaignId: String(i.campaignId),
+        timestamp: String(i.timestamp),
+      })));
+    } catch {
+      // fallback to localStorage
+      try {
+        const raw = localStorage.getItem("blacklistedZones");
+        if (raw) setBlacklistedZones(JSON.parse(raw));
+      } catch {}
+    }
   }, []);
   useEffect(() => {
-    try {
-      localStorage.setItem("blacklistedZones", JSON.stringify(blacklistedZones));
-    } catch {}
-  }, [blacklistedZones]);
+    refreshBlacklist();
+  }, [refreshBlacklist]);
 
   // Creatives doctor chat
   const [creativeChatMessages, setCreativeChatMessages] = useState<
@@ -573,15 +584,9 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
           : `Apply completed. ${json.summary ?? "Zones were sent to PropellerAds."}`
       );
 
-      // Record successful blacklists (non-dry-run) with timestamp
-      if (!optimizerDryRun && Array.isArray(json?.results)) {
-        const ts = new Date().toISOString();
-        const toAdd: BlacklistedZone[] = json.results
-          .filter((r: any) => r?.status === "success" && r?.zoneId && r?.campaignId)
-          .map((r: any) => ({ zoneId: String(r.zoneId), campaignId: String(r.campaignId), timestamp: ts }));
-        if (toAdd.length) {
-          setBlacklistedZones((prev) => [...toAdd, ...prev].slice(0, 500));
-        }
+      // After non-dry-run apply, refresh server-side blacklist
+      if (!optimizerDryRun) {
+        refreshBlacklist();
       }
     } catch (err: any) {
       console.error("Optimizer apply error:", err);
@@ -981,7 +986,16 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           runPreview={runOptimizerPreview}
           runApply={runOptimizerApply}
           blacklistedZones={blacklistedZones}
-          clearBlacklist={() => setBlacklistedZones([])}
+          clearBlacklist={async () => {
+            try {
+              const res = await fetch("/api/optimizer/blacklist-log", { method: "DELETE" });
+              if (!res.ok) throw new Error(String(res.status));
+              refreshBlacklist();
+            } catch {
+              setBlacklistedZones([]);
+              try { localStorage.removeItem("blacklistedZones"); } catch {}
+            }
+          }}
         />
       )}
 

@@ -1,5 +1,6 @@
 // app/api/optimizer/apply/route.ts
 import { NextRequest } from "next/server";
+import { kv } from "@vercel/kv";
 
 /**
  * Types
@@ -166,12 +167,38 @@ export async function POST(req: NextRequest): Promise<Response> {
       // Real API mode: attempt to pause via PropellerAds
       const apiResult = await pauseZoneInPropeller(zone);
 
-      results.push({
+      const entry = {
         campaignId: zone.campaignId,
         zoneId: zone.zoneId,
         status: apiResult.ok ? "success" : "failed",
         message: apiResult.message,
         dryRun: false,
+      } as ZoneApplyResult;
+
+      // Log to KV on success
+      if (apiResult.ok) {
+        try {
+          const logItem = {
+            id: crypto.randomUUID(),
+            campaignId: zone.campaignId,
+            zoneId: zone.zoneId,
+            provider: "propellerads",
+            reason: zone.reason || undefined,
+            timestamp: new Date().toISOString(),
+          };
+          await kv.lpush("blacklist:zones", logItem);
+          await kv.ltrim("blacklist:zones", 0, 999);
+        } catch (e) {
+          console.warn("KV log failed:", e);
+        }
+      }
+
+      results.push({
+        campaignId: zone.campaignId,
+        zoneId: zone.zoneId,
+        status: entry.status,
+        message: entry.message,
+        dryRun: entry.dryRun,
       });
     }
 
