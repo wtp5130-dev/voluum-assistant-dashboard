@@ -996,6 +996,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
               try { localStorage.removeItem("blacklistedZones"); } catch {}
             }
           }}
+          refreshBlacklist={refreshBlacklist}
         />
       )}
 
@@ -1779,6 +1780,7 @@ function OptimizerTab(props: {
   runApply: () => void;
   blacklistedZones: { zoneId: string; campaignId: string; timestamp: string }[];
   clearBlacklist: () => void;
+  refreshBlacklist: () => void;
 }) {
   const {
     data,
@@ -1793,6 +1795,7 @@ function OptimizerTab(props: {
     runApply,
     blacklistedZones,
     clearBlacklist,
+    refreshBlacklist,
   } = props;
 
   const zonesToPause = previewResult?.zonesToPauseNow ?? [];
@@ -1965,6 +1968,22 @@ function OptimizerTab(props: {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Blacklisted zones (history)</h3>
           <div className="flex items-center gap-3 text-[10px] text-slate-500">
             <span>{formatInteger(blacklistedZones.length)} entries</span>
+            <button
+              onClick={async () => {
+                try {
+                  await fetch("/api/optimizer/blacklist-log", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ zoneId: "TEST-ZONE", campaignId: "TEST-CAMPAIGN", reason: "ui-test" }),
+                  });
+                  refreshBlacklist();
+                } catch {}
+              }}
+              className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              title="Temporary: add a test entry to verify KV"
+            >
+              Add test entry
+            </button>
             <button
               onClick={clearBlacklist}
               className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
