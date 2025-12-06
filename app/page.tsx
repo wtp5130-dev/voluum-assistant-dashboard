@@ -238,6 +238,21 @@ export default function DashboardPage() {
     null
   );
 
+  // Optimizer blacklist history (client-side)
+  type BlacklistedZone = { zoneId: string; campaignId: string; timestamp: string };
+  const [blacklistedZones, setBlacklistedZones] = useState<BlacklistedZone[]>([]);
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("blacklistedZones");
+      if (raw) setBlacklistedZones(JSON.parse(raw));
+    } catch {}
+  }, []);
+  useEffect(() => {
+    try {
+      localStorage.setItem("blacklistedZones", JSON.stringify(blacklistedZones));
+    } catch {}
+  }, [blacklistedZones]);
+
   // Creatives doctor chat
   const [creativeChatMessages, setCreativeChatMessages] = useState<
     ChatMessage[]
@@ -557,6 +572,17 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
           ? `Dry run completed. ${json.summary ?? "Check logs for details."}`
           : `Apply completed. ${json.summary ?? "Zones were sent to PropellerAds."}`
       );
+
+      // Record successful blacklists (non-dry-run) with timestamp
+      if (!optimizerDryRun && Array.isArray(json?.results)) {
+        const ts = new Date().toISOString();
+        const toAdd: BlacklistedZone[] = json.results
+          .filter((r: any) => r?.status === "success" && r?.zoneId && r?.campaignId)
+          .map((r: any) => ({ zoneId: String(r.zoneId), campaignId: String(r.campaignId), timestamp: ts }));
+        if (toAdd.length) {
+          setBlacklistedZones((prev) => [...toAdd, ...prev].slice(0, 500));
+        }
+      }
     } catch (err: any) {
       console.error("Optimizer apply error:", err);
       setOptimizerStatus(err?.message || "Failed to apply optimizer rules.");
@@ -954,6 +980,8 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           setDryRun={setOptimizerDryRun}
           runPreview={runOptimizerPreview}
           runApply={runOptimizerApply}
+          blacklistedZones={blacklistedZones}
+          clearBlacklist={() => setBlacklistedZones([])}
         />
       )}
 
@@ -1735,6 +1763,8 @@ function OptimizerTab(props: {
   setDryRun: (b: boolean) => void;
   runPreview: () => void;
   runApply: () => void;
+  blacklistedZones: { zoneId: string; campaignId: string; timestamp: string }[];
+  clearBlacklist: () => void;
 }) {
   const {
     data,
@@ -1747,6 +1777,8 @@ function OptimizerTab(props: {
     setDryRun,
     runPreview,
     runApply,
+    blacklistedZones,
+    clearBlacklist,
   } = props;
 
   const zonesToPause = previewResult?.zonesToPauseNow ?? [];
@@ -1911,6 +1943,46 @@ function OptimizerTab(props: {
             </div>
           )}
         </div>
+      </div>
+
+      {/* Blacklisted zones history */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-xs">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Blacklisted zones (history)</h3>
+          <div className="flex items-center gap-3 text-[10px] text-slate-500">
+            <span>{formatInteger(blacklistedZones.length)} entries</span>
+            <button
+              onClick={clearBlacklist}
+              className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+            >
+              Clear
+            </button>
+          </div>
+        </div>
+        {blacklistedZones.length === 0 ? (
+          <p className="text-[11px] text-slate-500">No blacklisted zones recorded yet.</p>
+        ) : (
+          <div className="max-h-56 overflow-auto">
+            <table className="w-full border-collapse">
+              <thead className="bg-slate-900/80 sticky top-0 z-10">
+                <tr className="text-slate-400">
+                  <th className="text-left p-2">Zone</th>
+                  <th className="text-left p-2">Campaign</th>
+                  <th className="text-left p-2">Blacklisted at</th>
+                </tr>
+              </thead>
+              <tbody>
+                {blacklistedZones.map((b, i) => (
+                  <tr key={`${b.zoneId}-${b.timestamp}-${i}`}>
+                    <td className="p-2">{b.zoneId}</td>
+                    <td className="p-2">{b.campaignId}</td>
+                    <td className="p-2">{new Date(b.timestamp).toLocaleString()}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </section>
   );
