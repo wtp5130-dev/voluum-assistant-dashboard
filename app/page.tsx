@@ -1038,7 +1038,7 @@ function DashboardTab(props: {
             Campaigns
           </h2>
           <span className="text-xs text-slate-500">
-            Showing {filteredCampaigns.length} of {data.campaigns.length}
+            Showing {formatInteger(filteredCampaigns.length)} of {formatInteger(data.campaigns.length)}
           </span>
         </div>
 
@@ -1199,7 +1199,7 @@ function DashboardTab(props: {
                   Zones breakdown
                 </h3>
                 <span className="text-[10px] text-slate-500">
-                  {zones.length} zones
+                  {formatInteger(zones.length)} zones
                 </span>
               </div>
 
@@ -1264,7 +1264,7 @@ function DashboardTab(props: {
                   Creatives breakdown
                 </h3>
                 <span className="text-[10px] text-slate-500">
-                  {creatives.length} creatives
+                  {formatInteger(creatives.length)} creatives
                 </span>
               </div>
 
@@ -1520,7 +1520,7 @@ function OptimizerTab(props: {
               Zones flagged to pause
             </h3>
             <span className="text-[10px] text-slate-500">
-              {zonesToPause.length} zones
+              {formatInteger(zonesToPause.length)} zones
             </span>
           </div>
 
@@ -1552,13 +1552,13 @@ function OptimizerTab(props: {
                         {z.zoneId ?? z.zone ?? "—"}
                       </td>
                       <td className="p-2 text-right text-[11px]">
-                        {z.metrics?.visits ?? z.visits ?? 0}
+                        {formatInteger(z.metrics?.visits ?? z.visits ?? 0)}
                       </td>
                       <td className="p-2 text-right text-[11px]">
-                        {z.metrics?.signups ?? z.signups ?? 0}
+                        {formatInteger(z.metrics?.signups ?? z.signups ?? 0)}
                       </td>
                       <td className="p-2 text-right text-[11px]">
-                        {z.metrics?.deposits ?? z.deposits ?? 0}
+                        {formatInteger(z.metrics?.deposits ?? z.deposits ?? 0)}
                       </td>
                       <td className="p-2 text-right text-[11px]">
                         {formatMoney(
