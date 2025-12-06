@@ -186,6 +186,24 @@ function getDaysAgoYMD(days: number): string {
   return formatDateYMD(d);
 }
 
+// Timezone-aware date formatting (GMT+8)
+const TZ_GMT8 = "Asia/Singapore";
+const TZ_LABEL = "GMT+8";
+function formatDateTimeGMT8(value: string | Date): string {
+  const dt = typeof value === "string" ? new Date(value) : value;
+  const formatted = new Intl.DateTimeFormat("en-US", {
+    timeZone: TZ_GMT8,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  }).format(dt);
+  return `${formatted} ${TZ_LABEL}`;
+}
+
 /**
  * ===========
  * Main page
@@ -801,8 +819,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
             For Marketers. By Marketers
           </p>
           <p className="text-xs md:text-sm text-slate-400 mt-1">
-            {data.dateRange} • {new Date(data.from).toLocaleString()} –{" "}
-            {new Date(data.to).toLocaleString()}
+            {data.dateRange} • {formatDateTimeGMT8(data.from)} – {formatDateTimeGMT8(data.to)}
           </p>
         </div>
 
@@ -2009,7 +2026,7 @@ function OptimizerTab(props: {
                   <tr key={`${b.zoneId}-${b.timestamp}-${i}`}>
                     <td className="p-2">{b.zoneId}</td>
                     <td className="p-2">{b.campaignId}</td>
-                    <td className="p-2">{new Date(b.timestamp).toLocaleString()}</td>
+                    <td className="p-2">{formatDateTimeGMT8(b.timestamp)}</td>
                   </tr>
                 ))}
               </tbody>
