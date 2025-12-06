@@ -401,7 +401,8 @@ export default function OptimizerPage() {
     previewResult?.zonesToPauseNow?.length ?? 0;
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6 space-y-6">
+    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
       {/* Header + Controls */}
       <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
@@ -695,6 +696,7 @@ export default function OptimizerPage() {
           </div>
         )}
       </section>
+      </div>
     </main>
   );
 }

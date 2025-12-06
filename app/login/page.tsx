@@ -73,9 +73,15 @@ function LoginInner() {
 export default function LoginPage() {
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
-      <Suspense fallback={<div className="text-sm text-slate-400">Loading…</div>}>
-        <LoginInner />
-      </Suspense>
+      <div className="w-full max-w-sm">
+        <div className="text-center mb-4">
+          <h1 className="text-2xl font-semibold">Voluum Assistant</h1>
+          <p className="text-[12px] text-slate-400">For Marketers. By Marketers</p>
+        </div>
+        <Suspense fallback={<div className="text-sm text-slate-400">Loading…</div>}>
+          <LoginInner />
+        </Suspense>
+      </div>
     </main>
   );
 }

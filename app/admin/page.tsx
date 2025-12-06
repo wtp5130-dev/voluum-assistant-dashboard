@@ -94,7 +94,8 @@ export default function AdminPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6 space-y-6">
+    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6">
+      <div className="max-w-6xl mx-auto space-y-6">
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold">Admin – Users</h1>
@@ -103,7 +104,7 @@ export default function AdminPage() {
         <a href="/" className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Back</a>
       </header>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 shadow-sm">
         <h2 className="text-sm font-semibold mb-2">Add user</h2>
         <div className="grid gap-2 sm:grid-cols-3">
           <input className="bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-sm" placeholder="Username" value={username} onChange={(e)=>setUsername(e.target.value)} />
@@ -127,14 +128,14 @@ export default function AdminPage() {
         {error && <p className="text-[11px] text-rose-400 mt-2">{error}</p>}
       </section>
 
-      <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+      <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 shadow-sm">
         <h2 className="text-sm font-semibold mb-2">Users</h2>
         {loading ? (
           <p className="text-[11px] text-slate-400">Loading…</p>
         ) : users.length === 0 ? (
           <p className="text-[11px] text-slate-500">No users yet.</p>
         ) : (
-          <div className="overflow-auto">
+          <div className="overflow-auto rounded-xl border border-slate-800">
             <table className="min-w-[600px] text-xs">
               <thead className="bg-slate-900 text-slate-400">
                 <tr>
@@ -144,9 +145,9 @@ export default function AdminPage() {
                   <th className="text-right p-2">Actions</th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className="divide-y divide-slate-800">
                 {users.map((u)=> (
-                  <tr key={u.username} className="border-t border-slate-800">
+                  <tr key={u.username} className="hover:bg-slate-900/50">
                     <td className="p-2">{u.username}</td>
                     <td className="p-2">{u.role}</td>
                     <td className="p-2">
@@ -169,6 +170,7 @@ export default function AdminPage() {
           </div>
         )}
       </section>
+      </div>
     </main>
   );
 }

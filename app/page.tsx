@@ -826,7 +826,8 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6 space-y-6">
+    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6">
+      <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
@@ -945,36 +946,37 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
       </header>
 
       {/* Big tab buttons */}
-      <div className="flex gap-2 justify-center mb-2">
-        <button
+      <div className="flex justify-center mb-2">
+        <div className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/60 p-1 shadow-sm">
+          <button
           onClick={() => setActiveTab("dashboard")}
           className={`px-6 py-2 rounded-full text-sm font-semibold border ${
             activeTab === "dashboard"
-              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow-lg"
-              : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
+              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow"
+              : "bg-transparent text-slate-200 border-transparent hover:bg-slate-800"
           }`}
         >
           Dashboard
-        </button>
+          </button>
         {can("optimizer") && (
           <button
           onClick={() => setActiveTab("optimizer")}
           className={`px-6 py-2 rounded-full text-sm font-semibold border ${
             activeTab === "optimizer"
-              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow-lg"
-              : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
+              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow"
+              : "bg-transparent text-slate-200 border-transparent hover:bg-slate-800"
           }`}
         >
           Optimizer
-        </button>
+          </button>
         )}
         {can("creatives") && (
         <button
           onClick={() => setActiveTab("creatives")}
           className={`px-6 py-2 rounded-full text-sm font-semibold border ${
             activeTab === "creatives"
-              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow-lg"
-              : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
+              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow"
+              : "bg-transparent text-slate-200 border-transparent hover:bg-slate-800"
           }`}
         >
           Creatives Doctor
@@ -985,13 +987,14 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
             onClick={() => setActiveTab("builder")}
             className={`px-6 py-2 rounded-full text-sm font-semibold border ${
               activeTab === "builder"
-                ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow-lg"
-                : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
+                ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow"
+                : "bg-transparent text-slate-200 border-transparent hover:bg-slate-800"
             }`}
           >
             Campaign Builder
           </button>
         )}
+        </div>
       </div>
 
       {/* KPI cards (always visible) */}
@@ -999,7 +1002,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         {data.kpis.map((kpi) => (
           <div
             key={kpi.id}
-            className="rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3 flex flex-col gap-1"
+            className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 flex flex-col gap-1 shadow-sm hover:shadow-md transition-shadow"
           >
             <div className="text-xs uppercase tracking-wide text-slate-400">
               {kpi.label}
@@ -1096,6 +1099,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           imageUrl={imageUrl}
         />
       )}
+      </div>
     </main>
   );
 }
