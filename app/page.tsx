@@ -1035,6 +1035,10 @@ function CampaignBuilderTab(props: {
   const [dailyBudget, setDailyBudget] = useState<string>("");
   const [totalBudget, setTotalBudget] = useState<string>("");
   const [device, setDevice] = useState<string>("all");
+  // Voluum-specific
+  const [voluumCreate, setVoluumCreate] = useState<boolean>(false);
+  const [voluumTrafficSource, setVoluumTrafficSource] = useState<string>("");
+  const [destinationUrl, setDestinationUrl] = useState<string>("");
   const [creativeTitle, setCreativeTitle] = useState<string>(assetTitle || "");
   const [creativeDesc, setCreativeDesc] = useState<string>(assetDescription || "");
   const [creativeImage, setCreativeImage] = useState<string>(imageUrl || "");
@@ -1088,7 +1092,33 @@ function CampaignBuilderTab(props: {
       if (!res.ok) {
         throw new Error(json?.message || json?.error || `Create failed (${res.status})`);
       }
-      setResult(JSON.stringify(json, null, 2));
+      const output: any = { provider: json };
+
+      if (voluumCreate) {
+        // build a minimal Voluum payload
+        const voluumBody = {
+          name: payload.name,
+          trafficSource: voluumTrafficSource || undefined,
+          country: payload.country,
+          bid: payload.bid,
+          dailyBudget: payload.dailyBudget,
+          totalBudget: payload.totalBudget,
+          destinationUrl: destinationUrl || undefined,
+          dryRun, // mirror dryRun
+        };
+        const vres = await fetch("/api/voluum/campaigns/create", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(voluumBody),
+        });
+        const vjson = await vres.json().catch(() => ({}));
+        if (!vres.ok) {
+          throw new Error(vjson?.message || vjson?.error || `Voluum create failed (${vres.status})`);
+        }
+        output.voluum = vjson;
+      }
+
+      setResult(JSON.stringify(output, null, 2));
     } catch (e: any) {
       setErrorMsg(e?.message || String(e));
     } finally {
@@ -1160,6 +1190,26 @@ function CampaignBuilderTab(props: {
               <option value="mobile">Mobile</option>
               <option value="desktop">Desktop</option>
             </select>
+          </div>
+
+          {/* Voluum fields */}
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase text-slate-500">Voluum traffic source (name or id)</label>
+            <input
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+              value={voluumTrafficSource}
+              onChange={(e) => setVoluumTrafficSource(e.target.value)}
+              placeholder="e.g., PropellerAds"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase text-slate-500">Destination URL (offer/tracker)</label>
+            <input
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+              value={destinationUrl}
+              onChange={(e) => setDestinationUrl(e.target.value)}
+              placeholder="https://..."
+            />
           </div>
 
           <div className="flex flex-col gap-1">
@@ -1238,6 +1288,15 @@ function CampaignBuilderTab(props: {
             />
             Dry run (don’t create live)
           </label>
+          <label className="flex items-center gap-2 text-[11px] text-slate-400">
+            <input
+              type="checkbox"
+              className="accent-emerald-500"
+              checked={voluumCreate}
+              onChange={(e) => setVoluumCreate(e.target.checked)}
+            />
+            Also create in Voluum
+          </label>
           <button
             onClick={submit}
             disabled={submitting}
@@ -1263,6 +1322,7 @@ function CampaignBuilderTab(props: {
         <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300 mb-2">Notes</h4>
         <ul className="list-disc pl-5 text-[11px] text-slate-400 space-y-1">
           <li>Currently supports PropellerAds (scaffold). Set PROPELLER_API_TOKEN to enable live create later.</li>
+          <li>Voluum creation uses your VOLUUM_* credentials; live create is scaffolded and returns a dry-run preview for now.</li>
           <li>Use the Creatives tab to generate copy/images, then paste here.</li>
           <li>Dry run returns the exact JSON we would send.</li>
         </ul>
