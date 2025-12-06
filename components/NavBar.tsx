@@ -25,43 +25,46 @@ export default function NavBar() {
   }, []);
 
   // Health checks
+  const runHealth = async () => {
+    const checks = [
+      { name: "kv", url: "/api/optimizer/blacklist-log" },
+      { name: "dashboard", url: "/api/voluum-dashboard?dateRange=last7days" },
+      { name: "creative-doctor", url: "/api/creative-doctor" },
+      { name: "creative-assets", url: "/api/creative-assets" },
+    ];
+    const results: string[] = [];
+    let okCount = 0;
+    for (const c of checks) {
+      try {
+        const ctrl = new AbortController();
+        const id = setTimeout(() => ctrl.abort(), 4000);
+        const res = await fetch(c.url, { cache: "no-store", signal: ctrl.signal });
+        clearTimeout(id);
+        if (res.ok) {
+          okCount++;
+        } else {
+          results.push(`${c.name}:${res.status}`);
+        }
+      } catch (e: any) {
+        results.push(`${c.name}:err`);
+      }
+    }
+    if (okCount === checks.length) {
+      setStatus("live");
+      setDetail("All systems nominal");
+    } else if (okCount > 0) {
+      setStatus("degraded");
+      setDetail(results.join(", "));
+    } else {
+      setStatus("down");
+      setDetail(results.join(", "));
+    }
+  };
+
   useEffect(() => {
     let timer: any;
-    const run = async () => {
-      const checks = [
-        { name: "kv", url: "/api/optimizer/blacklist-log" },
-        { name: "dashboard", url: "/api/voluum-dashboard?dateRange=last7days" },
-      ];
-      const results: string[] = [];
-      let okCount = 0;
-      for (const c of checks) {
-        try {
-          const ctrl = new AbortController();
-          const id = setTimeout(() => ctrl.abort(), 4000);
-          const res = await fetch(c.url, { cache: "no-store", signal: ctrl.signal });
-          clearTimeout(id);
-          if (res.ok) {
-            okCount++;
-          } else {
-            results.push(`${c.name}:${res.status}`);
-          }
-        } catch (e: any) {
-          results.push(`${c.name}:err`);
-        }
-      }
-      if (okCount === checks.length) {
-        setStatus("live");
-        setDetail("All systems nominal");
-      } else if (okCount > 0) {
-        setStatus("degraded");
-        setDetail(results.join(", "));
-      } else {
-        setStatus("down");
-        setDetail(results.join(", "));
-      }
-    };
-    run();
-    timer = setInterval(run, 60000);
+    runHealth();
+    timer = setInterval(runHealth, 60000);
     return () => clearInterval(timer);
   }, []);
 
@@ -89,6 +92,13 @@ export default function NavBar() {
           </span>
         </a>
         <div className="flex items-center gap-2">
+          <button
+            onClick={runHealth}
+            className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+            title="Refresh status"
+          >
+            Refresh
+          </button>
           {me?.role === "admin" && (
             <a
               href="/admin"
