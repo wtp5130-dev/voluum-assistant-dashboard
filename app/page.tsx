@@ -924,8 +924,9 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
       </header>
 
       {/* Big tab buttons */}
-      <div className="flex justify-center mb-2">
-        <div className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/60 p-1 shadow-sm">
+      <div className="sticky top-14 z-40 backdrop-blur supports-[backdrop-filter]:bg-slate-950/70 bg-slate-950/90 border-b border-slate-800">
+        <div className="max-w-7xl mx-auto px-2 py-2 flex justify-center">
+        <div className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 p-1 shadow-sm">
           <button
           onClick={() => setActiveTab("dashboard")}
           className={`px-6 py-2 rounded-full text-sm font-semibold border ${
@@ -972,6 +973,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
             Campaign Builder
           </button>
         )}
+        </div>
         </div>
       </div>
 

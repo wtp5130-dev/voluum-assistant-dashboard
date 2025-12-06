@@ -9,6 +9,7 @@ export default function NavBar() {
   const [loading, setLoading] = useState(true);
   const [status, setStatus] = useState<"live" | "degraded" | "down">("live");
   const [detail, setDetail] = useState<string>("");
+  const [checking, setChecking] = useState(false);
 
   useEffect(() => {
     (async () => {
@@ -26,6 +27,8 @@ export default function NavBar() {
 
   // Health checks
   const runHealth = async () => {
+    if (checking) return;
+    setChecking(true);
     const checks = [
       { name: "kv", url: "/api/optimizer/blacklist-log" },
       { name: "dashboard", url: "/api/voluum-dashboard?dateRange=last7days" },
@@ -59,6 +62,7 @@ export default function NavBar() {
       setStatus("down");
       setDetail(results.join(", "));
     }
+    setChecking(false);
   };
 
   useEffect(() => {
@@ -94,9 +98,13 @@ export default function NavBar() {
         <div className="flex items-center gap-2">
           <button
             onClick={runHealth}
-            className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+            disabled={checking}
+            className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2"
             title="Refresh status"
           >
+            {checking && (
+              <span className="inline-block w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+            )}
             Refresh
           </button>
           {me?.role === "admin" && (
