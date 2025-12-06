@@ -981,16 +981,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         </button>
         )}
         {can("builder") && (
-        <button
-          onClick={() => setActiveTab("builder")}
-          className={`px-6 py-2 rounded-full text-sm font-semibold border ${
-            activeTab === "builder"
-              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow-lg"
-              : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
-          }`}
-        >
-          Campaign Builder
-        </button>
+        
         )}
         <button
           onClick={() => setActiveTab("builder")}
