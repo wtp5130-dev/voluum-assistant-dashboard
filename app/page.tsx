@@ -178,6 +178,7 @@ function getDaysAgoYMD(days: number): string {
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
+  const [refreshing, setRefreshing] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
 
   const [dateRange, setDateRange] = useState<DateRangeKey>("last7days");
@@ -260,7 +261,12 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
 
     const fetchData = async () => {
       try {
-        setLoading(true);
+        const isInitial = data === null;
+        if (isInitial) {
+          setLoading(true);
+        } else {
+          setRefreshing(true);
+        }
         setError(null);
 
         const params = new URLSearchParams();
@@ -302,7 +308,12 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
           err instanceof Error ? err.message : "Unknown error fetching data"
         );
       } finally {
-        setLoading(false);
+        const isInitial = data === null;
+        if (isInitial) {
+          setLoading(false);
+        } else {
+          setRefreshing(false);
+        }
       }
     };
 
@@ -698,7 +709,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
    * ===========
    */
 
-  if (loading) {
+  if (loading && !data) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
         <div className="text-lg font-medium">Loading Voluum data…</div>
@@ -788,6 +799,12 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
               </select>
             </div>
           </div>
+
+          {refreshing && (
+            <div className="flex items-center justify-end">
+              <span className="text-[11px] text-slate-400">Updating…</span>
+            </div>
+          )}
 
           {/* Custom date pickers */}
           {dateRange === "custom" && (
