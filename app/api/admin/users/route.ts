@@ -4,7 +4,14 @@ import { cookies } from "next/headers";
 
 const KEY = "auth:users";
 
-type UserRec = { username: string; role: "admin" | "user"; hash: string };
+type Perms = {
+  dashboard: boolean;
+  optimizer: boolean;
+  creatives: boolean;
+  builder: boolean;
+};
+
+type UserRec = { username: string; role: "admin" | "user"; hash: string; perms: Perms };
 
 function b64(input: ArrayBuffer) {
   return Buffer.from(new Uint8Array(input)).toString("base64");
@@ -44,7 +51,7 @@ export async function GET() {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
   const list: UserRec[] = (await kv.get(KEY)) as any;
-  const users = (Array.isArray(list) ? list : []).map((u) => ({ username: u.username, role: u.role }));
+  const users = (Array.isArray(list) ? list : []).map((u) => ({ username: u.username, role: u.role, perms: u.perms }));
   return NextResponse.json({ users });
 }
 
@@ -57,18 +64,30 @@ export async function POST(req: NextRequest) {
   }
   const body = await req.json().catch(() => ({}));
   const u = (body?.username || "").toString();
-  const p = (body?.password || "").toString();
+  const p = body?.password ? (body.password as string).toString() : "";
   const role = (body?.role || "user").toString() as "admin" | "user";
-  if (!u || !p) return NextResponse.json({ error: "username and password required" }, { status: 400 });
+  const permsBody = body?.perms as Partial<Perms> | undefined;
+  if (!u) return NextResponse.json({ error: "username required" }, { status: 400 });
   const secret = process.env.AUTH_SECRET || "dev-secret";
-  const hash = await sha256(`${secret}:${p}`);
   const list: UserRec[] = (await kv.get(KEY)) as any;
   const arr = Array.isArray(list) ? list : [];
   const existing = arr.findIndex((x) => x.username === u);
+  const defaultPerms: Perms = { dashboard: true, optimizer: false, creatives: false, builder: false };
+  const targetPerms: Perms = {
+    ...(existing >= 0 ? arr[existing].perms : defaultPerms),
+    ...(permsBody || {}),
+  } as Perms;
+
   if (existing >= 0) {
-    arr[existing] = { username: u, role, hash };
+    let nextHash = arr[existing].hash;
+    if (p) {
+      nextHash = await sha256(`${secret}:${p}`);
+    }
+    arr[existing] = { username: u, role, hash: nextHash, perms: targetPerms };
   } else {
-    arr.unshift({ username: u, role, hash });
+    if (!p) return NextResponse.json({ error: "password required for new user" }, { status: 400 });
+    const hash = await sha256(`${secret}:${p}`);
+    arr.unshift({ username: u, role, hash, perms: targetPerms });
   }
   await kv.set(KEY, arr);
   return NextResponse.json({ ok: true });

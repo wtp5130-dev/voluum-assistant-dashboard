@@ -1,5 +1,6 @@
 // app/api/creative-doctor/route.ts
 import OpenAI from "openai";
+import { requirePermission } from "@/app/lib/permissions";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -34,6 +35,8 @@ Rules:
 
 export async function POST(req: Request): Promise<Response> {
   try {
+    const ok = await requirePermission("creatives");
+    if (!ok) return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: { "Content-Type": "application/json" } });
     const body = await req.json();
 
     // Support both the older shape (question + fields) and the UI's current shape (messages + context)

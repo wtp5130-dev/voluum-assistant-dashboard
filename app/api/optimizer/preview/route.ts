@@ -1,6 +1,7 @@
 // app/api/optimizer/preview/route.ts
 
 import { NextRequest } from "next/server";
+import { requirePermission } from "@/app/lib/permissions";
 
 /**
  * Types – keep in sync with your DashboardData
@@ -106,6 +107,10 @@ type PreviewResponse = {
 
 export async function POST(req: NextRequest): Promise<Response> {
   try {
+    const ok = await requirePermission("optimizer");
+    if (!ok) {
+      return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: { "Content-Type": "application/json" } });
+    }
     const body = (await req.json()) as PreviewRequestBody | null;
 
     if (!body || !body.dashboard) {

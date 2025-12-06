@@ -1,7 +1,10 @@
 import { NextResponse } from "next/server";
+import { requirePermission } from "@/app/lib/permissions";
 
 export async function POST(request: Request) {
   try {
+    const ok = await requirePermission("builder");
+    if (!ok) return NextResponse.json({ error: "forbidden" }, { status: 403 });
     const body = await request.json().catch(() => ({}));
     const {
       name,

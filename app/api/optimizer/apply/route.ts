@@ -1,5 +1,6 @@
 // app/api/optimizer/apply/route.ts
 import { NextRequest } from "next/server";
+import { requirePermission } from "@/app/lib/permissions";
 import { kv } from "@vercel/kv";
 
 /**
@@ -112,6 +113,13 @@ async function pauseZoneInPropeller(
  */
 export async function POST(req: NextRequest): Promise<Response> {
   try {
+    const ok = await requirePermission("optimizer");
+    if (!ok) {
+      return new Response(
+        JSON.stringify({ error: "forbidden" }),
+        { status: 403, headers: { "Content-Type": "application/json" } }
+      );
+    }
     const body = (await req.json()) as ApplyRequestBody | null;
 
     if (!body || !Array.isArray(body.zonesToPauseNow)) {

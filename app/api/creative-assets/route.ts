@@ -1,5 +1,6 @@
 // app/api/creative-assets/route.ts
 import OpenAI from "openai";
+import { requirePermission } from "@/app/lib/permissions";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
@@ -63,6 +64,12 @@ function extractJsonPayload(text: string): Record<string, unknown> {
 }
 
 export async function POST(req: Request): Promise<Response> {
+  const ok = await requirePermission("creatives");
+  if (!ok)
+    return new Response(JSON.stringify({ error: "forbidden" }), {
+      status: 403,
+      headers: { "Content-Type": "application/json" },
+    });
   if (!process.env.OPENAI_API_KEY) {
     return new Response(
       JSON.stringify({ error: "Missing OPENAI_API_KEY on server" }),

@@ -227,6 +227,7 @@ export default function DashboardPage() {
   );
 
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
+  const [currentUser, setCurrentUser] = useState<null | { username: string; role: "admin" | "user"; perms: { dashboard: boolean; optimizer: boolean; creatives: boolean; builder: boolean } }>(null);
 
   // Dashboard chat state
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([
@@ -295,6 +296,23 @@ export default function DashboardPage() {
   const [creativeChatInput, setCreativeChatInput] = useState("");
   const [creativeChatLoading, setCreativeChatLoading] = useState(false);
   const [creativeTokenCount, setCreativeTokenCount] = useState<number>(0);
+
+  // Fetch current user for permissions
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/auth/me", { cache: "no-store" });
+        const json = await res.json();
+        if (json?.user) setCurrentUser(json.user);
+      } catch {}
+    })();
+  }, []);
+
+  const can = (key: keyof NonNullable<typeof currentUser>["perms"]) => {
+    if (!currentUser) return true; // allow during initial load
+    if (currentUser.role === "admin") return true;
+    return !!currentUser.perms?.[key];
+  };
 
 // Creative image generator
 const [imagePrompt, setImagePrompt] = useState(
@@ -826,12 +844,14 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         {/* Date + traffic source controls */}
         <div className="flex flex-col gap-3 items-stretch md:items-end">
           <div className="flex items-center justify-end gap-2">
-            <a
-              href="/admin"
-              className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
-            >
-              Admin
-            </a>
+            {currentUser?.role === "admin" && (
+              <a
+                href="/admin"
+                className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              >
+                Admin
+              </a>
+            )}
             <button
               onClick={async () => {
                 try {
@@ -936,7 +956,8 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         >
           Dashboard
         </button>
-        <button
+        {can("optimizer") && (
+          <button
           onClick={() => setActiveTab("optimizer")}
           className={`px-6 py-2 rounded-full text-sm font-semibold border ${
             activeTab === "optimizer"
@@ -946,6 +967,8 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         >
           Optimizer
         </button>
+        )}
+        {can("creatives") && (
         <button
           onClick={() => setActiveTab("creatives")}
           className={`px-6 py-2 rounded-full text-sm font-semibold border ${
@@ -956,6 +979,19 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         >
           Creatives Doctor
         </button>
+        )}
+        {can("builder") && (
+        <button
+          onClick={() => setActiveTab("builder")}
+          className={`px-6 py-2 rounded-full text-sm font-semibold border ${
+            activeTab === "builder"
+              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow-lg"
+              : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
+          }`}
+        >
+          Campaign Builder
+        </button>
+        )}
         <button
           onClick={() => setActiveTab("builder")}
           className={`px-6 py-2 rounded-full text-sm font-semibold border ${
@@ -1010,7 +1046,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         />
       )}
 
-      {activeTab === "optimizer" && (
+      {activeTab === "optimizer" && can("optimizer") && (
         <OptimizerTab
           data={data}
           trafficSourceFilter={trafficSourceFilter}
@@ -1037,7 +1073,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         />
       )}
 
-      {activeTab === "creatives" && (
+      {activeTab === "creatives" && can("creatives") && (
         <CreativesTab
           creativeChatMessages={creativeChatMessages}
           creativeChatInput={creativeChatInput}
@@ -1062,7 +1098,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         />
       )}
 
-      {activeTab === "builder" && (
+      {activeTab === "builder" && can("builder") && (
         <CampaignBuilderTab
           adType={adType}
           assetTitle={assetTitle}
