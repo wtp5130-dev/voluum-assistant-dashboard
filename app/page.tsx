@@ -77,7 +77,7 @@ type ChatMessage = {
   content: string;
 };
 
-type TabKey = "dashboard" | "optimizer" | "creatives";
+type TabKey = "dashboard" | "optimizer" | "creatives" | "builder";
 
 /**
  * ===========
@@ -888,6 +888,16 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         >
           Creatives Doctor
         </button>
+        <button
+          onClick={() => setActiveTab("builder")}
+          className={`px-6 py-2 rounded-full text-sm font-semibold border ${
+            activeTab === "builder"
+              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow-lg"
+              : "bg-slate-900 text-slate-200 border-slate-700 hover:bg-slate-800"
+          }`}
+        >
+          Campaign Builder
+        </button>
       </div>
 
       {/* KPI cards (always visible) */}
@@ -971,6 +981,15 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           generateCreativeBundle={generateCreativeBundle}
         />
       )}
+
+      {activeTab === "builder" && (
+        <CampaignBuilderTab
+          adType={adType}
+          assetTitle={assetTitle}
+          assetDescription={assetDescription}
+          imageUrl={imageUrl}
+        />
+      )}
     </main>
   );
 }
@@ -994,6 +1013,261 @@ function DetailStat({
       </div>
       <div className={`text-sm font-medium ${valueClass ?? ""}`}>{value}</div>
     </div>
+  );
+}
+
+/**
+ * Campaign Builder tab
+ */
+function CampaignBuilderTab(props: {
+  adType: string;
+  assetTitle: string;
+  assetDescription: string;
+  imageUrl: string | null;
+}) {
+  const { adType, assetTitle, assetDescription, imageUrl } = props;
+
+  const [provider, setProvider] = useState<string>("propellerads");
+  const [name, setName] = useState<string>("");
+  const [format, setFormat] = useState<string>(adType || "push-classic");
+  const [country, setCountry] = useState<string>("");
+  const [bid, setBid] = useState<string>("");
+  const [dailyBudget, setDailyBudget] = useState<string>("");
+  const [totalBudget, setTotalBudget] = useState<string>("");
+  const [device, setDevice] = useState<string>("all");
+  const [creativeTitle, setCreativeTitle] = useState<string>(assetTitle || "");
+  const [creativeDesc, setCreativeDesc] = useState<string>(assetDescription || "");
+  const [creativeImage, setCreativeImage] = useState<string>(imageUrl || "");
+  const [dryRun, setDryRun] = useState<boolean>(true);
+  const [submitting, setSubmitting] = useState<boolean>(false);
+  const [result, setResult] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    // keep creative defaults in sync when user switches tabs and generates assets
+    if (!creativeTitle && assetTitle) setCreativeTitle(assetTitle);
+    if (!creativeDesc && assetDescription) setCreativeDesc(assetDescription);
+    if (!creativeImage && imageUrl) setCreativeImage(imageUrl);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [assetTitle, assetDescription, imageUrl]);
+
+  const submit = async () => {
+    setSubmitting(true);
+    setResult(null);
+    setErrorMsg(null);
+    try {
+      const payload = {
+        provider,
+        name: name.trim(),
+        format,
+        country: country.trim().toUpperCase(),
+        bid: Number(bid || 0),
+        dailyBudget: Number(dailyBudget || 0),
+        totalBudget: totalBudget ? Number(totalBudget) : null,
+        device,
+        creative: {
+          title: creativeTitle,
+          description: creativeDesc,
+          imageUrl: creativeImage || null,
+        },
+        dryRun,
+      };
+
+      if (!payload.name) throw new Error("Campaign name is required");
+      if (!payload.country) throw new Error("Country is required (e.g., MX)");
+      if (!payload.bid || payload.bid <= 0) throw new Error("Bid must be > 0");
+      if (!payload.dailyBudget || payload.dailyBudget <= 0)
+        throw new Error("Daily budget must be > 0");
+
+      const res = await fetch("/api/campaigns/create", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(json?.message || json?.error || `Create failed (${res.status})`);
+      }
+      setResult(JSON.stringify(json, null, 2));
+    } catch (e: any) {
+      setErrorMsg(e?.message || String(e));
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="grid gap-6 lg:grid-cols-2">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 flex flex-col gap-3">
+        <div>
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Campaign Builder</h3>
+          <p className="text-[11px] text-slate-400">Draft and (optionally) create campaigns via provider APIs.</p>
+        </div>
+
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase text-slate-500">Provider</label>
+            <select
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+              value={provider}
+              onChange={(e) => setProvider(e.target.value)}
+            >
+              <option value="propellerads">PropellerAds</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase text-slate-500">Ad format</label>
+            <select
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+              value={format}
+              onChange={(e) => setFormat(e.target.value)}
+            >
+              {Object.entries(AD_TYPES).map(([key, meta]) => (
+                <option key={key} value={key}>{meta.label}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1 sm:col-span-2">
+            <label className="text-[10px] uppercase text-slate-500">Campaign name</label>
+            <input
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g., Casino MX – Push – Angle A"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase text-slate-500">Country (ISO)</label>
+            <input
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+              value={country}
+              onChange={(e) => setCountry(e.target.value)}
+              placeholder="MX, MY, US"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase text-slate-500">Device</label>
+            <select
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+              value={device}
+              onChange={(e) => setDevice(e.target.value)}
+            >
+              <option value="all">All</option>
+              <option value="mobile">Mobile</option>
+              <option value="desktop">Desktop</option>
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase text-slate-500">Bid (USD)</label>
+            <input
+              type="number"
+              step="0.001"
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+              value={bid}
+              onChange={(e) => setBid(e.target.value)}
+              placeholder="0.01"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase text-slate-500">Daily budget (USD)</label>
+            <input
+              type="number"
+              step="1"
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+              value={dailyBudget}
+              onChange={(e) => setDailyBudget(e.target.value)}
+              placeholder="50"
+            />
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label className="text-[10px] uppercase text-slate-500">Total budget (USD – optional)</label>
+            <input
+              type="number"
+              step="1"
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+              value={totalBudget}
+              onChange={(e) => setTotalBudget(e.target.value)}
+              placeholder="500"
+            />
+          </div>
+
+          <div className="sm:col-span-2 grid gap-2">
+            <div className="grid gap-1">
+              <label className="text-[10px] uppercase text-slate-500">Creative title</label>
+              <input
+                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+                value={creativeTitle}
+                onChange={(e) => setCreativeTitle(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1">
+              <label className="text-[10px] uppercase text-slate-500">Creative description</label>
+              <textarea
+                rows={2}
+                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+                value={creativeDesc}
+                onChange={(e) => setCreativeDesc(e.target.value)}
+              />
+            </div>
+            <div className="grid gap-1">
+              <label className="text-[10px] uppercase text-slate-500">Creative image URL</label>
+              <input
+                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+                value={creativeImage}
+                onChange={(e) => setCreativeImage(e.target.value)}
+                placeholder="https://..."
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-between mt-2">
+          <label className="flex items-center gap-2 text-[11px] text-slate-400">
+            <input
+              type="checkbox"
+              className="accent-emerald-500"
+              checked={dryRun}
+              onChange={(e) => setDryRun(e.target.checked)}
+            />
+            Dry run (don’t create live)
+          </label>
+          <button
+            onClick={submit}
+            disabled={submitting}
+            className="text-xs px-4 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50"
+          >
+            {submitting ? "Submitting…" : dryRun ? "Preview payload" : "Create campaign"}
+          </button>
+        </div>
+
+        {(errorMsg || result) && (
+          <div className="mt-3">
+            {errorMsg && (
+              <p className="text-[11px] text-rose-400 whitespace-pre-wrap">{errorMsg}</p>
+            )}
+            {result && (
+              <pre className="text-[10px] bg-slate-950 border border-slate-800 rounded-md p-2 overflow-auto max-h-60">{result}</pre>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4">
+        <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-300 mb-2">Notes</h4>
+        <ul className="list-disc pl-5 text-[11px] text-slate-400 space-y-1">
+          <li>Currently supports PropellerAds (scaffold). Set PROPELLER_API_TOKEN to enable live create later.</li>
+          <li>Use the Creatives tab to generate copy/images, then paste here.</li>
+          <li>Dry run returns the exact JSON we would send.</li>
+        </ul>
+      </div>
+    </section>
   );
 }
 
