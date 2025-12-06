@@ -654,10 +654,18 @@ export default function DashboardVoluumAssistant() {
                                                   {z.visits.toLocaleString()}
                                                 </td>
                                                 <td className="px-2 py-1 text-right">
-                                                  ${z.revenue.toFixed(2)}
+                                                  $
+                                                  {z.revenue.toLocaleString("en-US", {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                  })}
                                                 </td>
                                                 <td className="px-2 py-1 text-right">
-                                                  ${z.cost.toFixed(2)}
+                                                  $
+                                                  {z.cost.toLocaleString("en-US", {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                  })}
                                                 </td>
                                                 <td
                                                   className={`px-2 py-1 text-right ${
@@ -730,10 +738,18 @@ export default function DashboardVoluumAssistant() {
                                                   {cr.visits.toLocaleString()}
                                                 </td>
                                                 <td className="px-2 py-1 text-right">
-                                                  ${cr.revenue.toFixed(2)}
+                                                  $
+                                                  {cr.revenue.toLocaleString("en-US", {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                  })}
                                                 </td>
                                                 <td className="px-2 py-1 text-right">
-                                                  ${cr.cost.toFixed(2)}
+                                                  $
+                                                  {cr.cost.toLocaleString("en-US", {
+                                                    minimumFractionDigits: 2,
+                                                    maximumFractionDigits: 2,
+                                                  })}
                                                 </td>
                                                 <td
                                                   className={`px-2 py-1 text-right ${

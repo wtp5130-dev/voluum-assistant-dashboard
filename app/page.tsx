@@ -143,13 +143,30 @@ const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
 
 function formatMoney(value: number | string): string {
   if (typeof value === "string") return value;
-  const sign = value < 0 ? "-" : "";
-  const abs = Math.abs(value);
-  return `${sign}$${abs.toFixed(2)}`;
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    const sign = value < 0 ? "-" : "";
+    const abs = Math.abs(value);
+    return `${sign}$${abs.toFixed(2)}`;
+  }
 }
 
 function formatPercent(value: number): string {
   return `${value.toFixed(2)}%`;
+}
+
+function formatInteger(value: number): string {
+  try {
+    return Number(value).toLocaleString("en-US");
+  } catch {
+    return String(value);
+  }
 }
 
 function formatDateYMD(date: Date): string {
@@ -551,8 +568,8 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
   /**
    * Creatives Doctor - chat
    */
-  const sendCreativeChat = async () => {
-    const content = creativeChatInput.trim();
+  const sendCreativeChat = async (overrideMessage?: string) => {
+    const content = (overrideMessage ?? creativeChatInput).trim();
     if (!content || creativeChatLoading) return;
 
     const newMessages: ChatMessage[] = [
@@ -560,7 +577,7 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
       { role: "user", content },
     ];
     setCreativeChatMessages(newMessages);
-    setCreativeChatInput("");
+    if (!overrideMessage) setCreativeChatInput("");
     setCreativeChatLoading(true);
 
     try {
@@ -1059,9 +1076,9 @@ function DashboardTab(props: {
                         {c.trafficSource}
                       </div>
                     </td>
-                    <td className="p-2 text-right">{c.visits}</td>
-                    <td className="p-2 text-right">{c.signups}</td>
-                    <td className="p-2 text-right">{c.deposits}</td>
+                    <td className="p-2 text-right">{formatInteger(c.visits)}</td>
+                    <td className="p-2 text-right">{formatInteger(c.signups)}</td>
+                    <td className="p-2 text-right">{formatInteger(c.deposits)}</td>
                     <td className="p-2 text-right">
                       {formatMoney(c.revenue)}
                     </td>
@@ -1119,15 +1136,15 @@ function DashboardTab(props: {
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                   <DetailStat
                     label="Visits"
-                    value={selectedCampaign.visits}
+                    value={formatInteger(selectedCampaign.visits)}
                   />
                   <DetailStat
                     label="Signups"
-                    value={selectedCampaign.signups}
+                    value={formatInteger(selectedCampaign.signups)}
                   />
                   <DetailStat
                     label="Deposits"
-                    value={selectedCampaign.deposits}
+                    value={formatInteger(selectedCampaign.deposits)}
                   />
                   <DetailStat
                     label="Revenue"
@@ -1212,13 +1229,9 @@ function DashboardTab(props: {
                               ? z.id
                               : "Unknown zone"}
                           </td>
-                          <td className="p-2 text-right">{z.visits}</td>
-                          <td className="p-2 text-right">
-                            {z.signups}
-                          </td>
-                          <td className="p-2 text-right">
-                            {z.deposits}
-                          </td>
+                          <td className="p-2 text-right">{formatInteger(z.visits)}</td>
+                          <td className="p-2 text-right">{formatInteger(z.signups)}</td>
+                          <td className="p-2 text-right">{formatInteger(z.deposits)}</td>
                           <td className="p-2 text-right">
                             {formatMoney(z.revenue)}
                           </td>
@@ -1285,15 +1298,9 @@ function DashboardTab(props: {
                         return (
                           <tr key={`${c.id}-${c.visits}-${c.cost}`}>
                             <td className="p-2">{label}</td>
-                            <td className="p-2 text-right">
-                              {c.visits}
-                            </td>
-                            <td className="p-2 text-right">
-                              {c.signups}
-                            </td>
-                            <td className="p-2 text-right">
-                              {c.deposits}
-                            </td>
+                            <td className="p-2 text-right">{formatInteger(c.visits)}</td>
+                            <td className="p-2 text-right">{formatInteger(c.signups)}</td>
+                            <td className="p-2 text-right">{formatInteger(c.deposits)}</td>
                             <td className="p-2 text-right">
                               {formatMoney(c.revenue)}
                             </td>
@@ -1583,7 +1590,7 @@ function CreativesTab(props: {
   creativeChatInput: string;
   creativeChatLoading: boolean;
   setCreativeChatInput: (v: string) => void;
-  sendCreativeChat: () => void;
+  sendCreativeChat: (overrideMessage?: string) => void;
   creativeTokenCount: number;
   imagePrompt: string;
   setImagePrompt: (v: string) => void;
@@ -1623,6 +1630,33 @@ function CreativesTab(props: {
     generateCreativeBundle,
   } = props;
 
+  // Quick actions for Creative Doctor
+  const handleQuickPrompt = async () => {
+    try {
+      const base = (creativeChatInput || imagePrompt || "High-converting creative idea").trim();
+      if (!base) return;
+      const res = await fetch(CREATIVE_ASSETS_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: base, adType }),
+      });
+      if (!res.ok) {
+        // silently ignore in UI; this is a helper
+        return;
+      }
+      const json = await res.json();
+      const newMainPrompt = json.imagePrompt || json.mainImagePrompt || base;
+      setImagePrompt(newMainPrompt);
+    } catch {
+      // no-op
+    }
+  };
+
+  const handleQuickPerfSummary = () => {
+    const quick = "Give me a performance summary for the last 7 days. Keep it concise and actionable.";
+    sendCreativeChat(quick);
+  };
+
   return (
     <section className="grid gap-6 lg:grid-cols-2">
       {/* Creative Doctor chat */}
@@ -1636,11 +1670,28 @@ function CreativesTab(props: {
               Paste your angles or headlines and I’ll diagnose + improve them.
             </p>
           </div>
-          <div className="text-[10px] text-slate-500">
-            Tokens:{" "}
-            <span className="text-slate-200 font-semibold">
-              {creativeTokenCount}
-            </span>
+          <div className="flex items-center gap-2">
+            <div className="text-[10px] text-slate-500 mr-2">
+              Tokens: {" "}
+              <span className="text-slate-200 font-semibold">
+                {creativeTokenCount.toLocaleString()}
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleQuickPrompt}
+              className="text-[10px] px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700"
+              title="Generate Prompt for Creative"
+            >
+              Generate Prompt for Creative
+            </button>
+            <button
+              type="button"
+              onClick={handleQuickPerfSummary}
+              className="text-[10px] px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700"
+            >
+              Performance summary (7d)
+            </button>
           </div>
         </div>
 
@@ -1687,12 +1738,12 @@ function CreativesTab(props: {
         </div>
       </div>
 
-      {/* Creative image generator */}
+      {/* Creative generator */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 flex flex-col gap-3">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-              Creative Image Generator
+              Creative Generator
             </h3>
             <p className="text-[11px] text-slate-400">
               Generate copy + visuals tailored to each Propeller ad type.
