@@ -35,73 +35,76 @@ Rules:
 export async function POST(req: Request): Promise<Response> {
   try {
     const body = await req.json();
-    const { question, campaign, creatives, dateRange, from, to } = body || {};
 
-    if (!question || typeof question !== "string") {
+    // Support both the older shape (question + fields) and the UI's current shape (messages + context)
+    const incomingMessages = Array.isArray(body?.messages)
+      ? (body.messages as Array<{ role: string; content: string }>)
+      : [];
+    const question =
+      typeof body?.question === "string" && body.question.trim().length > 0
+        ? (body.question as string)
+        : undefined;
+
+    if (!incomingMessages.length && !question) {
       return new Response(
-        JSON.stringify({ error: "Missing or invalid 'question' field" }),
+        JSON.stringify({ error: "Provide 'messages' array or a 'question' string" }),
         { status: 400, headers: { "Content-Type": "application/json" } }
       );
     }
 
-    const context = {
-      campaign: campaign ?? null,
-      creatives: creatives ?? [],
-      dateRange: dateRange ?? null,
-      from: from ?? null,
-      to: to ?? null,
+    const legacyContext = {
+      campaign: body?.campaign ?? null,
+      creatives: body?.creatives ?? [],
+      dateRange: body?.dateRange ?? null,
+      from: body?.from ?? null,
+      to: body?.to ?? null,
     };
 
-    const messages = [
-      { role: "system" as const, content: systemPrompt },
-      { role: "user" as const, content: question },
-      {
-        role: "user" as const,
-        content:
-          "Here is the JSON data for the selected campaign and creatives:\n\n" +
-          JSON.stringify(context, null, 2),
-      },
+    const context = body?.context ?? legacyContext;
+
+    const chatMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+      { role: "system", content: systemPrompt },
     ];
 
-    // Create a streaming response
-    const stream = new ReadableStream({
-      async start(controller) {
-        const encoder = new TextEncoder();
-
-        try {
-          const completion = await client.chat.completions.create({
-            model: "gpt-4.1-mini",
-            messages,
-            temperature: 0.5,
-            stream: true,
-          });
-
-          for await (const chunk of completion) {
-            const delta = chunk.choices?.[0]?.delta?.content || "";
-            if (delta) {
-              controller.enqueue(encoder.encode(delta));
-            }
-          }
-
-          controller.close();
-        } catch (err: any) {
-          console.error("creative-doctor stream error:", err);
-          const errorMsg =
-            "\n\n[Creative Doctor error: " +
-            (err?.message || "Unknown error") +
-            "]";
-          controller.enqueue(encoder.encode(errorMsg));
-          controller.close();
+    if (incomingMessages.length) {
+      for (const m of incomingMessages) {
+        if (m && typeof m.content === "string" && (m.role === "user" || m.role === "assistant")) {
+          chatMessages.push({ role: m.role as "user" | "assistant", content: m.content });
         }
-      },
+      }
+    } else if (question) {
+      chatMessages.push({ role: "user", content: question });
+    }
+
+    chatMessages.push({
+      role: "user",
+      content:
+        "Context JSON (campaigns/selection/date range if provided):\n\n" +
+        JSON.stringify(context ?? {}, null, 2),
     });
 
-    return new Response(stream, {
-      status: 200,
-      headers: {
-        "Content-Type": "text/plain; charset=utf-8",
-      },
+    const completion = await client.chat.completions.create({
+      model: "gpt-4.1-mini",
+      messages: chatMessages,
+      temperature: 0.5,
     });
+
+    const reply = completion.choices?.[0]?.message?.content?.trim() || "";
+    const usage = (completion as any)?.usage || null;
+
+    return new Response(
+      JSON.stringify({
+        reply,
+        tokenUsage: usage
+          ? {
+              total: usage.total_tokens,
+              prompt: usage.prompt_tokens,
+              completion: usage.completion_tokens,
+            }
+          : undefined,
+      }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
   } catch (err: any) {
     console.error("creative-doctor error (setup):", err);
     return new Response(
