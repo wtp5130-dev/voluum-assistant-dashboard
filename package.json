@@ -12,7 +12,7 @@
     "next": "16.0.7",
     "react": "18.3.1",
     "react-dom": "18.3.1",
-    "openai": "^4.71.1"
+    "openai": "^4.71.1",
     "@vercel/kv": "^1.0.1"
   },
   "devDependencies": {
