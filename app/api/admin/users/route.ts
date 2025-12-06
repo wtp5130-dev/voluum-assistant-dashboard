@@ -37,7 +37,8 @@ async function isAdminUser(username: string | null): Promise<boolean> {
 }
 
 export async function GET() {
-  const session = cookies().get("session")?.value;
+  const cookieStore = await cookies();
+  const session = cookieStore.get("session")?.value;
   const username = parseToken(session);
   if (!(await isAdminUser(username))) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -48,7 +49,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const session = cookies().get("session")?.value;
+  const cookieStore = await cookies();
+  const session = cookieStore.get("session")?.value;
   const username = parseToken(session);
   if (!(await isAdminUser(username))) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
@@ -73,7 +75,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const session = cookies().get("session")?.value;
+  const cookieStore = await cookies();
+  const session = cookieStore.get("session")?.value;
   const username = parseToken(session);
   if (!(await isAdminUser(username))) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
