@@ -34,13 +34,7 @@ async function getCampaignIdsFromDashboard(dateRange: string): Promise<string[]>
   }
 }
 
-export async function POST(req: NextRequest): Promise<Response> {
-  try {
-    const body = await req.json().catch(() => ({}));
-    const campaignIds: string[] | undefined = Array.isArray(body?.campaignIds)
-      ? (body.campaignIds as string[])
-      : undefined;
-    const dateRange: string = (body?.dateRange as string) || "last7days";
+async function runSync(campaignIds: string[] | undefined, dateRange: string) {
 
     const seenList = ((await kv.lrange(LIST_KEY, 0, -1)) as any[]) || [];
     const seenSet = new Set<string>(
@@ -80,14 +74,31 @@ export async function POST(req: NextRequest): Promise<Response> {
       }
     }
 
-    return new Response(
-      JSON.stringify({ ok: true, campaigns: ids.length, added: newEntries.length }),
-      { status: 200, headers: { "Content-Type": "application/json" } }
-    );
+    return { ok: true, campaigns: ids.length, added: newEntries.length };
+}
+
+export async function POST(req: NextRequest): Promise<Response> {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const campaignIds: string[] | undefined = Array.isArray(body?.campaignIds)
+      ? (body.campaignIds as string[])
+      : undefined;
+    const dateRange: string = (body?.dateRange as string) || "last7days";
+    const result = await runSync(campaignIds, dateRange);
+    return new Response(JSON.stringify(result), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err: any) {
-    return new Response(
-      JSON.stringify({ error: "sync_error", message: err?.message || String(err) }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ error: "sync_error", message: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
+  }
+}
+
+export async function GET(req: NextRequest): Promise<Response> {
+  try {
+    const { searchParams } = new URL(req.url);
+    const dateRange = searchParams.get("dateRange") || "last7days";
+    const ids = searchParams.getAll("campaignId");
+    const result = await runSync(ids.length ? ids : undefined, dateRange);
+    return new Response(JSON.stringify(result), { status: 200, headers: { "Content-Type": "application/json" } });
+  } catch (err: any) {
+    return new Response(JSON.stringify({ error: "sync_error", message: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 }
