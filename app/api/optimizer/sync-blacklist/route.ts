@@ -3,11 +3,35 @@ import { kv } from "@vercel/kv";
 
 const LIST_KEY = "blacklist:zones";
 
+function buildProviderUrl(campaignId: string) {
+  const baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com";
+  // Allow configurable path with {campaignId} placeholder
+  const pathTmpl = process.env.PROPELLER_GET_BLACKLIST_PATH || "/v5/adv/campaigns/{campaignId}/zones/blacklist";
+  const path = pathTmpl.replace("{campaignId}", encodeURIComponent(campaignId));
+  return `${baseUrl}${path}`;
+}
+
+function extractZonesFromJson(json: any): string[] {
+  // Support configurable JSON path to array
+  const jsonPath = process.env.PROPELLER_GET_BLACKLIST_JSON_PATH; // e.g., "data.zone_ids"
+  let node: any = json;
+  if (jsonPath) {
+    try {
+      for (const key of jsonPath.split(".")) {
+        if (!key) continue;
+        node = node?.[key];
+      }
+    } catch {}
+  }
+  const candidates: any[] = [node, json?.zone_ids, json?.zones, json?.data, json?.items].filter(Boolean);
+  const arr = Array.isArray(candidates[0]) ? candidates[0] : [];
+  return (arr || []).map((z: any) => String(typeof z === "object" && z?.zoneId ? z.zoneId : z));
+}
+
 async function fetchBlacklistedFromPropeller(campaignId: string): Promise<{ zones: string[] | null; status: number | null; error?: string }> {
   const token = process.env.PROPELLER_API_TOKEN;
   if (!token) return { zones: null, status: null, error: "missing_token" };
-  const baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com/v5";
-  const url = `${baseUrl}/adv/campaigns/${encodeURIComponent(campaignId)}/zones/blacklist`;
+  const url = buildProviderUrl(campaignId);
   try {
     const res = await fetch(url, {
       method: "GET",
@@ -23,8 +47,7 @@ async function fetchBlacklistedFromPropeller(campaignId: string): Promise<{ zone
       console.warn("[SyncBlacklist] Provider JSON parse failed", campaignId, txt?.slice(0, 200));
       return { zones: null, status: res.status, error: "invalid_json" };
     }
-    const arr: any[] = (json?.zone_ids || json?.zones || json?.data || []) as any[];
-    const zones = (arr || []).map((z) => String(z));
+    const zones = extractZonesFromJson(json);
     return { zones, status: res.status };
   } catch (e: any) {
     console.error("[SyncBlacklist] Provider fetch error", campaignId, e?.message || String(e));
