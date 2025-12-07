@@ -28,10 +28,10 @@ export default function NavBar() {
 
   const selectTab = (key: typeof activeTab) => {
     try {
-      const nextHash = `#${key}`;
-      if (window.location.hash !== nextHash) {
-        window.history.replaceState(null, "", nextHash);
-      }
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", key);
+      url.hash = `#${key}`;
+      window.history.replaceState(null, "", url.toString());
     } catch {}
     window.dispatchEvent(new CustomEvent("tab:select", { detail: key }));
   };
@@ -52,10 +52,11 @@ export default function NavBar() {
   useEffect(() => {
     // initialize from hash for highlighting
     try {
-      const h = (window.location.hash || "").replace(/^#/, "");
-      if (h === "dashboard" || h === "optimizer" || h === "creatives" || h === "builder") {
-        setActiveTab(h as any);
-      }
+      const url = new URL(window.location.href);
+      const p = url.searchParams.get("tab");
+      const h = (url.hash || "").replace(/^#/, "");
+      const v = (p || h) as string;
+      if (v === "dashboard" || v === "optimizer" || v === "creatives" || v === "builder") setActiveTab(v as any);
     } catch {}
   }, []);
 

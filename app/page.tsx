@@ -321,6 +321,26 @@ export default function DashboardPage() {
     return null;
   };
 
+  const fromSearch = (s: string): TabKey | null => {
+    try {
+      const usp = new URLSearchParams(s.startsWith("?") ? s : `?${s}`);
+      const t = usp.get("tab");
+      if (t === "dashboard" || t === "optimizer" || t === "creatives" || t === "builder") return t as TabKey;
+      return null;
+    } catch {
+      return null;
+    }
+  };
+
+  const updateUrlTab = (t: TabKey) => {
+    try {
+      const url = new URL(window.location.href);
+      url.searchParams.set("tab", t);
+      url.hash = toHash(t);
+      window.history.replaceState(null, "", url.toString());
+    } catch {}
+  };
+
   // Sync tab selection with sticky navbar
   useEffect(() => {
     const handler = (e: Event) => {
@@ -335,9 +355,11 @@ export default function DashboardPage() {
       } catch {}
     };
     window.addEventListener("tab:select" as any, handler as any);
-    // Initialize from URL hash
+    // Initialize from URL param/hash
     try {
-      const initial = fromHash(window.location.hash);
+      const initialParam = fromSearch(window.location.search);
+      const initialHash = fromHash(window.location.hash);
+      const initial = initialParam || initialHash;
       if (initial && (
         initial === "dashboard" ||
         (initial === "optimizer" && can("optimizer")) ||
@@ -359,20 +381,31 @@ export default function DashboardPage() {
         setActiveTab(next);
       }
     };
+    const onPopState = () => {
+      const next = fromSearch(window.location.search) || fromHash(window.location.hash);
+      if (!next) return;
+      if (
+        next === "dashboard" ||
+        (next === "optimizer" && can("optimizer")) ||
+        (next === "creatives" && can("creatives")) ||
+        (next === "builder" && can("builder"))
+      ) {
+        setActiveTab(next);
+      }
+    };
     window.addEventListener("hashchange", onHashChange);
+    window.addEventListener("popstate", onPopState);
     return () => {
       window.removeEventListener("tab:select" as any, handler as any);
       window.removeEventListener("hashchange", onHashChange);
+      window.removeEventListener("popstate", onPopState);
     };
   }, [currentUser]);
 
   useEffect(() => {
     try {
       window.dispatchEvent(new CustomEvent("tab:current", { detail: activeTab }));
-      const hash = toHash(activeTab);
-      if (window.location.hash !== hash) {
-        window.history.replaceState(null, "", hash);
-      }
+      updateUrlTab(activeTab);
     } catch {}
   }, [activeTab]);
 

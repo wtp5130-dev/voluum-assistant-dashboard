@@ -432,6 +432,30 @@ export default function OptimizerPage() {
     return () => obs.disconnect();
   }, [previewResult]);
 
+  // Update hash to preserve sub-section: #optimizer:preview|apply|history
+  useEffect(() => {
+    try {
+      const url = new URL(window.location.href);
+      if (url.hash.startsWith("#optimizer")) {
+        url.hash = `#optimizer:${activeSub}`;
+        window.history.replaceState(null, "", url.toString());
+      }
+    } catch {}
+  }, [activeSub]);
+
+  // Initialize sub-section from hash and enable smooth scroll
+  useEffect(() => {
+    try {
+      const h = (window.location.hash || "").replace(/^#/, "");
+      const [, sub] = h.split(":");
+      const key = (sub as any) as "preview" | "apply" | "history";
+      if (key === "preview" || key === "apply" || key === "history") {
+        const el = document.getElementById(key);
+        if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+    } catch {}
+  }, []);
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -528,9 +552,36 @@ export default function OptimizerPage() {
       <div className="sticky top-14 z-40 backdrop-blur supports-[backdrop-filter]:bg-slate-950/70 bg-slate-950/90 border-b border-slate-800">
         <div className="max-w-7xl mx-auto px-2 py-2">
           <div className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 p-1 shadow-sm text-[12px]">
-            <a href="#preview" className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "preview" ? "bg-emerald-500 text-slate-900" : ""}`}>Preview</a>
-            <a href="#apply" className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "apply" ? "bg-emerald-500 text-slate-900" : ""}`}>Apply</a>
-            <a href="#history" className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "history" ? "bg-emerald-500 text-slate-900" : ""}`}>History</a>
+            <button
+              onClick={() => {
+                const el = document.getElementById("preview");
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                setActiveSub("preview");
+              }}
+              className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "preview" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}
+            >
+              Preview
+            </button>
+            <button
+              onClick={() => {
+                const el = document.getElementById("apply");
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                setActiveSub("apply");
+              }}
+              className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "apply" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}
+            >
+              Apply
+            </button>
+            <button
+              onClick={() => {
+                const el = document.getElementById("history");
+                if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+                setActiveSub("history");
+              }}
+              className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "history" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}
+            >
+              History
+            </button>
           </div>
         </div>
       </div>
