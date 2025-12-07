@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { usePathname } from "next/navigation";
 
 type Me = { username: string; role: "admin" | "user"; perms: Record<string, boolean> } | null;
 
@@ -10,6 +11,24 @@ export default function NavBar() {
   const [status, setStatus] = useState<"live" | "degraded" | "down">("live");
   const [detail, setDetail] = useState<string>("");
   const [checking, setChecking] = useState(false);
+  const pathname = usePathname();
+  const [activeTab, setActiveTab] = useState<"dashboard" | "optimizer" | "creatives" | "builder">("dashboard");
+
+  // Sync active tab from page
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        const key = (e as CustomEvent).detail as typeof activeTab;
+        setActiveTab(key);
+      } catch {}
+    };
+    window.addEventListener("tab:current" as any, handler as any);
+    return () => window.removeEventListener("tab:current" as any, handler as any);
+  }, []);
+
+  const selectTab = (key: typeof activeTab) => {
+    window.dispatchEvent(new CustomEvent("tab:select", { detail: key }));
+  };
 
   useEffect(() => {
     (async () => {
@@ -82,8 +101,8 @@ export default function NavBar() {
 
   return (
     <div className="sticky top-0 z-50 backdrop-blur supports-[backdrop-filter]:bg-slate-950/70 bg-slate-950/90 border-b border-slate-800">
-      <div className="max-w-7xl mx-auto px-4 md:px-6 h-14 flex items-center justify-between">
-        <a href="/" className="flex items-center gap-2 text-slate-100">
+      <div className="max-w-7xl mx-auto px-4 md:px-6 h-14 flex items-center justify-between gap-4">
+        <a href="/" className="flex items-center gap-2 text-slate-100 whitespace-nowrap">
           <span
             className={`inline-block w-2.5 h-2.5 rounded-full ${
               status === "live" ? "bg-emerald-500" : status === "degraded" ? "bg-amber-400" : "bg-rose-500"
@@ -95,7 +114,23 @@ export default function NavBar() {
             {status === "live" ? "Live" : status === "degraded" ? "Degraded" : "Down"}
           </span>
         </a>
-        <div className="flex items-center gap-2">
+        {/* Main tabs on home page */}
+        {pathname === "/" && (
+          <div className="hidden md:flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 p-1 shadow-sm text-[12px]">
+            <button onClick={() => selectTab("dashboard")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "dashboard" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Dashboard</button>
+            {(me?.role === "admin" || me?.perms?.optimizer || !me) && (
+              <button onClick={() => selectTab("optimizer")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "optimizer" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Optimizer</button>
+            )}
+            {(me?.role === "admin" || me?.perms?.creatives || !me) && (
+              <button onClick={() => selectTab("creatives")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "creatives" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Creatives</button>
+            )}
+            {(me?.role === "admin" || me?.perms?.builder || !me) && (
+              <button onClick={() => selectTab("builder")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "builder" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Campaign Builder</button>
+            )}
+          </div>
+        )}
+
+        <div className="flex items-center gap-2 ml-auto">
           <button
             onClick={runHealth}
             disabled={checking}

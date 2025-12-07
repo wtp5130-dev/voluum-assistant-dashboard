@@ -314,6 +314,29 @@ export default function DashboardPage() {
     return !!currentUser.perms?.[key];
   };
 
+  // Sync tab selection with sticky navbar
+  useEffect(() => {
+    const handler = (e: Event) => {
+      try {
+        const key = (e as CustomEvent).detail as TabKey;
+        if (key === "dashboard" ||
+            (key === "optimizer" && can("optimizer")) ||
+            (key === "creatives" && can("creatives")) ||
+            (key === "builder" && can("builder"))) {
+          setActiveTab(key);
+        }
+      } catch {}
+    };
+    window.addEventListener("tab:select" as any, handler as any);
+    return () => window.removeEventListener("tab:select" as any, handler as any);
+  }, [currentUser]);
+
+  useEffect(() => {
+    try {
+      window.dispatchEvent(new CustomEvent("tab:current", { detail: activeTab }));
+    } catch {}
+  }, [activeTab]);
+
 // Creative image generator
 const [imagePrompt, setImagePrompt] = useState(
   "High-converting casino push banner, bold CTA, mobile-first, 1:1 format."
@@ -923,59 +946,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         </div>
       </header>
 
-      {/* Big tab buttons */}
-      <div className="sticky top-14 z-40 backdrop-blur supports-[backdrop-filter]:bg-slate-950/70 bg-slate-950/90 border-b border-slate-800">
-        <div className="max-w-7xl mx-auto px-2 py-2 flex justify-center">
-        <div className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 p-1 shadow-sm">
-          <button
-          onClick={() => setActiveTab("dashboard")}
-          className={`px-6 py-2 rounded-full text-sm font-semibold border ${
-            activeTab === "dashboard"
-              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow"
-              : "bg-transparent text-slate-200 border-transparent hover:bg-slate-800"
-          }`}
-        >
-          Dashboard
-          </button>
-        {can("optimizer") && (
-          <button
-          onClick={() => setActiveTab("optimizer")}
-          className={`px-6 py-2 rounded-full text-sm font-semibold border ${
-            activeTab === "optimizer"
-              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow"
-              : "bg-transparent text-slate-200 border-transparent hover:bg-slate-800"
-          }`}
-        >
-          Optimizer
-          </button>
-        )}
-        {can("creatives") && (
-        <button
-          onClick={() => setActiveTab("creatives")}
-          className={`px-6 py-2 rounded-full text-sm font-semibold border ${
-            activeTab === "creatives"
-              ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow"
-              : "bg-transparent text-slate-200 border-transparent hover:bg-slate-800"
-          }`}
-        >
-          Creatives Doctor
-        </button>
-        )}
-        {can("builder") && (
-          <button
-            onClick={() => setActiveTab("builder")}
-            className={`px-6 py-2 rounded-full text-sm font-semibold border ${
-              activeTab === "builder"
-                ? "bg-emerald-500 text-slate-900 border-emerald-400 shadow"
-                : "bg-transparent text-slate-200 border-transparent hover:bg-slate-800"
-            }`}
-          >
-            Campaign Builder
-          </button>
-        )}
-        </div>
-        </div>
-      </div>
+      {/* Main tabs now live in sticky navbar */}
 
       {/* KPI cards (always visible) */}
       <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
