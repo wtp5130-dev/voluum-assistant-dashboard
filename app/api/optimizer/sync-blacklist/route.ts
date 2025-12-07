@@ -66,6 +66,22 @@ async function fetchBlacklistedFromPropeller(campaignId: string): Promise<{ zone
   }
 }
 
+async function fetchPropellerCampaigns(): Promise<Array<{ id: number | string; name?: string }>> {
+  const token = process.env.PROPELLER_API_TOKEN;
+  if (!token) return [];
+  const baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com";
+  const url = `${baseUrl.replace(/\/$/, "")}/v5/adv/campaigns?page_size=1000`;
+  try {
+    const res = await fetch(url, { method: "GET", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+    if (!res.ok) return [];
+    const json = await res.json().catch(() => null);
+    const list = json?.result || json?.campaigns || [];
+    return Array.isArray(list) ? list.map((c: any) => ({ id: c.id, name: c.name })) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
 function getBaseUrl(req: NextRequest): string {
   try {
     const proto = req.headers.get("x-forwarded-proto") || "https";
@@ -82,8 +98,9 @@ async function getCampaignIdsFromDashboard(req: NextRequest, dateRange: string):
     const res = await fetch(`${base}/api/voluum-dashboard?dateRange=${encodeURIComponent(dateRange)}`);
     if (!res.ok) return [];
     const json = await res.json();
-    const ids: string[] = (json?.campaigns || []).map((c: any) => String(c.id)).filter(Boolean);
-    return Array.from(new Set(ids));
+    // return list of { id, name } strings as 'id::name' to preserve both
+    const items: { id: string; name?: string }[] = (json?.campaigns || []).map((c: any) => ({ id: String(c.id), name: c?.name ? String(c.name) : undefined }));
+    return Array.from(new Set(items.map((it) => `${it.id}::${it.name || ""}`))).map((s) => s);
   } catch {
     return [];
   }
@@ -96,12 +113,41 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
       seenList.map((e: any) => `${String(e.campaignId)}:${String(e.zoneId)}`)
     );
 
-    let ids = campaignIds && campaignIds.length > 0 ? campaignIds : await getCampaignIdsFromDashboard(req, dateRange);
-    ids = Array.from(new Set(ids));
+    // dashboardIds are strings; they may be numeric propeller IDs or dashboard UUIDs.
+    const rawIds = campaignIds && campaignIds.length > 0 ? campaignIds : await getCampaignIdsFromDashboard(req, dateRange);
+    // rawIds may be in form 'id::name' when coming from dashboard; parse to objects
+    const dashboardList: { id: string; name?: string }[] = rawIds.map((r) => {
+      const parts = String(r).split("::");
+      return { id: parts[0], name: parts[1] || undefined };
+    });
+
+    // Fetch propeller campaigns to map names -> numeric ids
+    const propellerCampaigns = await fetchPropellerCampaigns();
+    const nameToId = new Map<string, string>();
+    for (const pc of propellerCampaigns) {
+      if (pc.name) nameToId.set(pc.name, String(pc.id));
+    }
+
+    const ids: string[] = [];
+    const unresolved: string[] = [];
+    for (const d of dashboardList) {
+      if (/^\d+$/.test(d.id)) {
+        ids.push(d.id);
+      } else if (d.name && nameToId.has(d.name)) {
+        ids.push(nameToId.get(d.name)!);
+      } else {
+        unresolved.push(d.id + (d.name ? ` (${d.name})` : ""));
+      }
+    }
+    // dedupe
+    const uniqueIds = Array.from(new Set(ids));
 
     const newEntries: any[] = [];
     const diagnostics: Array<{ campaignId: string; fetched: number | null; status: number | null; error?: string }> = [];
-    for (const cid of ids) {
+    if (unresolved.length > 0) {
+      diagnostics.push({ campaignId: "_unresolved", fetched: null, status: null, error: `unresolved_dashboard_campaigns:${unresolved.join(",")}` });
+    }
+    for (const cid of uniqueIds) {
       const resp = await fetchBlacklistedFromPropeller(String(cid));
       diagnostics.push({ campaignId: String(cid), fetched: resp.zones ? resp.zones.length : null, status: resp.status, error: resp.error });
       if (!resp.zones) continue;
