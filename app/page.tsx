@@ -1454,16 +1454,18 @@ function CampaignBuilderTab(props: {
         {(errorMsg || result) && (
           <div className="mt-3">
             {errorMsg && (
-              <p className="text-[11px] text-rose-400 whitespace-pre-wrap">{errorMsg}</p>
-            {lastSyncResult && (
-              <div className="ml-3 text-xs text-slate-400">
-                {lastSyncResult.ok ? (
-                  <span>{String(lastSyncResult.campaigns ?? '')} campaigns, {String(lastSyncResult.added ?? 0)} added</span>
-                ) : (
-                  <span>Sync error: {String(lastSyncResult.error || lastSyncResult.message || 'unknown')}</span>
+              <>
+                <p className="text-[11px] text-rose-400 whitespace-pre-wrap">{errorMsg}</p>
+                {lastSyncResult && (
+                  <div className="ml-3 text-xs text-slate-400">
+                    {lastSyncResult.ok ? (
+                      <span>{String(lastSyncResult.campaigns ?? '')} campaigns, {String(lastSyncResult.added ?? 0)} added</span>
+                    ) : (
+                      <span>Sync error: {String(lastSyncResult.error || lastSyncResult.message || 'unknown')}</span>
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
+              </>
             )}
             {result && (
               <pre className="text-[10px] bg-slate-950 border border-slate-800 rounded-md p-2 overflow-auto max-h-60">{result}</pre>
