@@ -106,7 +106,7 @@ async function getCampaignIdsFromDashboard(req: NextRequest, dateRange: string):
   }
 }
 
-async function runSync(req: NextRequest, campaignIds: string[] | undefined, dateRange: string) {
+async function runSync(req: NextRequest, campaignIds: string[] | undefined, dateRange: string, dryRun = false) {
 
     const seenList = ((await kv.lrange(LIST_KEY, 0, -1)) as any[]) || [];
     const seenSet = new Set<string>(
@@ -130,6 +130,12 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
 
     const ids: string[] = [];
     const unresolved: string[] = [];
+
+    // Load manual mappings from KV. Structure: { [dashboardIdOrName]: providerId }
+    const mappingKey = "mapping:dashboardToProvider";
+    const rawMapping = (await kv.get(mappingKey)) as Record<string, string> | null;
+    const manualMap = rawMapping || {};
+
     function extractNumericFromName(n?: string) {
       if (!n) return null;
       // Match a run of 6+ digits even if adjacent to underscores or non-word chars
@@ -141,6 +147,16 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
       // If the dashboard id is already numeric, use it
       if (/^\d+$/.test(d.id)) {
         ids.push(d.id);
+        continue;
+      }
+
+      // 0) Manual mapping: check by dashboard id first, then by dashboard name
+      if (manualMap[d.id]) {
+        ids.push(String(manualMap[d.id]));
+        continue;
+      }
+      if (d.name && manualMap[d.name]) {
+        ids.push(String(manualMap[d.name]));
         continue;
       }
 
@@ -175,6 +191,7 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
 
       unresolved.push(d.id + (d.name ? ` (${d.name})` : ""));
     }
+
     // dedupe
     const uniqueIds = Array.from(new Set(ids));
 
@@ -204,7 +221,7 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
       }
     }
 
-    if (newEntries.length > 0) {
+    if (!dryRun && newEntries.length > 0) {
       const updated = [...seenList, ...newEntries];
       // rewrite list preserving order
       await kv.del(LIST_KEY);
@@ -223,7 +240,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       ? (body.campaignIds as string[])
       : undefined;
     const dateRange: string = (body?.dateRange as string) || "last7days";
-    const result = await runSync(req, campaignIds, dateRange);
+    const dryRun = Boolean(body?.dryRun);
+    const result = await runSync(req, campaignIds, dateRange, dryRun);
     return new Response(JSON.stringify(result), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: "sync_error", message: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
@@ -235,7 +253,8 @@ export async function GET(req: NextRequest): Promise<Response> {
     const { searchParams } = new URL(req.url);
     const dateRange = searchParams.get("dateRange") || "last7days";
     const ids = searchParams.getAll("campaignId");
-    const result = await runSync(req, ids.length ? ids : undefined, dateRange);
+    const dryRun = Boolean(searchParams.get("dryRun"));
+    const result = await runSync(req, ids.length ? ids : undefined, dateRange, dryRun);
     return new Response(JSON.stringify(result), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: "sync_error", message: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
