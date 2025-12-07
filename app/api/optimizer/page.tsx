@@ -201,6 +201,8 @@ export default function OptimizerPage() {
   // Two-step confirm for live apply
   const [liveConfirmStep, setLiveConfirmStep] = useState<0 | 1>(0);
   const [liveConfirmTimer, setLiveConfirmTimer] = useState<any>(null);
+  const [showLiveModal, setShowLiveModal] = useState(false);
+  const [ackLive, setAckLive] = useState(false);
 
   const handleLiveClick = () => {
     if (
@@ -211,13 +213,15 @@ export default function OptimizerPage() {
     )
       return;
     if (liveConfirmStep === 0) {
+      setAckLive(false);
+      setShowLiveModal(true);
       setLiveConfirmStep(1);
       if (liveConfirmTimer) clearTimeout(liveConfirmTimer);
-      const t = setTimeout(() => setLiveConfirmStep(0), 8000);
+      const t = setTimeout(() => { setLiveConfirmStep(0); setShowLiveModal(false); }, 15000);
       setLiveConfirmTimer(t);
       return;
     }
-    handleApply(false);
+    setShowLiveModal(true);
   };
 
   /**
@@ -822,6 +826,23 @@ export default function OptimizerPage() {
           </div>
         )}
       </section>
+      {showLiveModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={() => { setShowLiveModal(false); setLiveConfirmStep(0); }} />
+          <div className="relative bg-slate-900 border border-slate-800 rounded-xl p-4 w-[420px] shadow-xl">
+            <h4 className="text-sm font-semibold text-slate-200">Confirm live apply</h4>
+            <p className="text-[12px] text-slate-400 mt-1">This will attempt to pause <span className="text-emerald-400 font-medium">{totalZonesSuggested}</span> zone{totalZonesSuggested===1?"":"s"} via PropellerAds. This action may impact traffic immediately.</p>
+            <label className="flex items-center gap-2 text-[12px] text-slate-300 mt-3">
+              <input type="checkbox" className="accent-emerald-500" checked={ackLive} onChange={(e)=>setAckLive(e.target.checked)} />
+              I understand and want to proceed
+            </label>
+            <div className="mt-3 flex justify-end gap-2">
+              <button onClick={()=>{ setShowLiveModal(false); setLiveConfirmStep(0); }} className="text-[12px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Cancel</button>
+              <button onClick={()=>{ if(!ackLive) return; setShowLiveModal(false); handleApply(false); }} disabled={!ackLive || applyLoading} className="text-[12px] px-3 py-1 rounded-md bg-rose-600 hover:bg-rose-500 disabled:opacity-50">{applyLoading?"Running…":"Confirm apply now"}</button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </main>
   );

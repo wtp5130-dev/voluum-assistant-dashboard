@@ -258,7 +258,7 @@ export default function DashboardPage() {
   );
 
   // Optimizer blacklist history (server via KV, with graceful fallback)
-  type BlacklistedZone = { zoneId: string; campaignId: string; timestamp: string };
+  type BlacklistedZone = { id?: string; zoneId: string; campaignId: string; timestamp: string };
   const [blacklistedZones, setBlacklistedZones] = useState<BlacklistedZone[]>([]);
   const refreshBlacklist = useCallback(async () => {
     try {
@@ -267,6 +267,7 @@ export default function DashboardPage() {
       const json = await res.json();
       const items = Array.isArray(json?.items) ? json.items : [];
       setBlacklistedZones(items.map((i: any) => ({
+        id: i.id ? String(i.id) : undefined,
         zoneId: String(i.zoneId),
         campaignId: String(i.campaignId),
         timestamp: String(i.timestamp),
@@ -2060,6 +2061,17 @@ function OptimizerTab(props: {
             <span>{formatInteger(blacklistedZones.length)} entries</span>
             <button
               onClick={async () => {
+                const items = blacklistedZones.filter((b)=>b.id).slice(0,1).map((b)=>({ id: b.id, zoneId: b.zoneId, campaignId: b.campaignId }));
+                if(items.length===0) return;
+                try { await fetch("/api/optimizer/unblacklist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items })}); refreshBlacklist(); } catch {}
+              }}
+              className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              title="Revert first item (quick)"
+            >
+              Revert first
+            </button>
+            <button
+              onClick={async () => {
                 try {
                   await fetch("/api/optimizer/blacklist-log", {
                     method: "POST",
@@ -2089,6 +2101,7 @@ function OptimizerTab(props: {
             <table className="w-full border-collapse">
               <thead className="bg-slate-900/80 sticky top-0 z-10">
                 <tr className="text-slate-400">
+                  <th className="p-2 w-8"></th>
                   <th className="text-left p-2">Zone</th>
                   <th className="text-left p-2">Campaign</th>
                   <th className="text-left p-2">Blacklisted at</th>
@@ -2097,6 +2110,7 @@ function OptimizerTab(props: {
               <tbody>
                 {blacklistedZones.map((b, i) => (
                   <tr key={`${b.zoneId}-${b.timestamp}-${i}`}>
+                    <td className="p-2 w-8"><input type="checkbox" className="accent-emerald-500" disabled={!b.id} /></td>
                     <td className="p-2">{b.zoneId}</td>
                     <td className="p-2">{b.campaignId}</td>
                     <td className="p-2">{formatDateTimeGMT8(b.timestamp)}</td>
