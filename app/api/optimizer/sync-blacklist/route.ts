@@ -39,7 +39,7 @@ function extractZonesFromJson(json: any): string[] {
   return (arr || []).map((z: any) => String(typeof z === "object" && z?.zoneId ? z.zoneId : z));
 }
 
-async function fetchBlacklistedFromPropeller(campaignId: string): Promise<{ zones: string[] | null; status: number | null; error?: string }> {
+async function fetchBlacklistedFromPropeller(campaignId: string): Promise<{ zones: string[] | null; status: number | null; error?: string; raw?: string | null }> {
   const token = process.env.PROPELLER_API_TOKEN;
   if (!token) return { zones: null, status: null, error: "missing_token" };
   const url = buildProviderUrl(campaignId);
@@ -59,10 +59,10 @@ async function fetchBlacklistedFromPropeller(campaignId: string): Promise<{ zone
       return { zones: null, status: res.status, error: "invalid_json" };
     }
     const zones = extractZonesFromJson(json);
-    return { zones, status: res.status };
+    return { zones, status: res.status, raw: txt };
   } catch (e: any) {
     console.error("[SyncBlacklist] Provider fetch error", campaignId, e?.message || String(e));
-    return { zones: null, status: null, error: e?.message || String(e) };
+    return { zones: null, status: null, error: e?.message || String(e), raw: null };
   }
 }
 
@@ -209,7 +209,7 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
     }
     for (const cid of fetchIds) {
       const resp = await fetchBlacklistedFromPropeller(String(cid));
-      diagnostics.push({ campaignId: String(cid), fetched: resp.zones ? resp.zones.length : null, status: resp.status, error: resp.error });
+      diagnostics.push({ campaignId: String(cid), fetched: resp.zones ? resp.zones.length : null, status: resp.status, error: resp.error, snippet: resp.raw ? String(resp.raw).slice(0, 1024) : null });
       if (!resp.zones) continue;
       for (const zid of resp.zones) {
         const key = `${cid}:${zid}`;
