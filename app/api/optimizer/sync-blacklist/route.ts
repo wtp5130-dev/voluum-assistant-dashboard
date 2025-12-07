@@ -34,8 +34,8 @@ function extractZonesFromJson(json: any): string[] {
     } catch {}
   }
   // include common names: zone, zone_ids, zones, data, items
+  // Find the first candidate that is actually an array
   const candidates: any[] = [node, json?.zone, json?.zone_ids, json?.zones, json?.data, json?.items].filter((c) => c !== null && c !== undefined);
-  // find the first candidate that is an array
   for (const candidate of candidates) {
     if (Array.isArray(candidate)) {
       return candidate.map((z: any) => String(typeof z === "object" && z?.zoneId ? z.zoneId : z));
