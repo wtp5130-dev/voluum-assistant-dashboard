@@ -130,14 +130,49 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
 
     const ids: string[] = [];
     const unresolved: string[] = [];
+    function extractNumericFromName(n?: string) {
+      if (!n) return null;
+      const m = n.match(/\b(\d{6,})\b/);
+      return m ? m[1] : null;
+    }
+
     for (const d of dashboardList) {
+      // If the dashboard id is already numeric, use it
       if (/^\d+$/.test(d.id)) {
         ids.push(d.id);
-      } else if (d.name && nameToId.has(d.name)) {
-        ids.push(nameToId.get(d.name)!);
-      } else {
-        unresolved.push(d.id + (d.name ? ` (${d.name})` : ""));
+        continue;
       }
+
+      // 1) If dashboard name contains a large numeric token, use that as Propeller ID
+      const numericFromName = extractNumericFromName(d.name);
+      if (numericFromName) {
+        ids.push(numericFromName);
+        continue;
+      }
+
+      // 2) Exact name match
+      if (d.name && nameToId.has(d.name)) {
+        ids.push(nameToId.get(d.name)!);
+        continue;
+      }
+
+      // 3) Substring matches: propellerName includes dashboard name or vice versa
+      let matched = false;
+      if (d.name) {
+        const dn = d.name.toLowerCase();
+        for (const [pname, pid] of nameToId.entries()) {
+          if (!pname) continue;
+          const pn = pname.toLowerCase();
+          if (pn.includes(dn) || dn.includes(pn)) {
+            ids.push(pid);
+            matched = true;
+            break;
+          }
+        }
+      }
+      if (matched) continue;
+
+      unresolved.push(d.id + (d.name ? ` (${d.name})` : ""));
     }
     // dedupe
     const uniqueIds = Array.from(new Set(ids));
