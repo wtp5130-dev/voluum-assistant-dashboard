@@ -407,9 +407,20 @@ export default function OptimizerPage() {
       <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold">
-            Optimizer – Zone Auto-Pause
-          </h1>
-          <p className="text-xs md:text-sm text-slate-400 mt-1">
+        {/* Sticky sub-tabs under navbar */}
+        <div className="sticky top-14 z-40 backdrop-blur supports-[backdrop-filter]:bg-slate-950/70 bg-slate-950/90 border-b border-slate-800">
+          <div className="max-w-7xl mx-auto px-2 py-2">
+            <div className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 p-1 shadow-sm text-[12px]">
+              <a href="#preview" className="px-4 py-1.5 rounded-full hover:bg-slate-800">Preview</a>
+              <a href="#apply" className="px-4 py-1.5 rounded-full hover:bg-slate-800">Apply</a>
+              <a href="#history" className="px-4 py-1.5 rounded-full hover:bg-slate-800">History</a>
+            </div>
+          </div>
+        </div>
+
+        {/* Optimizer controls + status */}
+        <section className="space-y-4">
+          <div id="preview" className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 flex flex-col gap-3">
             {data.dateRange} • {formatDateTimeGMT8(data.from)} – {formatDateTimeGMT8(data.to)}
           </p>
           <p className="text-[11px] text-slate-500 mt-1">
@@ -507,7 +518,7 @@ export default function OptimizerPage() {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2">
+            <div id="apply" className="flex flex-wrap gap-2">
               <button
                 onClick={handlePreview}
                 disabled={previewLoading || loading}
@@ -584,7 +595,7 @@ export default function OptimizerPage() {
         </div>
 
         {/* Zones to pause now */}
-        <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+        <div id="history" className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
               Zones to pause now (preview)
