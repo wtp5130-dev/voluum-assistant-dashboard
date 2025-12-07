@@ -1878,7 +1878,7 @@ function OptimizerTab(props: {
   setDryRun: (b: boolean) => void;
   runPreview: () => void;
   runApply: () => void;
-  blacklistedZones: { id?: string; zoneId: string; campaignId: string; timestamp: string; reverted?: boolean; revertedAt?: string | null }[];
+  blacklistedZones: { id?: string; zoneId: string; campaignId: string; timestamp: string; reverted?: boolean; revertedAt?: string | null; verified?: boolean; verifiedAt?: string | null }[];
   clearBlacklist: () => void;
   refreshBlacklist: () => void;
 }) {
