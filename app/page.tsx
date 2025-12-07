@@ -2082,23 +2082,15 @@ function OptimizerTab(props: {
             <span>{formatInteger(blacklistedZones.length)} entries</span>
             <button
               onClick={async ()=>{ 
-                setSyncLoading(true);
-                setLastSyncResult(null);
                 try{
-                  const res = await fetch("/api/optimizer/sync-blacklist", { method: "POST" });
-                  const json = await res.json().catch(()=>null);
-                  setLastSyncResult(json);
+                  await fetch("/api/optimizer/sync-blacklist", { method: "POST" });
                   await refreshBlacklist();
-                }catch(e){
-                  setLastSyncResult({ ok: false, error: String(e) });
-                } finally {
-                  setSyncLoading(false);
-                }
+                }catch(e){}
               }}
               className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
               title="Pull zones from provider and store in history"
             >
-              {syncLoading ? 'Syncing...' : 'Sync from provider'}
+              Sync from provider
             </button>
             <button
               onClick={async ()=>{ try{ await fetch("/api/optimizer/verify", { method: "POST" }); refreshBlacklist(); }catch{} }}
