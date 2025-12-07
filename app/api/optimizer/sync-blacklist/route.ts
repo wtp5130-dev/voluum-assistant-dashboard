@@ -22,9 +22,20 @@ async function fetchBlacklistedFromPropeller(campaignId: string): Promise<string
   }
 }
 
-async function getCampaignIdsFromDashboard(dateRange: string): Promise<string[]> {
+function getBaseUrl(req: NextRequest): string {
   try {
-    const res = await fetch(`/api/voluum-dashboard?dateRange=${encodeURIComponent(dateRange)}`);
+    const proto = req.headers.get("x-forwarded-proto") || "https";
+    const host = req.headers.get("host") || process.env.VERCEL_URL || "localhost:3000";
+    return `${proto}://${host}`;
+  } catch {
+    return process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:3000";
+  }
+}
+
+async function getCampaignIdsFromDashboard(req: NextRequest, dateRange: string): Promise<string[]> {
+  try {
+    const base = getBaseUrl(req);
+    const res = await fetch(`${base}/api/voluum-dashboard?dateRange=${encodeURIComponent(dateRange)}`);
     if (!res.ok) return [];
     const json = await res.json();
     const ids: string[] = (json?.campaigns || []).map((c: any) => String(c.id)).filter(Boolean);
@@ -34,19 +45,21 @@ async function getCampaignIdsFromDashboard(dateRange: string): Promise<string[]>
   }
 }
 
-async function runSync(campaignIds: string[] | undefined, dateRange: string) {
+async function runSync(req: NextRequest, campaignIds: string[] | undefined, dateRange: string) {
 
     const seenList = ((await kv.lrange(LIST_KEY, 0, -1)) as any[]) || [];
     const seenSet = new Set<string>(
       seenList.map((e: any) => `${String(e.campaignId)}:${String(e.zoneId)}`)
     );
 
-    let ids = campaignIds && campaignIds.length > 0 ? campaignIds : await getCampaignIdsFromDashboard(dateRange);
+    let ids = campaignIds && campaignIds.length > 0 ? campaignIds : await getCampaignIdsFromDashboard(req, dateRange);
     ids = Array.from(new Set(ids));
 
     const newEntries: any[] = [];
+    const diagnostics: Array<{ campaignId: string; fetched: number | null }> = [];
     for (const cid of ids) {
       const zones = await fetchBlacklistedFromPropeller(String(cid));
+      diagnostics.push({ campaignId: String(cid), fetched: zones ? zones.length : null });
       if (!zones) continue;
       for (const zid of zones) {
         const key = `${cid}:${zid}`;
@@ -74,7 +87,7 @@ async function runSync(campaignIds: string[] | undefined, dateRange: string) {
       }
     }
 
-    return { ok: true, campaigns: ids.length, added: newEntries.length };
+    return { ok: true, campaigns: ids.length, added: newEntries.length, diagnostics };
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -84,7 +97,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       ? (body.campaignIds as string[])
       : undefined;
     const dateRange: string = (body?.dateRange as string) || "last7days";
-    const result = await runSync(campaignIds, dateRange);
+    const result = await runSync(req, campaignIds, dateRange);
     return new Response(JSON.stringify(result), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: "sync_error", message: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
@@ -96,7 +109,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     const { searchParams } = new URL(req.url);
     const dateRange = searchParams.get("dateRange") || "last7days";
     const ids = searchParams.getAll("campaignId");
-    const result = await runSync(ids.length ? ids : undefined, dateRange);
+    const result = await runSync(req, ids.length ? ids : undefined, dateRange);
     return new Response(JSON.stringify(result), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: "sync_error", message: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
