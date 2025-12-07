@@ -2,7 +2,7 @@
   "crons": [
     {
       "path": "/api/optimizer/sync-blacklist",
-      "schedule": "0 * * * *"
+      "schedule": "0 18 * * *"
     }
   ]
 }
