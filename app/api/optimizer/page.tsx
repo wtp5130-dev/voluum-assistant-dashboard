@@ -438,21 +438,8 @@ export default function OptimizerPage() {
       {/* Header + Controls */}
       <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
-          <h1 className="text-2xl md:text-3xl font-semibold">
-        {/* Sticky sub-tabs under navbar */}
-        <div className="sticky top-14 z-40 backdrop-blur supports-[backdrop-filter]:bg-slate-950/70 bg-slate-950/90 border-b border-slate-800">
-          <div className="max-w-7xl mx-auto px-2 py-2">
-            <div className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 p-1 shadow-sm text-[12px]">
-              <a href="#preview" className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "preview" ? "bg-emerald-500 text-slate-900" : ""}`}>Preview</a>
-              <a href="#apply" className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "apply" ? "bg-emerald-500 text-slate-900" : ""}`}>Apply</a>
-              <a href="#history" className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "history" ? "bg-emerald-500 text-slate-900" : ""}`}>History</a>
-            </div>
-          </div>
-        </div>
-
-        {/* Optimizer controls + status */}
-        <section className="space-y-4">
-          <div id="preview" className="scroll-mt-28 rounded-xl border border-slate-800 bg-slate-900/70 p-4 flex flex-col gap-3">
+          <h1 className="text-2xl md:text-3xl font-semibold">Optimizer – Zone Auto-Pause</h1>
+          <p className="text-xs md:text-sm text-slate-400 mt-1">
             {data.dateRange} • {formatDateTimeGMT8(data.from)} – {formatDateTimeGMT8(data.to)}
           </p>
           <p className="text-[11px] text-slate-500 mt-1">
@@ -461,6 +448,10 @@ export default function OptimizerPage() {
             deposits, ROI).
           </p>
         </div>
+
+        {/* Optimizer controls + status */}
+        <section className="space-y-4">
+          
 
         <div className="flex flex-col gap-3 items-stretch md:items-end">
           <div className="flex flex-wrap gap-3 items-center justify-end">
@@ -536,9 +527,20 @@ export default function OptimizerPage() {
         </div>
       </header>
 
+      {/* Sticky sub-tabs under navbar */}
+      <div className="sticky top-14 z-40 backdrop-blur supports-[backdrop-filter]:bg-slate-950/70 bg-slate-950/90 border-b border-slate-800">
+        <div className="max-w-7xl mx-auto px-2 py-2">
+          <div className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 p-1 shadow-sm text-[12px]">
+            <a href="#preview" className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "preview" ? "bg-emerald-500 text-slate-900" : ""}`}>Preview</a>
+            <a href="#apply" className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "apply" ? "bg-emerald-500 text-slate-900" : ""}`}>Apply</a>
+            <a href="#history" className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "history" ? "bg-emerald-500 text-slate-900" : ""}`}>History</a>
+          </div>
+        </div>
+      </div>
+
       {/* Optimizer controls + status */}
       <section className="space-y-4">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 flex flex-col gap-3">
+        <div id="preview" className="scroll-mt-28 rounded-xl border border-slate-800 bg-slate-900/70 p-4 flex flex-col gap-3">
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
             <div>
               <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
