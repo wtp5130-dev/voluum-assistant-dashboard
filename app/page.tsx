@@ -260,6 +260,8 @@ export default function DashboardPage() {
   // Optimizer blacklist history (server via KV, with graceful fallback)
   type BlacklistedZone = { id?: string; zoneId: string; campaignId: string; timestamp: string; reverted?: boolean; revertedAt?: string | null; verified?: boolean; verifiedAt?: string | null };
   const [blacklistedZones, setBlacklistedZones] = useState<BlacklistedZone[]>([]);
+  const [syncLoading, setSyncLoading] = useState(false);
+  const [lastSyncResult, setLastSyncResult] = useState<any | null>(null);
   const refreshBlacklist = useCallback(async () => {
     try {
       const res = await fetch("/api/optimizer/blacklist-log", { cache: "no-store" });
@@ -1453,6 +1455,15 @@ function CampaignBuilderTab(props: {
           <div className="mt-3">
             {errorMsg && (
               <p className="text-[11px] text-rose-400 whitespace-pre-wrap">{errorMsg}</p>
+            {lastSyncResult && (
+              <div className="ml-3 text-xs text-slate-400">
+                {lastSyncResult.ok ? (
+                  <span>{String(lastSyncResult.campaigns ?? '')} campaigns, {String(lastSyncResult.added ?? 0)} added</span>
+                ) : (
+                  <span>Sync error: {String(lastSyncResult.error || lastSyncResult.message || 'unknown')}</span>
+                )}
+              </div>
+            )}
             )}
             {result && (
               <pre className="text-[10px] bg-slate-950 border border-slate-800 rounded-md p-2 overflow-auto max-h-60">{result}</pre>
@@ -2079,11 +2090,24 @@ function OptimizerTab(props: {
           <div className="flex items-center gap-3 text-[10px] text-slate-500">
             <span>{formatInteger(blacklistedZones.length)} entries</span>
             <button
-              onClick={async ()=>{ try{ await fetch("/api/optimizer/sync-blacklist", { method: "POST" }); refreshBlacklist(); }catch{} }}
+              onClick={async ()=>{ 
+                setSyncLoading(true);
+                setLastSyncResult(null);
+                try{
+                  const res = await fetch("/api/optimizer/sync-blacklist", { method: "POST" });
+                  const json = await res.json().catch(()=>null);
+                  setLastSyncResult(json);
+                  await refreshBlacklist();
+                }catch(e){
+                  setLastSyncResult({ ok: false, error: String(e) });
+                } finally {
+                  setSyncLoading(false);
+                }
+              }}
               className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
               title="Pull zones from provider and store in history"
             >
-              Sync from provider
+              {syncLoading ? 'Syncing...' : 'Sync from provider'}
             </button>
             <button
               onClick={async ()=>{ try{ await fetch("/api/optimizer/verify", { method: "POST" }); refreshBlacklist(); }catch{} }}
@@ -2118,6 +2142,7 @@ function OptimizerTab(props: {
                     body: JSON.stringify({ zoneId: "TEST-ZONE", campaignId: "TEST-CAMPAIGN", reason: "ui-test" }),
                   });
                   refreshBlacklist();
+                  setLastSyncResult(null);
                 } catch {}
               }}
               className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
