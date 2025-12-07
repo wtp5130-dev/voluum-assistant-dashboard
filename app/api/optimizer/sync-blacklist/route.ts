@@ -209,7 +209,7 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
     const fetchIds = uniqueIds.filter((id) => id !== "__IGNORED__");
 
     const newEntries: any[] = [];
-    const diagnostics: Array<{ campaignId: string; fetched: number | null; status: number | null; error?: string }> = [];
+    const diagnostics: Array<{ campaignId: string; fetched: number | null; status: number | null; error?: string; snippet?: string | null }> = [];
     if (unresolved.length > 0) {
       diagnostics.push({ campaignId: "_unresolved", fetched: null, status: null, error: `unresolved_dashboard_campaigns:${unresolved.join(",")}` });
     }
