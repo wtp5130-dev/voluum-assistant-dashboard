@@ -286,6 +286,20 @@ export default function DashboardPage() {
       } catch {}
     }
   }, []);
+  const handleSync = useCallback(async () => {
+    setSyncLoading(true);
+    setLastSyncResult(null);
+    try {
+      const res = await fetch("/api/optimizer/sync-blacklist", { method: "POST" });
+      const json = await res.json().catch(() => null);
+      setLastSyncResult(json);
+      await refreshBlacklist();
+    } catch (e: any) {
+      setLastSyncResult({ ok: false, error: e?.message || String(e) });
+    } finally {
+      setSyncLoading(false);
+    }
+  }, [refreshBlacklist]);
   useEffect(() => {
     refreshBlacklist();
   }, [refreshBlacklist]);
@@ -2081,16 +2095,11 @@ function OptimizerTab(props: {
           <div className="flex items-center gap-3 text-[10px] text-slate-500">
             <span>{formatInteger(blacklistedZones.length)} entries</span>
             <button
-              onClick={async ()=>{ 
-                try{
-                  await fetch("/api/optimizer/sync-blacklist", { method: "POST" });
-                  await refreshBlacklist();
-                }catch(e){}
-              }}
+              onClick={() => { void handleSync(); }}
               className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
               title="Pull zones from provider and store in history"
             >
-              Sync from provider
+              {syncLoading ? "Syncing..." : "Sync from provider"}
             </button>
             <button
               onClick={async ()=>{ try{ await fetch("/api/optimizer/verify", { method: "POST" }); refreshBlacklist(); }catch{} }}
