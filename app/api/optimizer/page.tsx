@@ -198,6 +198,27 @@ export default function OptimizerPage() {
   const [applyError, setApplyError] = useState<string | null>(null);
   const [applyResult, setApplyResult] =
     useState<OptimizerApplyResponse | null>(null);
+  // Two-step confirm for live apply
+  const [liveConfirmStep, setLiveConfirmStep] = useState<0 | 1>(0);
+  const [liveConfirmTimer, setLiveConfirmTimer] = useState<any>(null);
+
+  const handleLiveClick = () => {
+    if (
+      applyLoading ||
+      previewLoading ||
+      !previewResult ||
+      (previewResult?.zonesToPauseNow?.length ?? 0) === 0
+    )
+      return;
+    if (liveConfirmStep === 0) {
+      setLiveConfirmStep(1);
+      if (liveConfirmTimer) clearTimeout(liveConfirmTimer);
+      const t = setTimeout(() => setLiveConfirmStep(0), 8000);
+      setLiveConfirmTimer(t);
+      return;
+    }
+    handleApply(false);
+  };
 
   /**
    * Fetch dashboard data whenever dateRange or custom dates change
@@ -329,6 +350,12 @@ export default function OptimizerPage() {
     setApplyLoading(true);
     setApplyError(null);
     setApplyResult(null);
+    // reset live confirm UI
+    if (!dryRun) {
+      setLiveConfirmStep(0);
+      if (liveConfirmTimer) clearTimeout(liveConfirmTimer);
+      setLiveConfirmTimer(null);
+    }
 
     try {
       const res = await fetch(OPTIMIZER_APPLY_URL, {
@@ -621,16 +648,22 @@ export default function OptimizerPage() {
                 {applyLoading ? "Running…" : "Dry run (no real pauses)"}
               </button>
               <button
-                onClick={() => handleApply(false)}
+                onClick={handleLiveClick}
                 disabled={
                   applyLoading ||
                   previewLoading ||
                   !previewResult ||
                   (previewResult?.zonesToPauseNow?.length ?? 0) === 0
                 }
-                className="text-xs px-3 py-1 rounded-md bg-rose-600 hover:bg-rose-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                className={`text-xs px-3 py-1 rounded-md disabled:opacity-50 disabled:cursor-not-allowed ${
+                  liveConfirmStep === 1 ? "bg-rose-700 hover:bg-rose-600" : "bg-rose-600 hover:bg-rose-500"
+                }`}
               >
-                {applyLoading ? "Running…" : "Run live (pause zones)"}
+                {applyLoading
+                  ? "Running…"
+                  : liveConfirmStep === 1
+                  ? "Click again to confirm"
+                  : "Run live (pause zones)"}
               </button>
             </div>
           </div>
