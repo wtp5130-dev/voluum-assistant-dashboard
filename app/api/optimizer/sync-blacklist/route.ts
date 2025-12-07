@@ -224,7 +224,7 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
           const snippet = String(resp.raw).slice(0, 64_000);
           await kv.set(debugKey, { timestamp: new Date().toISOString(), status: resp.status, snippet });
         }
-      } catch (e) {
+      } catch (e: any) {
         // don't fail the sync if persisting debug snippet fails
         console.warn("[SyncBlacklist] failed to persist debug snippet", String(cid), e?.message || String(e));
       }
