@@ -1108,6 +1108,8 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
             }
           }}
           refreshBlacklist={refreshBlacklist}
+          handleSync={handleSync}
+          syncLoading={syncLoading}
         />
       )}
 
@@ -1897,6 +1899,8 @@ function OptimizerTab(props: {
   blacklistedZones: { id?: string; zoneId: string; campaignId: string; timestamp: string; reverted?: boolean; revertedAt?: string | null; verified?: boolean; verifiedAt?: string | null }[];
   clearBlacklist: () => void;
   refreshBlacklist: () => void;
+  handleSync: () => void;
+  syncLoading: boolean;
 }) {
   const {
     data,
@@ -1912,6 +1916,8 @@ function OptimizerTab(props: {
     blacklistedZones,
     clearBlacklist,
     refreshBlacklist,
+    handleSync,
+    syncLoading,
   } = props;
 
   const zonesToPause = previewResult?.zonesToPauseNow ?? [];
