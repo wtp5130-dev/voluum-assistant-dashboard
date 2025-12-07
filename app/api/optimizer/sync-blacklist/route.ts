@@ -34,9 +34,14 @@ function extractZonesFromJson(json: any): string[] {
     } catch {}
   }
   // include common names: zone, zone_ids, zones, data, items
-  const candidates: any[] = [node, json?.zone, json?.zone_ids, json?.zones, json?.data, json?.items].filter(Boolean);
-  const arr = Array.isArray(candidates[0]) ? candidates[0] : [];
-  return (arr || []).map((z: any) => String(typeof z === "object" && z?.zoneId ? z.zoneId : z));
+  const candidates: any[] = [node, json?.zone, json?.zone_ids, json?.zones, json?.data, json?.items].filter((c) => c !== null && c !== undefined);
+  // find the first candidate that is an array
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) {
+      return candidate.map((z: any) => String(typeof z === "object" && z?.zoneId ? z.zoneId : z));
+    }
+  }
+  return [];
 }
 
 async function fetchBlacklistedFromPropeller(campaignId: string): Promise<{ zones: string[] | null; status: number | null; error?: string; raw?: string | null }> {
