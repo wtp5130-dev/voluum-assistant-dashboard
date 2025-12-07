@@ -151,6 +151,11 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
       }
 
       // 0) Manual mapping: check by dashboard id first, then by dashboard name
+      // Manual mapping may contain a special value '__IGNORED__' meaning skip this dashboard entry
+      if (manualMap[d.id] === "__IGNORED__" || (d.name && manualMap[d.name] === "__IGNORED__")) {
+        // skip — intentionally ignored
+        continue;
+      }
       if (manualMap[d.id]) {
         ids.push(String(manualMap[d.id]));
         continue;
