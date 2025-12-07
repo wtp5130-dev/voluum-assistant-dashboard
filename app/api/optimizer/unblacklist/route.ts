@@ -59,6 +59,15 @@ export async function POST(req: NextRequest): Promise<Response> {
       // ignore
     }
 
+    // Write audit entry
+    try {
+      const audit = {
+        category: "optimizer",
+        action: "unblacklist",
+        items: results,
+      };
+      await fetch("/api/audit/log", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(audit) });
+    } catch {}
     return new Response(JSON.stringify({ ok: true, results }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: "unblacklist_error", message: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });

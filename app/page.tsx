@@ -78,6 +78,7 @@ type ChatMessage = {
 };
 
 type TabKey = "dashboard" | "optimizer" | "creatives" | "builder";
+type TabKey = "dashboard" | "optimizer" | "creatives" | "builder" | "audit";
 
 /**
  * ===========
@@ -352,7 +353,8 @@ export default function DashboardPage() {
         if (key === "dashboard" ||
             (key === "optimizer" && can("optimizer")) ||
             (key === "creatives" && can("creatives")) ||
-            (key === "builder" && can("builder"))) {
+            (key === "builder" && can("builder")) ||
+            key === "audit") {
           setActiveTab(key);
         }
       } catch {}
@@ -1124,6 +1126,10 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           assetDescription={assetDescription}
           imageUrl={imageUrl}
         />
+      )}
+
+      {activeTab === "audit" && currentUser?.role === "admin" && (
+        <AuditTrailTab />
       )}
       </div>
     </main>
@@ -2426,6 +2432,92 @@ function CreativesTab(props: {
               alt="Generated creative"
               className="max-h-64 rounded-lg border border-slate-800 object-contain w-full"
             />
+          </div>
+        )}
+      </div>
+    </section>
+  );
+}
+
+function AuditTrailTab() {
+  const [category, setCategory] = useState<string>("optimizer");
+  const [loading, setLoading] = useState<boolean>(false);
+  const [items, setItems] = useState<any[]>([]);
+  const [search, setSearch] = useState<string>("");
+
+  const fetchAudit = async (cat: string) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/audit/list?category=${encodeURIComponent(cat)}`, { cache: "no-store" });
+      const json = await res.json();
+      setItems(Array.isArray(json?.items) ? json.items : []);
+    } catch {
+      setItems([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { fetchAudit(category); }, [category]);
+
+  const cats = [
+    { key: "all", label: "All" },
+    { key: "dashboard", label: "Dashboard" },
+    { key: "optimizer", label: "Optimizer" },
+    { key: "creatives", label: "Creatives" },
+    { key: "builder", label: "Builder" },
+    { key: "admin", label: "Admin" },
+    { key: "auth", label: "Auth" },
+  ];
+
+  const filtered = items.filter((it) => {
+    if (!search.trim()) return true;
+    const s = search.toLowerCase();
+    return JSON.stringify(it).toLowerCase().includes(s);
+  });
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+        <div>
+          <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">Audit Trail</h2>
+          <p className="text-[11px] text-slate-500">Historical actions grouped by category. Search matches in JSON details.</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <select value={category} onChange={(e)=>setCategory(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs">
+            {cats.map((c)=>(<option key={c.key} value={c.key}>{c.label}</option>))}
+          </select>
+          <input value={search} onChange={(e)=>setSearch(e.target.value)} placeholder="Search..." className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs min-w-[180px]" />
+          <button onClick={()=>fetchAudit(category)} className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Refresh</button>
+        </div>
+      </div>
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-xs">
+        {loading ? (
+          <p className="text-[11px] text-slate-400">Loading…</p>
+        ) : filtered.length === 0 ? (
+          <p className="text-[11px] text-slate-500">No audit entries.</p>
+        ) : (
+          <div className="max-h-80 overflow-auto">
+            <table className="w-full border-collapse">
+              <thead className="bg-slate-900/80 sticky top-0 z-10">
+                <tr className="text-slate-400">
+                  <th className="text-left p-2">Time</th>
+                  <th className="text-left p-2">Category</th>
+                  <th className="text-left p-2">Action</th>
+                  <th className="text-left p-2">Details</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((it: any, idx: number) => (
+                  <tr key={it.id || idx}>
+                    <td className="p-2">{formatDateTimeGMT8(it.ts || it.timestamp || new Date().toISOString())}</td>
+                    <td className="p-2">{it.category || "-"}</td>
+                    <td className="p-2">{it.action || "-"}</td>
+                    <td className="p-2"><pre className="whitespace-pre-wrap break-words">{JSON.stringify(it, null, 2)}</pre></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>

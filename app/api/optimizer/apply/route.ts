@@ -219,6 +219,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
+    // Note: If needed, audit logging could be done before returning.
   } catch (err: any) {
     console.error("Optimizer apply error:", err);
     return new Response(
