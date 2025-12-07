@@ -3,9 +3,9 @@ import { kv } from "@vercel/kv";
 
 const LIST_KEY = "blacklist:zones";
 
-async function fetchBlacklistedFromPropeller(campaignId: string): Promise<string[] | null> {
+async function fetchBlacklistedFromPropeller(campaignId: string): Promise<{ zones: string[] | null; status: number | null; error?: string }> {
   const token = process.env.PROPELLER_API_TOKEN;
-  if (!token) return null;
+  if (!token) return { zones: null, status: null, error: "missing_token" };
   const baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com/v5";
   const url = `${baseUrl}/adv/campaigns/${encodeURIComponent(campaignId)}/zones/blacklist`;
   try {
@@ -13,12 +13,22 @@ async function fetchBlacklistedFromPropeller(campaignId: string): Promise<string
       method: "GET",
       headers: { Authorization: `Bearer ${token}`, Accept: "application/json" },
     });
-    if (!res.ok) return null;
-    const json = await res.json().catch(() => null);
+    const txt = await res.text();
+    if (!res.ok) {
+      console.warn("[SyncBlacklist] Provider GET failed", campaignId, res.status, txt?.slice(0, 200));
+      return { zones: null, status: res.status, error: txt?.slice(0, 200) };
+    }
+    let json: any = null;
+    try { json = txt ? JSON.parse(txt) : null; } catch (e) {
+      console.warn("[SyncBlacklist] Provider JSON parse failed", campaignId, txt?.slice(0, 200));
+      return { zones: null, status: res.status, error: "invalid_json" };
+    }
     const arr: any[] = (json?.zone_ids || json?.zones || json?.data || []) as any[];
-    return (arr || []).map((z) => String(z));
-  } catch {
-    return null;
+    const zones = (arr || []).map((z) => String(z));
+    return { zones, status: res.status };
+  } catch (e: any) {
+    console.error("[SyncBlacklist] Provider fetch error", campaignId, e?.message || String(e));
+    return { zones: null, status: null, error: e?.message || String(e) };
   }
 }
 
@@ -56,12 +66,12 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
     ids = Array.from(new Set(ids));
 
     const newEntries: any[] = [];
-    const diagnostics: Array<{ campaignId: string; fetched: number | null }> = [];
+    const diagnostics: Array<{ campaignId: string; fetched: number | null; status: number | null; error?: string }> = [];
     for (const cid of ids) {
-      const zones = await fetchBlacklistedFromPropeller(String(cid));
-      diagnostics.push({ campaignId: String(cid), fetched: zones ? zones.length : null });
-      if (!zones) continue;
-      for (const zid of zones) {
+      const resp = await fetchBlacklistedFromPropeller(String(cid));
+      diagnostics.push({ campaignId: String(cid), fetched: resp.zones ? resp.zones.length : null, status: resp.status, error: resp.error });
+      if (!resp.zones) continue;
+      for (const zid of resp.zones) {
         const key = `${cid}:${zid}`;
         if (seenSet.has(key)) continue;
         seenSet.add(key);
