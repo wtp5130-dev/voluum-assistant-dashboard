@@ -42,16 +42,18 @@ export async function POST(req: NextRequest): Promise<Response> {
       results.push({ campaignId: it.campaignId, zoneId: it.zoneId, ok: r.ok, message: r.message });
     }
 
-    // Remove matching entries from KV history
+    // Mark matching entries as reverted in KV history (keep audit trail)
     try {
       const list = ((await kv.lrange(LIST_KEY, 0, -1)) as any[]) || [];
-      const remaining = list.filter((entry: any) => !items.some((it) => it.id && entry?.id === it.id));
-      await kv.del(LIST_KEY);
-      if (remaining.length > 0) {
-        // preserve original order: lpush reversed
-        for (let i = remaining.length - 1; i >= 0; i--) {
-          await kv.lpush(LIST_KEY, remaining[i]);
+      const updated = list.map((entry: any) => {
+        if (items.some((it) => it.id && entry?.id === it.id)) {
+          return { ...entry, reverted: true, revertedAt: new Date().toISOString() };
         }
+        return entry;
+      });
+      await kv.del(LIST_KEY);
+      for (let i = updated.length - 1; i >= 0; i--) {
+        await kv.lpush(LIST_KEY, updated[i]);
       }
     } catch (e) {
       // ignore

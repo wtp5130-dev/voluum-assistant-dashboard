@@ -258,7 +258,7 @@ export default function DashboardPage() {
   );
 
   // Optimizer blacklist history (server via KV, with graceful fallback)
-  type BlacklistedZone = { id?: string; zoneId: string; campaignId: string; timestamp: string };
+  type BlacklistedZone = { id?: string; zoneId: string; campaignId: string; timestamp: string; reverted?: boolean; revertedAt?: string | null };
   const [blacklistedZones, setBlacklistedZones] = useState<BlacklistedZone[]>([]);
   const refreshBlacklist = useCallback(async () => {
     try {
@@ -271,6 +271,8 @@ export default function DashboardPage() {
         zoneId: String(i.zoneId),
         campaignId: String(i.campaignId),
         timestamp: String(i.timestamp),
+        reverted: Boolean(i.reverted),
+        revertedAt: i.revertedAt ? String(i.revertedAt) : null,
       })));
     } catch {
       // fallback to localStorage
@@ -1869,7 +1871,7 @@ function OptimizerTab(props: {
   setDryRun: (b: boolean) => void;
   runPreview: () => void;
   runApply: () => void;
-  blacklistedZones: { zoneId: string; campaignId: string; timestamp: string }[];
+  blacklistedZones: { id?: string; zoneId: string; campaignId: string; timestamp: string; reverted?: boolean; revertedAt?: string | null }[];
   clearBlacklist: () => void;
   refreshBlacklist: () => void;
 }) {
@@ -1890,6 +1892,16 @@ function OptimizerTab(props: {
   } = props;
 
   const zonesToPause = previewResult?.zonesToPauseNow ?? [];
+  const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
+  const toggleSelected = (id?: string, enabled?: boolean) => {
+    if (!id || enabled === false) return;
+    setSelectedIds((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+  const revertSelected = async () => {
+    const items = blacklistedZones.filter((b)=> b.id && !b.reverted && selectedIds[b.id]).map((b)=> ({ id: b.id, zoneId: b.zoneId, campaignId: b.campaignId }));
+    if(items.length===0) return;
+    try { await fetch("/api/optimizer/unblacklist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items })}); setSelectedIds({}); refreshBlacklist(); } catch {}
+  };
 
   return (
     <section className="space-y-4">
@@ -2060,6 +2072,13 @@ function OptimizerTab(props: {
           <div className="flex items-center gap-3 text-[10px] text-slate-500">
             <span>{formatInteger(blacklistedZones.length)} entries</span>
             <button
+              onClick={revertSelected}
+              disabled={blacklistedZones.filter((b)=> b.id && !b.reverted && selectedIds[b.id]).length===0}
+              className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
+            >
+              Revert selected
+            </button>
+            <button
               onClick={async () => {
                 const items = blacklistedZones.filter((b)=>b.id).slice(0,1).map((b)=>({ id: b.id, zoneId: b.zoneId, campaignId: b.campaignId }));
                 if(items.length===0) return;
@@ -2105,15 +2124,27 @@ function OptimizerTab(props: {
                   <th className="text-left p-2">Zone</th>
                   <th className="text-left p-2">Campaign</th>
                   <th className="text-left p-2">Blacklisted at</th>
+                  <th className="text-left p-2">Status</th>
+                  <th className="text-right p-2">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {blacklistedZones.map((b, i) => (
                   <tr key={`${b.zoneId}-${b.timestamp}-${i}`}>
-                    <td className="p-2 w-8"><input type="checkbox" className="accent-emerald-500" disabled={!b.id} /></td>
+                    <td className="p-2 w-8"><input type="checkbox" className="accent-emerald-500" checked={!!(b.id && selectedIds[b.id])} onChange={()=>toggleSelected(b.id, !b.reverted)} disabled={!b.id || b.reverted} /></td>
                     <td className="p-2">{b.zoneId}</td>
                     <td className="p-2">{b.campaignId}</td>
                     <td className="p-2">{formatDateTimeGMT8(b.timestamp)}</td>
+                    <td className="p-2">{b.reverted ? (<span className="text-amber-400">Reverted</span>) : (<span className="text-emerald-400">Active</span>)}</td>
+                    <td className="p-2 text-right">
+                      <button
+                        onClick={async ()=>{ if(!b.id || b.reverted) return; try{ await fetch("/api/optimizer/unblacklist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items:[{ id:b.id, zoneId:b.zoneId, campaignId:b.campaignId }] })}); refreshBlacklist(); }catch{} }}
+                        disabled={!b.id || b.reverted}
+                        className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
+                      >
+                        Revert
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
