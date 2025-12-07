@@ -449,9 +449,6 @@ export default function OptimizerPage() {
           </p>
         </div>
 
-        {/* Optimizer controls + status */}
-        <section className="space-y-4">
-          
 
         <div className="flex flex-col gap-3 items-stretch md:items-end">
           <div className="flex flex-wrap gap-3 items-center justify-end">
