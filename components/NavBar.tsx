@@ -27,6 +27,12 @@ export default function NavBar() {
   }, []);
 
   const selectTab = (key: typeof activeTab) => {
+    try {
+      const nextHash = `#${key}`;
+      if (window.location.hash !== nextHash) {
+        window.history.replaceState(null, "", nextHash);
+      }
+    } catch {}
     window.dispatchEvent(new CustomEvent("tab:select", { detail: key }));
   };
 
@@ -42,6 +48,15 @@ export default function NavBar() {
         setLoading(false);
       }
     })();
+  }, []);
+  useEffect(() => {
+    // initialize from hash for highlighting
+    try {
+      const h = (window.location.hash || "").replace(/^#/, "");
+      if (h === "dashboard" || h === "optimizer" || h === "creatives" || h === "builder") {
+        setActiveTab(h as any);
+      }
+    } catch {}
   }, []);
 
   // Health checks

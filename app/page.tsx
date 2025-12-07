@@ -314,6 +314,13 @@ export default function DashboardPage() {
     return !!currentUser.perms?.[key];
   };
 
+  const toHash = (t: TabKey) => `#${t}`;
+  const fromHash = (h: string): TabKey | null => {
+    const v = (h || "").replace(/^#/, "");
+    if (v === "dashboard" || v === "optimizer" || v === "creatives" || v === "builder") return v as TabKey;
+    return null;
+  };
+
   // Sync tab selection with sticky navbar
   useEffect(() => {
     const handler = (e: Event) => {
@@ -328,12 +335,44 @@ export default function DashboardPage() {
       } catch {}
     };
     window.addEventListener("tab:select" as any, handler as any);
-    return () => window.removeEventListener("tab:select" as any, handler as any);
+    // Initialize from URL hash
+    try {
+      const initial = fromHash(window.location.hash);
+      if (initial && (
+        initial === "dashboard" ||
+        (initial === "optimizer" && can("optimizer")) ||
+        (initial === "creatives" && can("creatives")) ||
+        (initial === "builder" && can("builder"))
+      )) {
+        setActiveTab(initial);
+      }
+    } catch {}
+    const onHashChange = () => {
+      const next = fromHash(window.location.hash);
+      if (!next) return;
+      if (
+        next === "dashboard" ||
+        (next === "optimizer" && can("optimizer")) ||
+        (next === "creatives" && can("creatives")) ||
+        (next === "builder" && can("builder"))
+      ) {
+        setActiveTab(next);
+      }
+    };
+    window.addEventListener("hashchange", onHashChange);
+    return () => {
+      window.removeEventListener("tab:select" as any, handler as any);
+      window.removeEventListener("hashchange", onHashChange);
+    };
   }, [currentUser]);
 
   useEffect(() => {
     try {
       window.dispatchEvent(new CustomEvent("tab:current", { detail: activeTab }));
+      const hash = toHash(activeTab);
+      if (window.location.hash !== hash) {
+        window.history.replaceState(null, "", hash);
+      }
     } catch {}
   }, [activeTab]);
 
