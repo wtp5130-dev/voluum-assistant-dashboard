@@ -210,6 +210,18 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
     for (const cid of fetchIds) {
       const resp = await fetchBlacklistedFromPropeller(String(cid));
       diagnostics.push({ campaignId: String(cid), fetched: resp.zones ? resp.zones.length : null, status: resp.status, error: resp.error, snippet: resp.raw ? String(resp.raw).slice(0, 1024) : null });
+      // Persist a truncated raw response for later inspection (temporary debug key)
+      try {
+        if (resp.raw) {
+          const debugKey = `debug:propeller:responses:${String(cid)}`;
+          // limit size to avoid storing huge payloads
+          const snippet = String(resp.raw).slice(0, 64_000);
+          await kv.set(debugKey, { timestamp: new Date().toISOString(), status: resp.status, snippet });
+        }
+      } catch (e) {
+        // don't fail the sync if persisting debug snippet fails
+        console.warn("[SyncBlacklist] failed to persist debug snippet", String(cid), e?.message || String(e));
+      }
       if (!resp.zones) continue;
       for (const zid of resp.zones) {
         const key = `${cid}:${zid}`;
