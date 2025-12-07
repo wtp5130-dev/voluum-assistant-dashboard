@@ -4,11 +4,20 @@ import { kv } from "@vercel/kv";
 const LIST_KEY = "blacklist:zones";
 
 function buildProviderUrl(campaignId: string) {
-  const baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com";
+  let baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com";
   // Default to the targeting exclude zone endpoint (per Swagger)
   const pathTmpl =
     process.env.PROPELLER_GET_BLACKLIST_PATH || "/v5/adv/campaigns/{campaignId}/targeting/exclude/zone";
-  const path = pathTmpl.replace("{campaignId}", encodeURIComponent(campaignId));
+  let path = pathTmpl.replace("{campaignId}", encodeURIComponent(campaignId));
+  // Normalize: avoid duplicated /v5 or double slashes when baseUrl already contains a version segment
+  // Remove trailing slash from baseUrl
+  if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
+  // If baseUrl already contains /v5 and path starts with /v5, strip leading /v5 from path
+  if (baseUrl.match(/\/v\d+(?:$|\/)/) && path.match(/^\/v\d+\//)) {
+    path = path.replace(/^\/v\d+/, "");
+  }
+  // Ensure path begins with a single slash
+  if (!path.startsWith("/")) path = `/${path}`;
   return `${baseUrl}${path}`;
 }
 
