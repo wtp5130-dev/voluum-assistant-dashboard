@@ -132,7 +132,8 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
     const unresolved: string[] = [];
     function extractNumericFromName(n?: string) {
       if (!n) return null;
-      const m = n.match(/\b(\d{6,})\b/);
+      // Match a run of 6+ digits even if adjacent to underscores or non-word chars
+      const m = n.match(/(?:^|[^0-9])(\d{6,})(?=$|[^0-9])/);
       return m ? m[1] : null;
     }
 
