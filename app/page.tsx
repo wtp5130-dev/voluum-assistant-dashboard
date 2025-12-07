@@ -695,7 +695,13 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
         zonesToPauseNow: json.zonesToPauseNow ?? [],
         meta: json.meta ?? null,
       });
-      setOptimizerStatus("Preview generated. Review zones before applying.");
+      // Provide clearer feedback when preview returned no zones
+      const zonesFound = (json.zonesToPauseNow ?? []).length;
+      if (zonesFound === 0) {
+        setOptimizerStatus("Preview generated: 0 zones flagged. Adjust filters or check campaign zone metrics.");
+      } else {
+        setOptimizerStatus("Preview generated. Review zones before applying.");
+      }
     } catch (err: any) {
       console.error("Optimizer preview error:", err);
       setOptimizerStatus(
@@ -1968,7 +1974,11 @@ function OptimizerTab(props: {
             </button>
             <button
               onClick={runApply}
-              disabled={applyLoading || !previewResult}
+              disabled={
+                applyLoading ||
+                !previewResult ||
+                ((previewResult?.zonesToPauseNow?.length ?? 0) === 0)
+              }
               className="px-4 py-2 rounded-md text-xs font-semibold bg-slate-800 hover:bg-slate-700 disabled:opacity-40"
             >
               {applyLoading
