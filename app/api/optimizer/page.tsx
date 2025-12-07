@@ -400,6 +400,38 @@ export default function OptimizerPage() {
   const totalZonesSuggested =
     previewResult?.zonesToPauseNow?.length ?? 0;
 
+  // Active sub-tab for sticky anchors
+  const [activeSub, setActiveSub] = useState<"preview" | "apply" | "history">("preview");
+  useEffect(() => {
+    const sections = [
+      { id: "preview", el: document.getElementById("preview") },
+      { id: "apply", el: document.getElementById("apply") },
+      { id: "history", el: document.getElementById("history") },
+    ].filter((s) => s.el) as { id: "preview" | "apply" | "history"; el: Element }[];
+    if (sections.length === 0) return;
+
+    const obs = new IntersectionObserver(
+      (entries) => {
+        const visible = entries
+          .filter((e) => e.isIntersecting)
+          .sort((a, b) => b.intersectionRatio - a.intersectionRatio);
+        if (visible[0]) {
+          const id = visible[0].target.id as "preview" | "apply" | "history";
+          setActiveSub(id);
+        }
+      },
+      {
+        root: null,
+        // Offset for navbar (56px) + sub-tabs (~40px)
+        rootMargin: "-96px 0px -60% 0px",
+        threshold: [0.01, 0.1, 0.25, 0.5],
+      }
+    );
+
+    sections.forEach((s) => obs.observe(s.el));
+    return () => obs.disconnect();
+  }, [previewResult]);
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -411,16 +443,16 @@ export default function OptimizerPage() {
         <div className="sticky top-14 z-40 backdrop-blur supports-[backdrop-filter]:bg-slate-950/70 bg-slate-950/90 border-b border-slate-800">
           <div className="max-w-7xl mx-auto px-2 py-2">
             <div className="inline-flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 p-1 shadow-sm text-[12px]">
-              <a href="#preview" className="px-4 py-1.5 rounded-full hover:bg-slate-800">Preview</a>
-              <a href="#apply" className="px-4 py-1.5 rounded-full hover:bg-slate-800">Apply</a>
-              <a href="#history" className="px-4 py-1.5 rounded-full hover:bg-slate-800">History</a>
+              <a href="#preview" className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "preview" ? "bg-emerald-500 text-slate-900" : ""}`}>Preview</a>
+              <a href="#apply" className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "apply" ? "bg-emerald-500 text-slate-900" : ""}`}>Apply</a>
+              <a href="#history" className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeSub === "history" ? "bg-emerald-500 text-slate-900" : ""}`}>History</a>
             </div>
           </div>
         </div>
 
         {/* Optimizer controls + status */}
         <section className="space-y-4">
-          <div id="preview" className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 flex flex-col gap-3">
+          <div id="preview" className="scroll-mt-28 rounded-xl border border-slate-800 bg-slate-900/70 p-4 flex flex-col gap-3">
             {data.dateRange} • {formatDateTimeGMT8(data.from)} – {formatDateTimeGMT8(data.to)}
           </p>
           <p className="text-[11px] text-slate-500 mt-1">
@@ -518,7 +550,7 @@ export default function OptimizerPage() {
               </p>
             </div>
 
-            <div id="apply" className="flex flex-wrap gap-2">
+            <div id="apply" className="scroll-mt-28 flex flex-wrap gap-2">
               <button
                 onClick={handlePreview}
                 disabled={previewLoading || loading}
@@ -595,7 +627,7 @@ export default function OptimizerPage() {
         </div>
 
         {/* Zones to pause now */}
-        <div id="history" className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
+        <div id="history" className="scroll-mt-28 rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
           <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
               Zones to pause now (preview)
