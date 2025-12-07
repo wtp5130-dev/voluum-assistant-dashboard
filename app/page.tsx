@@ -2079,6 +2079,13 @@ function OptimizerTab(props: {
           <div className="flex items-center gap-3 text-[10px] text-slate-500">
             <span>{formatInteger(blacklistedZones.length)} entries</span>
             <button
+              onClick={async ()=>{ try{ await fetch("/api/optimizer/sync-blacklist", { method: "POST" }); refreshBlacklist(); }catch{} }}
+              className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              title="Pull zones from provider and store in history"
+            >
+              Sync from provider
+            </button>
+            <button
               onClick={async ()=>{ try{ await fetch("/api/optimizer/verify", { method: "POST" }); refreshBlacklist(); }catch{} }}
               className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
             >
