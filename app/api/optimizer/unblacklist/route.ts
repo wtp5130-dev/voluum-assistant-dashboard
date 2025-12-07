@@ -70,7 +70,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       };
       await kv.lpush("audit:events", auditEntry);
       await kv.ltrim("audit:events", 0, 999);
-    } catch (e) {
+    } catch (e: any) {
       // ignore audit persistence errors
       console.warn("[unblacklist] failed to write audit entry", e?.message || String(e));
     }
