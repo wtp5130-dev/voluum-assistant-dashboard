@@ -2,6 +2,7 @@ import { NextRequest } from "next/server";
 import { kv } from "@vercel/kv";
 
 const LIST_KEY = "blacklist:zones";
+// Force rebuild: 2025-12-07T00:51
 
 function buildProviderUrl(campaignId: string) {
   let baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com";
