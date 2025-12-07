@@ -5,8 +5,9 @@ const LIST_KEY = "blacklist:zones";
 
 function buildProviderUrl(campaignId: string) {
   const baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com";
-  // Allow configurable path with {campaignId} placeholder
-  const pathTmpl = process.env.PROPELLER_GET_BLACKLIST_PATH || "/v5/adv/campaigns/{campaignId}/zones/blacklist";
+  // Default to the targeting exclude zone endpoint (per Swagger)
+  const pathTmpl =
+    process.env.PROPELLER_GET_BLACKLIST_PATH || "/v5/adv/campaigns/{campaignId}/targeting/exclude/zone";
   const path = pathTmpl.replace("{campaignId}", encodeURIComponent(campaignId));
   return `${baseUrl}${path}`;
 }
@@ -23,7 +24,8 @@ function extractZonesFromJson(json: any): string[] {
       }
     } catch {}
   }
-  const candidates: any[] = [node, json?.zone_ids, json?.zones, json?.data, json?.items].filter(Boolean);
+  // include common names: zone, zone_ids, zones, data, items
+  const candidates: any[] = [node, json?.zone, json?.zone_ids, json?.zones, json?.data, json?.items].filter(Boolean);
   const arr = Array.isArray(candidates[0]) ? candidates[0] : [];
   return (arr || []).map((z: any) => String(typeof z === "object" && z?.zoneId ? z.zoneId : z));
 }
