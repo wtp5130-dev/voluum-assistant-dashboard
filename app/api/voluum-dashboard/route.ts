@@ -68,6 +68,13 @@ function sleep(ms: number) {
  */
 const MAX_DETAIL_CAMPAIGNS =
   Number(process.env.VOLUUM_MAX_DETAIL_CAMPAIGNS || "3");
+const DETAIL_THROTTLE_MS = Number(process.env.VOLUUM_DETAIL_THROTTLE_MS || "300");
+
+async function backoff(attempt: number, base: number) {
+  const jitter = Math.floor(Math.random() * base);
+  const delay = base * Math.pow(2, attempt) + jitter;
+  await sleep(delay);
+}
 
 /**
  * Fetch zones for a specific campaign
@@ -145,13 +152,19 @@ async function fetchZonesForCampaign(
 
     const url = `${base.replace(/\/$/, "")}/report?${params.toString()}`;
 
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        "cwauth-token": token,
-        Accept: "application/json",
-      },
-    });
+    let res: Response | null = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "cwauth-token": token,
+          Accept: "application/json",
+        },
+      });
+      if (res.status !== 429 && res.status < 500) break;
+      await backoff(attempt, 400);
+    }
+    if (!res) throw new Error("No response from Voluum zones");
 
     const text = await res.text();
     let json: any = null;
@@ -258,13 +271,19 @@ async function fetchCreativesForCampaign(
 
     const url = `${base.replace(/\/$/, "")}/report?${params.toString()}`;
 
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        "cwauth-token": token,
-        Accept: "application/json",
-      },
-    });
+    let res: Response | null = null;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      res = await fetch(url, {
+        method: "GET",
+        headers: {
+          "cwauth-token": token,
+          Accept: "application/json",
+        },
+      });
+      if (res.status !== 429 && res.status < 500) break;
+      await backoff(attempt, 400);
+    }
+    if (!res) throw new Error("No response from Voluum creatives");
 
     const text = await res.text();
     let json: any = null;
@@ -488,13 +507,10 @@ export async function GET(request: Request) {
 
       // Only fetch detailed breakdown for first N campaigns
       if (index < MAX_DETAIL_CAMPAIGNS) {
-        [zones, creatives] = await Promise.all([
-          fetchZonesForCampaign(base, token, fromIso, toIso, campaignId),
-          fetchCreativesForCampaign(base, token, fromIso, toIso, campaignId),
-        ]);
-
-        // Optional throttle if you still hit 429:
-        // await sleep(150);
+        zones = await fetchZonesForCampaign(base, token, fromIso, toIso, campaignId);
+        await sleep(DETAIL_THROTTLE_MS);
+        creatives = await fetchCreativesForCampaign(base, token, fromIso, toIso, campaignId);
+        await sleep(DETAIL_THROTTLE_MS);
       }
 
       campaigns.push({
