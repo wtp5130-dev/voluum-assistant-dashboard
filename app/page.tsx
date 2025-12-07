@@ -77,7 +77,6 @@ type ChatMessage = {
   content: string;
 };
 
-type TabKey = "dashboard" | "optimizer" | "creatives" | "builder";
 type TabKey = "dashboard" | "optimizer" | "creatives" | "builder" | "audit";
 
 /**
