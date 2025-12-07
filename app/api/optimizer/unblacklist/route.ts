@@ -59,15 +59,21 @@ export async function POST(req: NextRequest): Promise<Response> {
       // ignore
     }
 
-    // Write audit entry
+    // Write audit entry directly to KV (server-side) to avoid internal HTTP call failures
     try {
-      const audit = {
+      const auditEntry = {
+        id: crypto.randomUUID(),
+        ts: new Date().toISOString(),
         category: "optimizer",
         action: "unblacklist",
         items: results,
       };
-      await fetch("/api/audit/log", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(audit) });
-    } catch {}
+      await kv.lpush("audit:events", auditEntry);
+      await kv.ltrim("audit:events", 0, 999);
+    } catch (e) {
+      // ignore audit persistence errors
+      console.warn("[unblacklist] failed to write audit entry", e?.message || String(e));
+    }
     return new Response(JSON.stringify({ ok: true, results }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: "unblacklist_error", message: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
