@@ -2140,7 +2140,6 @@ function OptimizerTab(props: {
                     body: JSON.stringify({ zoneId: "TEST-ZONE", campaignId: "TEST-CAMPAIGN", reason: "ui-test" }),
                   });
                   refreshBlacklist();
-                  setLastSyncResult(null);
                 } catch {}
               }}
               className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
