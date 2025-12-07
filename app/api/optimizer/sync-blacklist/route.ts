@@ -199,13 +199,15 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
 
     // dedupe
     const uniqueIds = Array.from(new Set(ids));
+    // filter out any special sentinel values (e.g. '__IGNORED__') to avoid accidental provider calls
+    const fetchIds = uniqueIds.filter((id) => id !== "__IGNORED__");
 
     const newEntries: any[] = [];
     const diagnostics: Array<{ campaignId: string; fetched: number | null; status: number | null; error?: string }> = [];
     if (unresolved.length > 0) {
       diagnostics.push({ campaignId: "_unresolved", fetched: null, status: null, error: `unresolved_dashboard_campaigns:${unresolved.join(",")}` });
     }
-    for (const cid of uniqueIds) {
+    for (const cid of fetchIds) {
       const resp = await fetchBlacklistedFromPropeller(String(cid));
       diagnostics.push({ campaignId: String(cid), fetched: resp.zones ? resp.zones.length : null, status: resp.status, error: resp.error });
       if (!resp.zones) continue;
