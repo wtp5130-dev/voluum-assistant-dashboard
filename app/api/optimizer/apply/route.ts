@@ -36,7 +36,7 @@ type ZoneApplyResult = {
 };
 
 /** Resolve dashboard campaignId to provider campaign id using KV mapping when needed */
-async function resolveProviderCampaignId(dashboardId: string): Promise<string> {
+async function resolveProviderCampaignId(dashboardId: string, campaignName?: string): Promise<string> {
   // If already numeric, assume it's a provider id
   if (/^\d+$/.test(dashboardId)) return dashboardId;
   try {
@@ -46,7 +46,15 @@ async function resolveProviderCampaignId(dashboardId: string): Promise<string> {
     if (mapping && mapping[dashboardId]) {
       return String(mapping[dashboardId]);
     }
+    if (campaignName && mapping && mapping[campaignName]) {
+      return String(mapping[campaignName]);
+    }
   } catch {}
+  // Try to extract a long numeric token from the name (common pattern)
+  if (campaignName) {
+    const m = campaignName.match(/(?:^|[^0-9])(\d{6,})(?=$|[^0-9])/);
+    if (m && m[1]) return m[1];
+  }
   return dashboardId; // fall back to original
 }
 
@@ -76,7 +84,7 @@ async function pauseZoneInPropeller(
   // Prefer an explicit add/blacklist path for POST operations; fall back to the GET path
   const pathTmpl = process.env.PROPELLER_ADD_BLACKLIST_PATH || process.env.PROPELLER_GET_BLACKLIST_PATH || "/v5/adv/campaigns/{campaignId}/targeting/exclude/zone";
   // Ensure we call provider with provider campaign id
-  const providerCid = await resolveProviderCampaignId(zone.campaignId);
+  const providerCid = await resolveProviderCampaignId(zone.campaignId, (zone as any).campaignName);
   let path = pathTmpl.replace("{campaignId}", encodeURIComponent(providerCid));
   if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
   if (baseUrl.match(/\/v\d+(?:$|\/)/) && path.match(/^\/v\d+\//)) {

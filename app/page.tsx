@@ -746,10 +746,11 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
       const okCount = results.filter((r: any) => r.status === "success").length;
       const failCount = results.filter((r: any) => r.status === "failed").length;
       const skipped = results.filter((r: any) => r.status === "skipped").length;
+      const firstFailMsg = results.find((r: any) => r.status === "failed")?.message;
       setOptimizerStatus(
         optimizerDryRun
           ? `Dry run completed: ${okCount} would pause, ${skipped} skipped.`
-          : `Apply completed: ${okCount} succeeded, ${failCount} failed${skipped ? ", "+skipped+" skipped" : ""}.`
+          : `Apply completed: ${okCount} succeeded, ${failCount} failed${skipped ? ", "+skipped+" skipped" : ""}.${firstFailMsg ? " First error: " + firstFailMsg : ""}`
       );
 
       // After non-dry-run apply, refresh server-side blacklist
