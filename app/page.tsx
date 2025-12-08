@@ -1737,7 +1737,7 @@ function DashboardTab(props: {
           </span>
         </div>
 
-        <div className="max-h-[520px] overflow-auto text-xs">
+        <div className="max-h-[600px] md:max-h-[calc(100vh-280px)] overflow-auto text-xs">
           <table className="w-full border-collapse">
             <thead className="bg-slate-900/80 sticky top-0 z-10">
               <tr className="text-slate-400">
