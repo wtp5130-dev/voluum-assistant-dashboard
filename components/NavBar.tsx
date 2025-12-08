@@ -130,6 +130,20 @@ export default function NavBar() {
             {status === "live" ? "Live" : status === "degraded" ? "Degraded" : "Down"}
           </span>
         </a>
+        {/* Quick refresh next to status dot */}
+        <button
+          onClick={runHealth}
+          disabled={checking}
+          className="hidden sm:inline-flex items-center gap-1 text-[11px] px-2 py-0.5 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
+          title="Refresh system status"
+          aria-label="Refresh status"
+        >
+          {checking ? (
+            <span className="inline-block w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
+          ) : (
+            <span>Refresh</span>
+          )}
+        </button>
         {/* Main tabs on home page */}
         {pathname === "/" && (
           <div className="hidden md:flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 p-1 shadow-sm text-[12px]">
@@ -165,17 +179,6 @@ export default function NavBar() {
           >
             Gallery
           </a>
-          <button
-            onClick={runHealth}
-            disabled={checking}
-            className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 flex items-center gap-2"
-            title="Refresh status"
-          >
-            {checking && (
-              <span className="inline-block w-3 h-3 border-2 border-slate-400 border-t-transparent rounded-full animate-spin" />
-            )}
-            Refresh
-          </button>
           {me?.role === "admin" && (
             <a
               href="/admin"

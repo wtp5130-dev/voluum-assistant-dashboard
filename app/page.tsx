@@ -2686,7 +2686,7 @@ function CreativesTab(props: {
   return (
     <section className="grid gap-6 lg:grid-cols-2">
       {/* Creative Doctor chat */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/80 flex flex-col h-[560px] min-h-0">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/80 flex flex-col">
         <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
@@ -2723,7 +2723,7 @@ function CreativesTab(props: {
             </div>
           </div>
 
-          <div className="flex-1 overflow-auto px-4 py-2 space-y-2 text-xs">
+          <div className="px-4 py-2 space-y-2 text-xs">
             {/* Style / Negative / Seed / References */}
             <div className="grid gap-2 md:grid-cols-12">
               {/* Brand style */}
