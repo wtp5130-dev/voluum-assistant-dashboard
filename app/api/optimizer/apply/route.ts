@@ -276,6 +276,22 @@ export async function POST(req: NextRequest): Promise<Response> {
       });
     }
 
+    // Write audit entry to KV so Audit Trail shows blacklist operations
+    try {
+      const auditEntry = {
+        id: crypto.randomUUID(),
+        ts: new Date().toISOString(),
+        category: "optimizer",
+        action: dryRun ? "blacklist_dryrun" : "blacklist_apply",
+        items: results,
+      };
+      await kv.lpush("audit:events", auditEntry);
+      await kv.ltrim("audit:events", 0, 999);
+    } catch (e) {
+      // non-fatal
+      console.warn("[apply] failed to write audit entry", (e as any)?.message || String(e));
+    }
+
     return new Response(
       JSON.stringify({
         ok: true,
