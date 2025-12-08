@@ -151,7 +151,6 @@ function getDaysAgoYMD(days: number): string {
   d.setDate(d.getDate() - days);
   return formatDateYMD(d);
 }
-
 // Timezone-aware date formatting (GMT+8)
 const TZ_GMT8 = "Asia/Singapore";
 const TZ_LABEL = "GMT+8";
@@ -168,6 +167,10 @@ function formatDateTimeGMT8(value: string | Date): string {
     hour12: true,
   }).format(dt);
   return `${formatted} ${TZ_LABEL}`;
+}
+
+function zoneKey(z: ZonePauseSuggestion): string {
+  return `${z.campaignId}__${z.zoneId}`;
 }
 
 /**
@@ -193,6 +196,10 @@ export default function OptimizerPage() {
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [previewResult, setPreviewResult] =
     useState<OptimizerPreviewResponse | null>(null);
+
+  const [selectedZoneIds, setSelectedZoneIds] = useState<Set<string>>(
+    new Set()
+  );
 
   const [applyLoading, setApplyLoading] = useState<boolean>(false);
   const [applyError, setApplyError] = useState<string | null>(null);
@@ -309,6 +316,7 @@ export default function OptimizerPage() {
     setPreviewResult(null);
     setApplyResult(null);
     setApplyError(null);
+    setSelectedZoneIds(new Set());
 
     try {
       const res = await fetch(OPTIMIZER_PREVIEW_URL, {
@@ -327,6 +335,10 @@ export default function OptimizerPage() {
 
       const json = (await res.json()) as OptimizerPreviewResponse;
       setPreviewResult(json);
+      const nextSelection = new Set(
+        (json.zonesToPauseNow ?? []).map((z) => zoneKey(z))
+      );
+      setSelectedZoneIds(nextSelection);
     } catch (err) {
       console.error(err);
       setPreviewError(
@@ -351,6 +363,15 @@ export default function OptimizerPage() {
       return;
     }
 
+    const zonesSelected = previewResult.zonesToPauseNow.filter((z) =>
+      selectedZoneIds.has(zoneKey(z))
+    );
+
+    if (zonesSelected.length === 0) {
+      setApplyError("No zones selected. Choose at least one to pause.");
+      return;
+    }
+
     setApplyLoading(true);
     setApplyError(null);
     setApplyResult(null);
@@ -366,7 +387,7 @@ export default function OptimizerPage() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          zonesToPauseNow: previewResult.zonesToPauseNow,
+          zonesToPauseNow: zonesSelected,
           dryRun,
         }),
       });
@@ -430,7 +451,6 @@ export default function OptimizerPage() {
 
   const totalZonesSuggested =
     previewResult?.zonesToPauseNow?.length ?? 0;
-
   // Active sub-tab for sticky anchors
   const [activeSub, setActiveSub] = useState<"preview" | "apply" | "history">("preview");
   useEffect(() => {
@@ -486,6 +506,46 @@ export default function OptimizerPage() {
       }
     } catch {}
   }, []);
+
+  const selectedZonesCount = useMemo(() => {
+    if (!previewResult?.zonesToPauseNow) return 0;
+    return previewResult.zonesToPauseNow.reduce((acc, z) => {
+      return selectedZoneIds.has(zoneKey(z)) ? acc + 1 : acc;
+    }, 0);
+  }, [previewResult, selectedZoneIds]);
+
+  const allZonesSelected =
+    !!previewResult?.zonesToPauseNow?.length &&
+    selectedZonesCount === previewResult.zonesToPauseNow.length;
+
+  const toggleZoneSelection = (key: string) => {
+    setSelectedZoneIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) {
+        next.delete(key);
+      } else {
+        next.add(key);
+      }
+      return next;
+    });
+  };
+
+  const toggleAllZones = () => {
+    if (!previewResult?.zonesToPauseNow?.length) {
+      setSelectedZoneIds(new Set());
+      return;
+    }
+
+    if (allZonesSelected) {
+      setSelectedZoneIds(new Set());
+      return;
+    }
+
+    const next = new Set(
+      previewResult.zonesToPauseNow.map((z) => zoneKey(z))
+    );
+    setSelectedZoneIds(next);
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6">
@@ -645,7 +705,8 @@ export default function OptimizerPage() {
                   applyLoading ||
                   previewLoading ||
                   !previewResult ||
-                  (previewResult?.zonesToPauseNow?.length ?? 0) === 0
+                  (previewResult?.zonesToPauseNow?.length ?? 0) === 0 ||
+                  selectedZonesCount === 0
                 }
                 className="text-xs px-3 py-1 rounded-md bg-slate-700 hover:bg-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -657,7 +718,8 @@ export default function OptimizerPage() {
                   applyLoading ||
                   previewLoading ||
                   !previewResult ||
-                  (previewResult?.zonesToPauseNow?.length ?? 0) === 0
+                  (previewResult?.zonesToPauseNow?.length ?? 0) === 0 ||
+                  selectedZonesCount === 0
                 }
                 className={`text-xs px-3 py-1 rounded-md disabled:opacity-50 disabled:cursor-not-allowed ${
                   liveConfirmStep === 1 ? "bg-rose-700 hover:bg-rose-600" : "bg-rose-600 hover:bg-rose-500"
@@ -689,7 +751,7 @@ export default function OptimizerPage() {
                   {totalZonesSuggested} zone
                   {totalZonesSuggested === 1 ? "" : "s"}
                 </span>{" "}
-                suggested to pause.
+                suggested to pause. Selected: {selectedZonesCount}
               </div>
             )}
             {applyResult && (
@@ -741,6 +803,15 @@ export default function OptimizerPage() {
                 <table className="w-full border-collapse">
                   <thead className="bg-slate-900/80 sticky top-0 z-10">
                     <tr className="text-slate-400">
+                      <th className="text-left p-2 w-10">
+                        <input
+                          type="checkbox"
+                          aria-label="Toggle all zones"
+                          checked={allZonesSelected}
+                          onChange={toggleAllZones}
+                          className="h-4 w-4 accent-emerald-500"
+                        />
+                      </th>
                       <th className="text-left p-2">Campaign</th>
                       <th className="text-left p-2">Traffic source</th>
                       <th className="text-left p-2">Zone ID</th>
@@ -755,51 +826,64 @@ export default function OptimizerPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {previewResult.zonesToPauseNow.map((z, idx) => (
-                      <tr key={`${z.campaignId}-${z.zoneId}-${idx}`}>
-                        <td className="p-2">
-                          {z.campaignName ?? z.campaignId}
-                        </td>
-                        <td className="p-2">
-                          {z.trafficSource ?? "—"}
-                        </td>
-                        <td className="p-2">{z.zoneId}</td>
-                        <td className="p-2 text-right">
-                          {z.metrics.visits}
-                        </td>
-                        <td className="p-2 text-right">
-                          {z.metrics.conversions}
-                        </td>
-                        <td className="p-2 text-right">
-                          {z.metrics.signups ?? "—"}
-                        </td>
-                        <td className="p-2 text-right">
-                          {z.metrics.deposits ?? "—"}
-                        </td>
-                        <td className="p-2 text-right">
-                          {formatMoney(z.metrics.revenue)}
-                        </td>
-                        <td className="p-2 text-right">
-                          {formatMoney(z.metrics.cost)}
-                        </td>
-                        <td
-                          className={`p-2 text-right ${
-                            z.metrics.roi < 0
-                              ? "text-rose-400"
-                              : z.metrics.roi > 0
-                              ? "text-emerald-400"
-                              : ""
-                          }`}
-                        >
-                          {formatPercent(z.metrics.roi)}
-                        </td>
-                        <td className="p-2 max-w-xs">
-                          <span className="block text-[11px] text-slate-300">
-                            {z.reason}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {previewResult.zonesToPauseNow.map((z, idx) => {
+                      const key = zoneKey(z);
+                      const isChecked = selectedZoneIds.has(key);
+                      return (
+                        <tr key={`${z.campaignId}-${z.zoneId}-${idx}`}>
+                          <td className="p-2 align-top">
+                            <input
+                              type="checkbox"
+                              aria-label={`Select zone ${z.zoneId}`}
+                              checked={isChecked}
+                              onChange={() => toggleZoneSelection(key)}
+                              className="h-4 w-4 accent-emerald-500"
+                            />
+                          </td>
+                          <td className="p-2">
+                            {z.campaignName ?? z.campaignId}
+                          </td>
+                          <td className="p-2">
+                            {z.trafficSource ?? "—"}
+                          </td>
+                          <td className="p-2">{z.zoneId}</td>
+                          <td className="p-2 text-right">
+                            {z.metrics.visits}
+                          </td>
+                          <td className="p-2 text-right">
+                            {z.metrics.conversions}
+                          </td>
+                          <td className="p-2 text-right">
+                            {z.metrics.signups ?? "—"}
+                          </td>
+                          <td className="p-2 text-right">
+                            {z.metrics.deposits ?? "—"}
+                          </td>
+                          <td className="p-2 text-right">
+                            {formatMoney(z.metrics.revenue)}
+                          </td>
+                          <td className="p-2 text-right">
+                            {formatMoney(z.metrics.cost)}
+                          </td>
+                          <td
+                            className={`p-2 text-right ${
+                              z.metrics.roi < 0
+                                ? "text-rose-400"
+                                : z.metrics.roi > 0
+                                ? "text-emerald-400"
+                                : ""
+                            }`}
+                          >
+                            {formatPercent(z.metrics.roi)}
+                          </td>
+                          <td className="p-2 max-w-xs">
+                            <span className="block text-[11px] text-slate-300">
+                              {z.reason}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
@@ -831,7 +915,7 @@ export default function OptimizerPage() {
           <div className="absolute inset-0 bg-black/60" onClick={() => { setShowLiveModal(false); setLiveConfirmStep(0); }} />
           <div className="relative bg-slate-900 border border-slate-800 rounded-xl p-4 w-[420px] shadow-xl">
             <h4 className="text-sm font-semibold text-slate-200">Confirm live apply</h4>
-            <p className="text-[12px] text-slate-400 mt-1">This will attempt to pause <span className="text-emerald-400 font-medium">{totalZonesSuggested}</span> zone{totalZonesSuggested===1?"":"s"} via PropellerAds. This action may impact traffic immediately.</p>
+            <p className="text-[12px] text-slate-400 mt-1">This will attempt to pause <span className="text-emerald-400 font-medium">{selectedZonesCount}</span> selected zone{selectedZonesCount===1?"":"s"} via PropellerAds. This action may impact traffic immediately.</p>
             <label className="flex items-center gap-2 text-[12px] text-slate-300 mt-3">
               <input type="checkbox" className="accent-emerald-500" checked={ackLive} onChange={(e)=>setAckLive(e.target.checked)} />
               I understand and want to proceed
