@@ -2614,6 +2614,7 @@ function CreativesTab(props: {
               >
                 <option value="openai">OpenAI</option>
                 <option value="stability">Stability (SDXL)</option>
+                <option value="firefly">Adobe Firefly 3</option>
               </select>
             </div>
           </div>
