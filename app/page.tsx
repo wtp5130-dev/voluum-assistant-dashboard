@@ -2724,7 +2724,7 @@ function CreativesTab(props: {
                   </div>
                   <div className="md:col-span-12">
                     <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Style notes</label>
-                    <textarea value={brandStyle} onChange={(e)=>setBrandStyle(e.target.value)} rows={2} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1" placeholder="High-contrast, glossy casino UI, neon accents, realistic chips & cards, cinematic lighting." />
+                    <textarea value={brandStyle} onChange={(e)=>setBrandStyle(e.target.value)} rows={6} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1" placeholder="High-contrast, glossy casino UI, neon accents, realistic chips & cards, cinematic lighting." />
                   </div>
                   <div className="md:col-span-12 flex justify-end">
                     <button onClick={saveBrand} className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Save brand</button>
