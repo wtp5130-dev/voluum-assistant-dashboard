@@ -113,13 +113,6 @@ async function pauseZoneInPropeller(
  */
 export async function POST(req: NextRequest): Promise<Response> {
   try {
-    const ok = await requirePermission("optimizer");
-    if (!ok) {
-      return new Response(
-        JSON.stringify({ error: "forbidden" }),
-        { status: 403, headers: { "Content-Type": "application/json" } }
-      );
-    }
     const body = (await req.json()) as ApplyRequestBody | null;
 
     if (!body || !Array.isArray(body.zonesToPauseNow)) {
@@ -133,6 +126,17 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     const { zonesToPauseNow } = body;
     const dryRun = body.dryRun ?? true;
+
+    // Permission check: allow dry-run calls without auth, but require permission for real applies
+    if (!dryRun) {
+      const ok = await requirePermission("optimizer");
+      if (!ok) {
+        return new Response(
+          JSON.stringify({ error: "forbidden" }),
+          { status: 403, headers: { "Content-Type": "application/json" } }
+        );
+      }
+    }
 
     if (zonesToPauseNow.length === 0) {
       return new Response(

@@ -1,0 +1,62 @@
+﻿{
+    "ok":  true,
+    "campaigns":  11,
+    "added":  0,
+    "diagnostics":  [
+                        {
+                            "campaignId":  "9857527",
+                            "fetched":  45,
+                            "status":  200
+                        },
+                        {
+                            "campaignId":  "10087368",
+                            "fetched":  5,
+                            "status":  200
+                        },
+                        {
+                            "campaignId":  "10095093",
+                            "fetched":  0,
+                            "status":  200
+                        },
+                        {
+                            "campaignId":  "9960340",
+                            "fetched":  17,
+                            "status":  200
+                        },
+                        {
+                            "campaignId":  "9857528",
+                            "fetched":  26,
+                            "status":  200
+                        },
+                        {
+                            "campaignId":  "9960337",
+                            "fetched":  9,
+                            "status":  200
+                        },
+                        {
+                            "campaignId":  "10095094",
+                            "fetched":  0,
+                            "status":  200
+                        },
+                        {
+                            "campaignId":  "9960338",
+                            "fetched":  112,
+                            "status":  200
+                        },
+                        {
+                            "campaignId":  "9960339",
+                            "fetched":  30,
+                            "status":  200
+                        },
+                        {
+                            "campaignId":  "9857526",
+                            "fetched":  5,
+                            "status":  200
+                        },
+                        {
+                            "campaignId":  "10085798",
+                            "fetched":  0,
+                            "status":  200
+                        }
+                    ]
+}
