@@ -460,6 +460,7 @@ const [negativePrompt, setNegativePrompt] = useState<string>("");
 const [seed, setSeed] = useState<string>("");
 const [charRefFiles, setCharRefFiles] = useState<File[]>([]);
 const [imageRefFile, setImageRefFile] = useState<File | null>(null);
+const [saveToGallery, setSaveToGallery] = useState<boolean>(true);
 
   /**
    * Fetch dashboard data whenever dateRange or custom dates change
@@ -866,6 +867,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         form.append("prompt", promptText);
         form.append("size", sizeOverride || mainImageSize);
         form.append("provider", imageProvider);
+        form.append("saveToGallery", String(saveToGallery));
         if (stylePreset) form.append("style_preset", stylePreset);
         if (negativePrompt) form.append("negative_prompt", negativePrompt);
         if (seed) form.append("seed", seed);
@@ -887,7 +889,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
             style_preset: stylePreset || undefined,
             negative_prompt: negativePrompt || undefined,
             seed: seed || undefined,
-            saveToGallery: true,
+            saveToGallery,
           }),
         });
       }
@@ -1203,6 +1205,8 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           setSeed={setSeed}
           setCharRefFiles={setCharRefFiles}
           setImageRefFile={setImageRefFile}
+          saveToGallery={saveToGallery}
+          setSaveToGallery={setSaveToGallery}
         />
       )}
 
@@ -2493,6 +2497,8 @@ function CreativesTab(props: {
   setSeed: (v: string) => void;
   setCharRefFiles: (v: File[]) => void;
   setImageRefFile: (v: File | null) => void;
+  saveToGallery: boolean;
+  setSaveToGallery: (v: boolean) => void;
 }) {
   const {
     creativeChatMessages,
@@ -2525,6 +2531,8 @@ function CreativesTab(props: {
     setSeed,
     setCharRefFiles,
     setImageRefFile,
+    saveToGallery,
+    setSaveToGallery,
   } = props;
 
   // Quick actions for Creative Doctor
@@ -2823,6 +2831,10 @@ function CreativesTab(props: {
                 <option value="ideogram">Ideogram</option>
               </select>
             </div>
+            <label className="flex items-center gap-2">
+              <input type="checkbox" className="accent-emerald-500" checked={saveToGallery} onChange={(e)=>setSaveToGallery(e.target.checked)} />
+              Save to Gallery
+            </label>
           </div>
         </div>
 

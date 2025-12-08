@@ -1,10 +1,15 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 export default function CreativeGalleryPage() {
   const [items, setItems] = useState<Array<any>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [brands, setBrands] = useState<Array<{ id: string; name: string }>>([]);
+  const [filterBrand, setFilterBrand] = useState<string>("");
+  const [filterStyle, setFilterStyle] = useState<string>("");
+  const [from, setFrom] = useState<string>("");
+  const [to, setTo] = useState<string>("");
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -20,6 +25,27 @@ export default function CreativeGalleryPage() {
   };
 
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    (async () => {
+      try { const r = await fetch("/api/brand", { cache: "no-store" }); const j = await r.json(); setBrands(Array.isArray(j?.brands) ? j.brands : []);} catch {}
+    })();
+  }, []);
+
+  const filtered = useMemo(() => {
+    const fromTs = from ? new Date(from).getTime() : 0;
+    const toTs = to ? new Date(to).getTime() + 24*3600*1000 - 1 : Number.MAX_SAFE_INTEGER;
+    return items.filter((it) => {
+      const t = it.createdAt ? new Date(it.createdAt).getTime() : 0;
+      if (t < fromTs || t > toTs) return false;
+      if (filterStyle && String(it.style_preset||"").toLowerCase() !== filterStyle.toLowerCase()) return false;
+      if (filterBrand) {
+        const bn = (it.brandName || "").toLowerCase();
+        const target = (brands.find(b=>b.id===filterBrand)?.name || "").toLowerCase();
+        if (!bn || !target || bn !== target) return false;
+      }
+      return true;
+    });
+  }, [items, from, to, filterStyle, filterBrand, brands]);
 
   const remove = async (id: string) => {
     try {
@@ -37,11 +63,63 @@ export default function CreativeGalleryPage() {
         </div>
         {error && <div className="text-rose-400 text-sm">{error}</div>}
         {loading && <div className="text-sm text-slate-400">Loading…</div>}
-        {(!loading && items.length === 0) ? (
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-[11px] flex flex-wrap items-end gap-3">
+          <div>
+            <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Brand</label>
+            <select value={filterBrand} onChange={(e)=>setFilterBrand(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1">
+              <option value="">All</option>
+              {brands.map((b)=> (<option key={b.id} value={b.id}>{b.name}</option>))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Style preset</label>
+            <select value={filterStyle} onChange={(e)=>setFilterStyle(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1">
+              <option value="">All</option>
+              <option value="MIXED_MEDIA">MIXED_MEDIA</option>
+              <option value="90S_NOSTALGIA">90S_NOSTALGIA</option>
+              <option value="SPOTLIGHT_80S">SPOTLIGHT_80S</option>
+              <option value="C4D_CARTOON">C4D_CARTOON</option>
+              <option value="JAPANDI_FUSION">JAPANDI_FUSION</option>
+              <option value="CYBERPUNK">CYBERPUNK</option>
+              <option value="NEON_NOIR">NEON_NOIR</option>
+              <option value="RETRO_FUTURISM">RETRO_FUTURISM</option>
+              <option value="VAPORWAVE">VAPORWAVE</option>
+              <option value="POP_ART">POP_ART</option>
+              <option value="COMIC_BOOK">COMIC_BOOK</option>
+              <option value="ANIME">ANIME</option>
+              <option value="PIXEL_ART">PIXEL_ART</option>
+              <option value="LOWPOLY">LOWPOLY</option>
+              <option value="WATERCOLOR">WATERCOLOR</option>
+              <option value="OIL_PAINTING">OIL_PAINTING</option>
+              <option value="ART_BRUT">ART_BRUT</option>
+              <option value="LINE_ART">LINE_ART</option>
+              <option value="ISOMETRIC">ISOMETRIC</option>
+              <option value="3D_RENDER">3D_RENDER</option>
+              <option value="ULTRA_REALISTIC">ULTRA_REALISTIC</option>
+              <option value="CINEMATIC">CINEMATIC</option>
+              <option value="FILM_GRAIN">FILM_GRAIN</option>
+              <option value="BLACK_WHITE">BLACK_WHITE</option>
+              <option value="DUOTONE">DUOTONE</option>
+              <option value="LONG_EXPOSURE">LONG_EXPOSURE</option>
+              <option value="BOKEH">BOKEH</option>
+              <option value="TYPOGRAPHY_BOLD">TYPOGRAPHY_BOLD</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">From</label>
+            <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1" />
+          </div>
+          <div>
+            <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">To</label>
+            <input type="date" value={to} onChange={(e)=>setTo(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1" />
+          </div>
+          <div className="ml-auto text-slate-500">{filtered.length} result(s)</div>
+        </div>
+        {(!loading && filtered.length === 0) ? (
           <div className="text-sm text-slate-400">No generated creatives saved yet.</div>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {items.map((it) => (
+            {filtered.map((it) => (
               <div key={it.id} className="rounded-xl border border-slate-800 bg-slate-900/70 overflow-hidden flex flex-col">
                 <div className="aspect-video bg-slate-950 flex items-center justify-center overflow-hidden">
                   {/* eslint-disable-next-line @next/next/no-img-element */}
