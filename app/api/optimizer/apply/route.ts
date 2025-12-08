@@ -56,17 +56,17 @@ async function pauseZoneInPropeller(
     };
   }
 
-  // You may want to use a different base URL if Propeller updates their API
-  const baseUrl =
-    process.env.PROPELLER_API_BASE_URL ||
-    "https://ssp-api.propellerads.com/v5";
-
-  // ⚠️ IMPORTANT:
-  // This endpoint + body is an educated example.
-  // Check PropellerAds Swagger/docs and adjust if needed.
-  const url = `${baseUrl}/adv/campaigns/${encodeURIComponent(
-    zone.campaignId
-  )}/zones/blacklist`;
+  // Build provider URL using configurable path (matches sync route)
+  let baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com";
+  // Prefer an explicit add/blacklist path for POST operations; fall back to the GET path
+  const pathTmpl = process.env.PROPELLER_ADD_BLACKLIST_PATH || process.env.PROPELLER_GET_BLACKLIST_PATH || "/v5/adv/campaigns/{campaignId}/targeting/exclude/zone";
+  let path = pathTmpl.replace("{campaignId}", encodeURIComponent(zone.campaignId));
+  if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
+  if (baseUrl.match(/\/v\d+(?:$|\/)/) && path.match(/^\/v\d+\//)) {
+    path = path.replace(/^\/v\d+/, "");
+  }
+  if (!path.startsWith("/")) path = `/${path}`;
+  const url = `${baseUrl}${path}`;
 
   try {
     const res = await fetch(url, {

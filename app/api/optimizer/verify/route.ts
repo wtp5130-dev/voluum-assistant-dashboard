@@ -6,8 +6,15 @@ const LIST_KEY = "blacklist:zones";
 async function fetchBlacklistedFromPropeller(campaignId: string): Promise<Set<string> | null> {
   const token = process.env.PROPELLER_API_TOKEN;
   if (!token) return null;
-  const baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com/v5";
-  const url = `${baseUrl}/adv/campaigns/${encodeURIComponent(campaignId)}/zones/blacklist`;
+  let baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com";
+  const pathTmpl = process.env.PROPELLER_GET_BLACKLIST_PATH || "/v5/adv/campaigns/{campaignId}/targeting/exclude/zone";
+  let path = pathTmpl.replace("{campaignId}", encodeURIComponent(campaignId));
+  if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
+  if (baseUrl.match(/\/v\d+(?:$|\/)/) && path.match(/^\/v\d+\//)) {
+    path = path.replace(/^\/v\d+/, "");
+  }
+  if (!path.startsWith("/")) path = `/${path}`;
+  const url = `${baseUrl}${path}`;
   try {
     const res = await fetch(url, {
       method: "GET",
