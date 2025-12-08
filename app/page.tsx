@@ -1203,6 +1203,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           setNegativePrompt={setNegativePrompt}
           seed={seed}
           setSeed={setSeed}
+          charRefFiles={charRefFiles}
           setCharRefFiles={setCharRefFiles}
           setImageRefFile={setImageRefFile}
           saveToGallery={saveToGallery}
@@ -2495,6 +2496,7 @@ function CreativesTab(props: {
   setNegativePrompt: (v: string) => void;
   seed: string;
   setSeed: (v: string) => void;
+  charRefFiles: File[];
   setCharRefFiles: (v: File[]) => void;
   setImageRefFile: (v: File | null) => void;
   saveToGallery: boolean;
@@ -2529,6 +2531,7 @@ function CreativesTab(props: {
     setNegativePrompt,
     seed,
     setSeed,
+    charRefFiles,
     setCharRefFiles,
     setImageRefFile,
     saveToGallery,
@@ -2658,6 +2661,28 @@ function CreativesTab(props: {
     sendCreativeChat(quick);
   };
 
+  function LibraryStrip({ mode, onUse }: { mode: "chars" | "image"; onUse: (url: string) => void }) {
+    const [items, setItems] = useState<Array<{ id: string; url: string }>>([]);
+    const [loaded, setLoaded] = useState(false);
+    useEffect(() => {
+      (async () => {
+        try { const r = await fetch("/api/media", { cache: "no-store" }); const j = await r.json(); const arr = Array.isArray(j?.items) ? j.items.slice(0, 8) : []; setItems(arr); } catch {}
+        setLoaded(true);
+      })();
+    }, []);
+    if (!loaded || items.length === 0) return null;
+    return (
+      <div className="mt-2 flex flex-wrap gap-2">
+        {items.map((it) => (
+          <button key={it.id} title="Use from library" onClick={() => onUse(it.url)} className="w-16 h-12 overflow-hidden rounded border border-slate-700 bg-slate-950">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={it.url} alt="ref" className="w-full h-full object-cover" />
+          </button>
+        ))}
+      </div>
+    );
+  }
+
   return (
     <section className="grid gap-6 lg:grid-cols-2">
       {/* Creative Doctor chat */}
@@ -2785,10 +2810,12 @@ function CreativesTab(props: {
               <div className="md:col-span-6">
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Character references (images)</label>
                 <input type="file" multiple accept="image/*" onChange={(e)=>{ const files = Array.from(e.target.files || []); setCharRefFiles(files as File[]); }} className="block w-full text-[11px]" />
+                <LibraryStrip mode="chars" onUse={async (url: string)=>{ try{ const b = await fetch(url).then(r=>r.blob()); const f = new File([b], url.split('/').pop()||'ref.png', { type: (b as any).type||'image/png' }); setCharRefFiles([...(charRefFiles||[]), f]); }catch{} }} />
               </div>
               <div className="md:col-span-6">
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Image reference (remix)</label>
                 <input type="file" accept="image/*" onChange={(e)=>{ const f = (e.target.files && e.target.files[0]) || null; setImageRefFile(f as any); }} className="block w-full text-[11px]" />
+                <LibraryStrip mode="image" onUse={async (url: string)=>{ try{ const b = await fetch(url).then(r=>r.blob()); const f = new File([b], url.split('/').pop()||'ref.png', { type: (b as any).type||'image/png' }); setImageRefFile(f); }catch{} }} />
               </div>
             </div>
           </div>
