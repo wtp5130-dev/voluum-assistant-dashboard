@@ -2530,9 +2530,12 @@ function CreativesTab(props: {
   const [doctorTitle, setDoctorTitle] = useState<string>("");
   const [doctorDescription, setDoctorDescription] = useState<string>("");
   const [doctorBusy, setDoctorBusy] = useState<boolean>(false);
+  const [embedCaption, setEmbedCaption] = useState<boolean>(true);
 
   const generateIdeogramPromptFromCopy = async () => {
-    const brief = [doctorTitle.trim(), doctorDescription.trim()].filter(Boolean).join(" — ");
+    const titleText = doctorTitle.trim();
+    const descText = doctorDescription.trim();
+    const brief = [titleText, descText].filter(Boolean).join(" — ");
     if (!brief) return;
     try {
       setDoctorBusy(true);
@@ -2543,7 +2546,16 @@ function CreativesTab(props: {
       });
       const json = await res.json().catch(() => null);
       if (!res.ok) throw new Error(json?.error || String(res.status));
-      const newMainPrompt = json?.imagePrompt || json?.mainImagePrompt || brief;
+      // Build an Ideogram-friendly prompt that embeds the caption text inside the image.
+      const basePrompt = (json?.imagePrompt || json?.mainImagePrompt || brief) as string;
+      const adLabel = (AD_TYPES as any)[adType]?.label || adType;
+      const captionDirective = embedCaption
+        ? ` Render the EXACT caption text inside the image as on-image typography: "${titleText}${descText ? ` — ${descText}` : ""}". Use bold, legible, high-contrast type. No extra text besides the caption. No watermarks.`
+        : "";
+      const typographyHints = " Clean layout, strong focal point, ad-friendly composition.";
+      const styleHint = stylePreset ? ` Style preset: ${stylePreset}.` : "";
+      const negHint = negativePrompt ? ` Avoid: ${negativePrompt}.` : "";
+      const newMainPrompt = `High-converting ${adLabel} visual. ${basePrompt}.${captionDirective}${typographyHints}${styleHint}${negHint}`.replace(/\s+/g, " ").trim();
       setImagePrompt(newMainPrompt);
     } catch (e) {
       // Silent fail in UI; user can still chat or try again
@@ -2627,7 +2639,11 @@ function CreativesTab(props: {
               <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Description</label>
               <input value={doctorDescription} onChange={(e)=>setDoctorDescription(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs" placeholder="Eg. Deposit bonus, instant withdrawals, mobile-first" />
             </div>
-            <div className="md:col-span-2 flex gap-2">
+            <div className="md:col-span-2 flex gap-2 items-center">
+              <label className="flex items-center gap-2 text-[11px] text-slate-300 whitespace-nowrap">
+                <input type="checkbox" checked={embedCaption} onChange={(e)=>setEmbedCaption(e.target.checked)} className="accent-emerald-500" />
+                Embed caption
+              </label>
               <button onClick={generateIdeogramPromptFromCopy} disabled={doctorBusy || (!doctorTitle.trim() && !doctorDescription.trim())} className="flex-1 text-[11px] px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50" title="Make an image prompt from your copy">
                 {doctorBusy?"Making…":"Make Ideogram Prompt"}
               </button>
