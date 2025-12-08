@@ -2613,8 +2613,7 @@ function CreativesTab(props: {
                 onChange={(e) => setImageProvider(e.target.value)}
               >
                 <option value="openai">OpenAI</option>
-                <option value="stability">Stability (SDXL)</option>
-                <option value="firefly">Adobe Firefly 3</option>
+                <option value="ideogram">Ideogram</option>
               </select>
             </div>
           </div>
