@@ -35,6 +35,21 @@ type ZoneApplyResult = {
   dryRun: boolean;
 };
 
+/** Resolve dashboard campaignId to provider campaign id using KV mapping when needed */
+async function resolveProviderCampaignId(dashboardId: string): Promise<string> {
+  // If already numeric, assume it's a provider id
+  if (/^\d+$/.test(dashboardId)) return dashboardId;
+  try {
+    const mapping = (await kv.get("mapping:dashboardToProvider")) as
+      | Record<string, string>
+      | null;
+    if (mapping && mapping[dashboardId]) {
+      return String(mapping[dashboardId]);
+    }
+  } catch {}
+  return dashboardId; // fall back to original
+}
+
 /**
  * Helper – call PropellerAds API for a single zone
  *
@@ -60,7 +75,9 @@ async function pauseZoneInPropeller(
   let baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com";
   // Prefer an explicit add/blacklist path for POST operations; fall back to the GET path
   const pathTmpl = process.env.PROPELLER_ADD_BLACKLIST_PATH || process.env.PROPELLER_GET_BLACKLIST_PATH || "/v5/adv/campaigns/{campaignId}/targeting/exclude/zone";
-  let path = pathTmpl.replace("{campaignId}", encodeURIComponent(zone.campaignId));
+  // Ensure we call provider with provider campaign id
+  const providerCid = await resolveProviderCampaignId(zone.campaignId);
+  let path = pathTmpl.replace("{campaignId}", encodeURIComponent(providerCid));
   if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
   if (baseUrl.match(/\/v\d+(?:$|\/)/) && path.match(/^\/v\d+\//)) {
     path = path.replace(/^\/v\d+/, "");

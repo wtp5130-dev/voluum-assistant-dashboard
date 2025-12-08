@@ -742,10 +742,14 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
       }
 
       const json = await res.json();
+      const results = Array.isArray(json?.results) ? json.results : [];
+      const okCount = results.filter((r: any) => r.status === "success").length;
+      const failCount = results.filter((r: any) => r.status === "failed").length;
+      const skipped = results.filter((r: any) => r.status === "skipped").length;
       setOptimizerStatus(
         optimizerDryRun
-          ? `Dry run completed. ${json.summary ?? "Check logs for details."}`
-          : `Apply completed. ${json.summary ?? "Zones were sent to PropellerAds."}`
+          ? `Dry run completed: ${okCount} would pause, ${skipped} skipped.`
+          : `Apply completed: ${okCount} succeeded, ${failCount} failed${skipped ? ", "+skipped+" skipped" : ""}.`
       );
 
       // After non-dry-run apply, refresh server-side blacklist
