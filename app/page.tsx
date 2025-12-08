@@ -2537,33 +2537,53 @@ function CreativesTab(props: {
   const [brandNegative, setBrandNegative] = useState<string>("");
   const [applyBrand, setApplyBrand] = useState<boolean>(true);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch("/api/brand", { cache: "no-store" });
-        const json = await res.json().catch(() => null);
-        if (json?.brand) {
-          setBrandName(String(json.brand.name || ""));
-          setBrandColors(Array.isArray(json.brand.colors) ? json.brand.colors.join(", ") : String(json.brand.colors || ""));
-          setBrandStyle(String(json.brand.style || ""));
-          setBrandNegative(String(json.brand.negative || ""));
-        }
-      } catch {}
-    })();
+  const [brandList, setBrandList] = useState<Array<{ id: string; name: string; colors: string[]; style: string; negative?: string }>>([]);
+  const [selectedBrandId, setSelectedBrandId] = useState<string>("");
+  const loadBrands = useCallback(async () => {
+    try {
+      const res = await fetch("/api/brand", { cache: "no-store" });
+      const json = await res.json().catch(() => null);
+      const items = Array.isArray(json?.brands) ? json.brands : [];
+      if (items.length === 0) {
+        // Seed SOL88 default on first run
+        await fetch("/api/brand", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: "SOL88",
+            colors: ["#0B1220", "#101826", "#12FFC6", "#FFD54A", "#FFFFFF"],
+            style: "High-contrast dark UI; glossy gold accents; teal neon highlights; cinematic rim lighting; realistic chips/cards/roulette; shallow depth of field; subtle bokeh; clean, centered composition; bold display typography; Mexico market flavor (subtle)",
+            negative: "pastel, low-contrast, cartoon, watermark, tiny unreadable text, cluttered backgrounds, blurry motion, JPEG artifacts, children imagery",
+          }),
+        });
+        return loadBrands();
+      }
+      setBrandList(items);
+      // Select first brand by default
+      const b = items[0];
+      setSelectedBrandId(b.id);
+      setBrandName(b.name || "");
+      setBrandColors(Array.isArray(b.colors) ? b.colors.join(", ") : "");
+      setBrandStyle(b.style || "");
+      setBrandNegative(b.negative || "");
+    } catch {}
   }, []);
+  useEffect(() => { loadBrands(); }, [loadBrands]);
 
   const saveBrand = async () => {
     try {
-      await fetch("/api/brand", {
+      const res = await fetch("/api/brand", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
+          id: selectedBrandId || undefined,
           name: brandName,
           colors: brandColors,
           style: brandStyle,
           negative: brandNegative,
         }),
       });
+      await loadBrands();
     } catch {}
   };
 
@@ -2701,6 +2721,17 @@ function CreativesTab(props: {
                   <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" className="accent-emerald-500" checked={applyBrand} onChange={(e)=>setApplyBrand(e.target.checked)} />Apply in prompts</label>
                 </div>
                 <div className="mt-2 grid gap-2 md:grid-cols-12 text-[11px]">
+                  <div className="md:col-span-3">
+                    <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Select brand</label>
+                    <select value={selectedBrandId} onChange={(e)=>{
+                      const id = e.target.value; setSelectedBrandId(id);
+                      const b = brandList.find(x=>x.id===id);
+                      if(b){ setBrandName(b.name||""); setBrandColors((b.colors||[]).join(", ")); setBrandStyle(b.style||""); setBrandNegative(b.negative||""); }
+                    }} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1">
+                      {brandList.map((b)=> (<option key={b.id} value={b.id}>{b.name}</option>))}
+                      {brandList.length===0 && (<option value="">No brands</option>)}
+                    </select>
+                  </div>
                   <div className="md:col-span-3">
                     <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Brand name</label>
                     <input value={brandName} onChange={(e)=>setBrandName(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1" placeholder="Your brand" />
