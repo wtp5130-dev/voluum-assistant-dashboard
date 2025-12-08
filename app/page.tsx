@@ -712,9 +712,14 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
     }
   };
 
-  const runOptimizerApply = async () => {
+  const runOptimizerApply = async (selectedZones: any[]) => {
     if (!optimizerPreviewResult) {
       setOptimizerStatus("Run preview first before applying.");
+      return;
+    }
+
+    if (!Array.isArray(selectedZones) || selectedZones.length === 0) {
+      setOptimizerStatus("No zones selected. Choose at least one to pause.");
       return;
     }
 
@@ -726,7 +731,7 @@ const [assetsError, setAssetsError] = useState<string | null>(null);
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          zonesToPauseNow: optimizerPreviewResult.zonesToPauseNow,
+          zonesToPauseNow: selectedZones,
           dryRun: optimizerDryRun,
         }),
       });
@@ -1901,7 +1906,7 @@ function OptimizerTab(props: {
   dryRun: boolean;
   setDryRun: (b: boolean) => void;
   runPreview: () => void;
-  runApply: () => void;
+  runApply: (selectedZones: any[]) => void;
   blacklistedZones: { id?: string; zoneId: string; campaignId: string; timestamp: string; reverted?: boolean; revertedAt?: string | null; verified?: boolean; verifiedAt?: string | null }[];
   clearBlacklist: () => void;
   refreshBlacklist: () => void;
@@ -1927,6 +1932,37 @@ function OptimizerTab(props: {
   } = props;
 
   const zonesToPause = previewResult?.zonesToPauseNow ?? [];
+  // Selection state for previewed zones
+  const [selectedZoneIds, setSelectedZoneIds] = useState<Set<string>>(new Set());
+  const zoneKey = (z: any) => `${String(z?.campaignId ?? z?.campaign ?? "")}__${String(z?.zoneId ?? z?.zone ?? "")}`;
+  // When preview updates, select all zones by default
+  useEffect(() => {
+    const next = new Set<string>();
+    for (const z of zonesToPause) next.add(zoneKey(z));
+    setSelectedZoneIds(next);
+  }, [zonesToPause]);
+  const selectedZonesCount = useMemo(() => {
+    if (!zonesToPause.length) return 0;
+    let c = 0;
+    for (const z of zonesToPause) if (selectedZoneIds.has(zoneKey(z))) c++;
+    return c;
+  }, [zonesToPause, selectedZoneIds]);
+  const allZonesSelected = zonesToPause.length > 0 && selectedZonesCount === zonesToPause.length;
+  const toggleZoneSelection = (key: string) => {
+    setSelectedZoneIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+  const toggleAllZones = () => {
+    if (!zonesToPause.length) { setSelectedZoneIds(new Set()); return; }
+    if (allZonesSelected) { setSelectedZoneIds(new Set()); return; }
+    const next = new Set<string>();
+    for (const z of zonesToPause) next.add(zoneKey(z));
+    setSelectedZoneIds(next);
+  };
   const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({});
   const toggleSelected = (id?: string, enabled?: boolean) => {
     if (!id || enabled === false) return;
@@ -1973,11 +2009,12 @@ function OptimizerTab(props: {
               {previewLoading ? "Generating…" : "Generate pause plan"}
             </button>
             <button
-              onClick={runApply}
+              onClick={() => runApply(zonesToPause.filter((z:any)=> selectedZoneIds.has(zoneKey(z))))}
               disabled={
                 applyLoading ||
                 !previewResult ||
-                ((previewResult?.zonesToPauseNow?.length ?? 0) === 0)
+                ((previewResult?.zonesToPauseNow?.length ?? 0) === 0) ||
+                selectedZonesCount === 0
               }
               className="px-4 py-2 rounded-md text-xs font-semibold bg-slate-800 hover:bg-slate-700 disabled:opacity-40"
             >
@@ -2045,7 +2082,7 @@ function OptimizerTab(props: {
               Zones flagged to pause
             </h3>
             <span className="text-[10px] text-slate-500">
-              {formatInteger(zonesToPause.length)} zones
+              {formatInteger(zonesToPause.length)} zones • {formatInteger(selectedZonesCount)} selected
             </span>
           </div>
 
@@ -2058,6 +2095,15 @@ function OptimizerTab(props: {
               <table className="w-full border-collapse">
                 <thead className="bg-slate-900/80 sticky top-0 z-10">
                   <tr className="text-slate-400">
+                    <th className="text-left p-2 w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Toggle all zones"
+                        checked={allZonesSelected}
+                        onChange={toggleAllZones}
+                        className="h-4 w-4 accent-emerald-500"
+                      />
+                    </th>
                     <th className="text-left p-2">Campaign</th>
                     <th className="text-left p-2">Zone</th>
                     <th className="text-right p-2">Visits</th>
@@ -2068,35 +2114,48 @@ function OptimizerTab(props: {
                   </tr>
                 </thead>
                 <tbody>
-                  {zonesToPause.map((z: any, idx: number) => (
-                    <tr key={idx}>
-                      <td className="p-2 text-[11px]">
-                        {z.campaignName ?? z.campaignId}
-                      </td>
-                      <td className="p-2 text-[11px]">
-                        {z.zoneId ?? z.zone ?? "—"}
-                      </td>
-                      <td className="p-2 text-right text-[11px]">
-                        {formatInteger(z.metrics?.visits ?? z.visits ?? 0)}
-                      </td>
-                      <td className="p-2 text-right text-[11px]">
-                        {formatInteger(z.metrics?.signups ?? z.signups ?? 0)}
-                      </td>
-                      <td className="p-2 text-right text-[11px]">
-                        {formatInteger(z.metrics?.deposits ?? z.deposits ?? 0)}
-                      </td>
-                      <td className="p-2 text-right text-[11px]">
-                        {formatMoney(
-                          z.metrics?.cost ?? z.cost ?? 0
-                        )}
-                      </td>
-                      <td className="p-2 text-right text-[11px]">
-                        {formatPercent(
-                          z.metrics?.roi ?? z.roi ?? -100
-                        )}
-                      </td>
-                    </tr>
-                  ))}
+                  {zonesToPause.map((z: any, idx: number) => {
+                    const key = zoneKey(z);
+                    const isChecked = selectedZoneIds.has(key);
+                    return (
+                      <tr key={idx}>
+                        <td className="p-2 align-top">
+                          <input
+                            type="checkbox"
+                            aria-label={`Select zone ${z.zoneId ?? z.zone ?? ""}`}
+                            checked={isChecked}
+                            onChange={() => toggleZoneSelection(key)}
+                            className="h-4 w-4 accent-emerald-500"
+                          />
+                        </td>
+                        <td className="p-2 text-[11px]">
+                          {z.campaignName ?? z.campaignId}
+                        </td>
+                        <td className="p-2 text-[11px]">
+                          {z.zoneId ?? z.zone ?? "—"}
+                        </td>
+                        <td className="p-2 text-right text-[11px]">
+                          {formatInteger(z.metrics?.visits ?? z.visits ?? 0)}
+                        </td>
+                        <td className="p-2 text-right text-[11px]">
+                          {formatInteger(z.metrics?.signups ?? z.signups ?? 0)}
+                        </td>
+                        <td className="p-2 text-right text-[11px]">
+                          {formatInteger(z.metrics?.deposits ?? z.deposits ?? 0)}
+                        </td>
+                        <td className="p-2 text-right text-[11px]">
+                          {formatMoney(
+                            z.metrics?.cost ?? z.cost ?? 0
+                          )}
+                        </td>
+                        <td className="p-2 text-right text-[11px]">
+                          {formatPercent(
+                            z.metrics?.roi ?? z.roi ?? -100
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
