@@ -77,7 +77,7 @@ type ChatMessage = {
   content: string;
 };
 
-type TabKey = "dashboard" | "optimizer" | "creatives" | "builder" | "audit";
+type TabKey = "dashboard" | "optimizer" | "creatives" | "builder" | "audit" | "updates";
 
 /**
  * ===========
@@ -338,7 +338,7 @@ export default function DashboardPage() {
   const toHash = (t: TabKey) => `#${t}`;
   const fromHash = (h: string): TabKey | null => {
     const v = (h || "").replace(/^#/, "");
-    if (v === "dashboard" || v === "optimizer" || v === "creatives" || v === "builder") return v as TabKey;
+    if (v === "dashboard" || v === "optimizer" || v === "creatives" || v === "builder" || v === "updates" || v === "audit") return v as TabKey;
     return null;
   };
 
@@ -346,7 +346,7 @@ export default function DashboardPage() {
     try {
       const usp = new URLSearchParams(s.startsWith("?") ? s : `?${s}`);
       const t = usp.get("tab");
-      if (t === "dashboard" || t === "optimizer" || t === "creatives" || t === "builder") return t as TabKey;
+      if (t === "dashboard" || t === "optimizer" || t === "creatives" || t === "builder" || t === "updates" || t === "audit") return t as TabKey;
       return null;
     } catch {
       return null;
@@ -371,7 +371,8 @@ export default function DashboardPage() {
             (key === "optimizer" && can("optimizer")) ||
             (key === "creatives" && can("creatives")) ||
             (key === "builder" && can("builder")) ||
-            key === "audit") {
+            key === "audit" ||
+            (key === "updates" && currentUser?.role === "admin")) {
           setActiveTab(key);
         }
       } catch {}
@@ -386,7 +387,9 @@ export default function DashboardPage() {
         initial === "dashboard" ||
         (initial === "optimizer" && can("optimizer")) ||
         (initial === "creatives" && can("creatives")) ||
-        (initial === "builder" && can("builder"))
+        (initial === "builder" && can("builder")) ||
+        (initial === "updates" && currentUser?.role === "admin") ||
+        (initial === "audit" && currentUser?.role === "admin")
       )) {
         setActiveTab(initial);
       }
@@ -398,7 +401,9 @@ export default function DashboardPage() {
         next === "dashboard" ||
         (next === "optimizer" && can("optimizer")) ||
         (next === "creatives" && can("creatives")) ||
-        (next === "builder" && can("builder"))
+        (next === "builder" && can("builder")) ||
+        (next === "updates" && currentUser?.role === "admin") ||
+        (next === "audit" && currentUser?.role === "admin")
       ) {
         setActiveTab(next);
       }
@@ -410,7 +415,9 @@ export default function DashboardPage() {
         next === "dashboard" ||
         (next === "optimizer" && can("optimizer")) ||
         (next === "creatives" && can("creatives")) ||
-        (next === "builder" && can("builder"))
+        (next === "builder" && can("builder")) ||
+        (next === "updates" && currentUser?.role === "admin") ||
+        (next === "audit" && currentUser?.role === "admin")
       ) {
         setActiveTab(next);
       }
@@ -1166,8 +1173,141 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
       {activeTab === "audit" && currentUser?.role === "admin" && (
         <AuditTrailTab />
       )}
+      {activeTab === "updates" && currentUser?.role === "admin" && (
+        <UpdatesTab />
+      )}
       </div>
     </main>
+  );
+}
+
+/**
+ * Updates tab (admin only)
+ */
+function UpdatesTab() {
+  const [entries, setEntries] = useState<Array<{ id: string; title: string; kind: string; content: string; createdAt: string; author?: string }>>([]);
+  const [loading, setLoading] = useState(false);
+  const [title, setTitle] = useState("");
+  const [kind, setKind] = useState<"feature" | "fix" | "note">("feature");
+  const [content, setContent] = useState("");
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchEntries = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/updates", { cache: "no-store" });
+      const json = await res.json().catch(() => null);
+      if (res.ok && Array.isArray(json?.items)) setEntries(json.items);
+      else setError(json?.error || `Failed to load (${res.status})`);
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchEntries();
+  }, [fetchEntries]);
+
+  const addEntry = async () => {
+    if (!title.trim() || !content.trim()) return;
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/updates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, kind, content }),
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(`Add failed (${res.status}): ${txt}`);
+      }
+      setTitle("");
+      setKind("feature");
+      setContent("");
+      fetchEntries();
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const removeEntry = async (id: string) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/updates", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) throw new Error(String(res.status));
+      fetchEntries();
+    } catch (e: any) {
+      setError(e?.message || String(e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <section className="space-y-4">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300 mb-2">Team Updates</h2>
+        <div className="grid gap-3 md:grid-cols-3">
+          <input value={title} onChange={(e)=>setTitle(e.target.value)} placeholder="Title" className="px-3 py-2 rounded-md bg-slate-950 border border-slate-800 text-sm text-slate-200" />
+          <select value={kind} onChange={(e)=>setKind(e.target.value as any)} className="px-3 py-2 rounded-md bg-slate-950 border border-slate-800 text-sm text-slate-200">
+            <option value="feature">Feature</option>
+            <option value="fix">Fix</option>
+            <option value="note">Note</option>
+          </select>
+          <button onClick={addEntry} disabled={loading || !title.trim() || !content.trim()} className="px-4 py-2 rounded-md text-xs font-semibold bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50">{loading?"Saving…":"Add update"}</button>
+        </div>
+        <textarea value={content} onChange={(e)=>setContent(e.target.value)} placeholder="Write the update details…" className="mt-3 w-full min-h-28 px-3 py-2 rounded-md bg-slate-950 border border-slate-800 text-sm text-slate-200" />
+        {error && <p className="text-[11px] text-rose-400 mt-2">{error}</p>}
+      </div>
+
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-0 overflow-hidden">
+        <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Recent entries</h3>
+          <span className="text-[10px] text-slate-500">{entries.length} total</span>
+        </div>
+        {entries.length === 0 ? (
+          <div className="p-4 text-[11px] text-slate-500">No updates yet.</div>
+        ) : (
+          <div className="max-h-80 overflow-auto text-[12px]">
+            <table className="w-full border-collapse">
+              <thead className="bg-slate-900/80 sticky top-0 z-10">
+                <tr className="text-slate-400">
+                  <th className="text-left p-2 w-28">When</th>
+                  <th className="text-left p-2 w-24">Type</th>
+                  <th className="text-left p-2">Title</th>
+                  <th className="text-left p-2">Details</th>
+                  <th className="text-right p-2 w-24">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map((e, i) => (
+                  <tr key={e.id || i}>
+                    <td className="p-2 align-top text-[11px] text-slate-400">{new Date(e.createdAt).toLocaleString()}</td>
+                    <td className="p-2 align-top"><span className={`px-2 py-0.5 rounded text-[11px] ${e.kind === 'feature' ? 'bg-emerald-600/20 text-emerald-300' : e.kind === 'fix' ? 'bg-amber-500/20 text-amber-300' : 'bg-slate-600/20 text-slate-300'}`}>{e.kind}</span></td>
+                    <td className="p-2 align-top text-slate-200">{e.title}</td>
+                    <td className="p-2 align-top text-slate-300 whitespace-pre-wrap">{e.content}</td>
+                    <td className="p-2 align-top text-right">
+                      <button onClick={()=>removeEntry(e.id)} className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Delete</button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 

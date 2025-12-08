@@ -12,7 +12,7 @@ export default function NavBar() {
   const [detail, setDetail] = useState<string>("");
   const [checking, setChecking] = useState(false);
   const pathname = usePathname();
-  const [activeTab, setActiveTab] = useState<"dashboard" | "optimizer" | "creatives" | "builder" | "audit">("dashboard");
+  const [activeTab, setActiveTab] = useState<"dashboard" | "optimizer" | "creatives" | "builder" | "audit" | "updates">("dashboard");
 
   // Sync active tab from page
   useEffect(() => {
@@ -56,7 +56,7 @@ export default function NavBar() {
       const p = url.searchParams.get("tab");
       const h = (url.hash || "").replace(/^#/, "");
       const v = (p || h) as string;
-      if (v === "dashboard" || v === "optimizer" || v === "creatives" || v === "builder" || v === "audit") setActiveTab(v as any);
+      if (v === "dashboard" || v === "optimizer" || v === "creatives" || v === "builder" || v === "audit" || v === "updates") setActiveTab(v as any);
     } catch {}
   }, []);
 
@@ -145,6 +145,9 @@ export default function NavBar() {
             )}
             {me?.role === "admin" && (
               <button onClick={() => selectTab("audit")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "audit" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Audit Trail</button>
+            )}
+            {me?.role === "admin" && (
+              <button onClick={() => selectTab("updates")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "updates" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Updates</button>
             )}
           </div>
         )}
