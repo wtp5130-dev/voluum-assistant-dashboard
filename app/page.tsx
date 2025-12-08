@@ -92,7 +92,7 @@ const OPTIMIZER_APPLY_URL = "/api/optimizer/apply";
 const CREATIVE_CHAT_API_URL = "/api/creative-doctor";
 const CREATIVE_IMAGE_API_URL = "/api/creative-images";
 const CREATIVE_ASSETS_API_URL = "/api/creative-assets";
-const IMAGE_PROVIDER_DEFAULT = (process.env.NEXT_PUBLIC_IMAGE_PROVIDER as string) || "openai";
+const IMAGE_PROVIDER_DEFAULT = (process.env.NEXT_PUBLIC_IMAGE_PROVIDER as string) || "ideogram";
 const AD_TYPES: Record<
   string,
   {

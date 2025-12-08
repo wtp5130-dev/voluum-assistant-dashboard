@@ -21,7 +21,7 @@ export async function POST(req: Request): Promise<Response> {
 
     const prompt = body?.prompt;
     const size = body?.size || "1024x1024";
-    const provider = String(body?.provider || process.env.CREATIVE_IMAGE_PROVIDER || "openai").toLowerCase();
+    const provider = String(body?.provider || process.env.CREATIVE_IMAGE_PROVIDER || "ideogram").toLowerCase();
 
     if (!prompt || typeof prompt !== "string") {
       return new Response(
