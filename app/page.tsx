@@ -887,6 +887,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
             style_preset: stylePreset || undefined,
             negative_prompt: negativePrompt || undefined,
             seed: seed || undefined,
+            saveToGallery: true,
           }),
         });
       }

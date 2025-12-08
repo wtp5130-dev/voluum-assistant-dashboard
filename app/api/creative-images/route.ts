@@ -91,10 +91,53 @@ export async function POST(req: Request): Promise<Response> {
       const b64 = json?.data?.[0]?.b64_json || json?.image?.base64 || json?.outputs?.[0]?.image?.base64;
       if (b64) {
         const url = `data:image/png;base64,${b64}`;
+        try {
+          // Save to gallery (best-effort)
+          // @ts-ignore dynamic import types
+          const { kv } = await import("@vercel/kv");
+          const save = body?.saveToGallery !== false;
+          if (save) {
+            await kv.lpush("gallery:images", {
+              id: crypto.randomUUID(),
+              url,
+              provider: "ideogram",
+              prompt,
+              size,
+              style_preset: body?.style_preset,
+              negative_prompt: body?.negative_prompt,
+              seed: body?.seed,
+              brandId: body?.brandId,
+              brandName: body?.brandName,
+              createdAt: new Date().toISOString(),
+            });
+            await kv.ltrim("gallery:images", 0, 999);
+          }
+        } catch {}
         return new Response(JSON.stringify({ url, provider: "ideogram" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       const url = json?.data?.[0]?.url || json?.image?.url || json?.outputs?.[0]?.image?.url;
       if (url) {
+        try {
+          // @ts-ignore dynamic import types
+          const { kv } = await import("@vercel/kv");
+          const save = body?.saveToGallery !== false;
+          if (save) {
+            await kv.lpush("gallery:images", {
+              id: crypto.randomUUID(),
+              url,
+              provider: "ideogram",
+              prompt,
+              size,
+              style_preset: body?.style_preset,
+              negative_prompt: body?.negative_prompt,
+              seed: body?.seed,
+              brandId: body?.brandId,
+              brandName: body?.brandName,
+              createdAt: new Date().toISOString(),
+            });
+            await kv.ltrim("gallery:images", 0, 999);
+          }
+        } catch {}
         return new Response(JSON.stringify({ url, provider: "ideogram" }), { status: 200, headers: { "Content-Type": "application/json" } });
       }
       return new Response(JSON.stringify({ error: "No image in Ideogram response" }), { status: 500, headers: { "Content-Type": "application/json" } });
