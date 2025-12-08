@@ -92,6 +92,7 @@ const OPTIMIZER_APPLY_URL = "/api/optimizer/apply";
 const CREATIVE_CHAT_API_URL = "/api/creative-doctor";
 const CREATIVE_IMAGE_API_URL = "/api/creative-images";
 const CREATIVE_ASSETS_API_URL = "/api/creative-assets";
+const IMAGE_PROVIDER_DEFAULT = (process.env.NEXT_PUBLIC_IMAGE_PROVIDER as string) || "openai";
 const AD_TYPES: Record<
   string,
   {
@@ -450,6 +451,7 @@ const [mainImageSize, setMainImageSize] = useState("1024x1024");
 const [imageLoading, setImageLoading] = useState(false);
 const [imageError, setImageError] = useState<string | null>(null);
 const [imageUrl, setImageUrl] = useState<string | null>(null);
+  const [imageProvider, setImageProvider] = useState<string>(IMAGE_PROVIDER_DEFAULT);
 const [assetsLoading, setAssetsLoading] = useState(false);
 const [assetsError, setAssetsError] = useState<string | null>(null);
 
@@ -854,6 +856,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         body: JSON.stringify({
           prompt: promptText,
           size: sizeOverride || mainImageSize,
+          provider: imageProvider,
         }),
       });
 
@@ -1158,6 +1161,8 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           assetsError={assetsError}
           imageUrl={imageUrl}
           generateCreativeBundle={generateCreativeBundle}
+          imageProvider={imageProvider}
+          setImageProvider={setImageProvider}
         />
       )}
 
@@ -2438,6 +2443,8 @@ function CreativesTab(props: {
   assetsError: string | null;
   imageUrl: string | null;
   generateCreativeBundle: () => void;
+  imageProvider: string;
+  setImageProvider: (v: string) => void;
 }) {
   const {
     creativeChatMessages,
@@ -2460,6 +2467,8 @@ function CreativesTab(props: {
     assetsError,
     imageUrl,
     generateCreativeBundle,
+    imageProvider,
+    setImageProvider,
   } = props;
 
   // Quick actions for Creative Doctor
@@ -2581,19 +2590,32 @@ function CreativesTab(props: {
               Generate copy + visuals tailored to each Propeller ad type.
             </p>
           </div>
-          <div className="text-[11px] text-slate-400">
-            Ad type:{" "}
-            <select
-              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
-              value={adType}
-              onChange={(e) => setAdType(e.target.value)}
-            >
-              {Object.entries(AD_TYPES).map(([key, meta]) => (
-                <option key={key} value={key}>
-                  {meta.label}
-                </option>
-              ))}
-            </select>
+          <div className="flex items-center gap-3 text-[11px] text-slate-400">
+            <div>
+              Ad type:{" "}
+              <select
+                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+                value={adType}
+                onChange={(e) => setAdType(e.target.value)}
+              >
+                {Object.entries(AD_TYPES).map(([key, meta]) => (
+                  <option key={key} value={key}>
+                    {meta.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              Image provider:{" "}
+              <select
+                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs"
+                value={imageProvider}
+                onChange={(e) => setImageProvider(e.target.value)}
+              >
+                <option value="openai">OpenAI</option>
+                <option value="stability">Stability (SDXL)</option>
+              </select>
+            </div>
           </div>
         </div>
 
