@@ -2472,6 +2472,31 @@ function CreativesTab(props: {
   } = props;
 
   // Quick actions for Creative Doctor
+  const [doctorTitle, setDoctorTitle] = useState<string>("");
+  const [doctorDescription, setDoctorDescription] = useState<string>("");
+  const [doctorBusy, setDoctorBusy] = useState<boolean>(false);
+
+  const generateIdeogramPromptFromCopy = async () => {
+    const brief = [doctorTitle.trim(), doctorDescription.trim()].filter(Boolean).join(" — ");
+    if (!brief) return;
+    try {
+      setDoctorBusy(true);
+      const res = await fetch(CREATIVE_ASSETS_API_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ prompt: brief, adType }),
+      });
+      const json = await res.json().catch(() => null);
+      if (!res.ok) throw new Error(json?.error || String(res.status));
+      const newMainPrompt = json?.imagePrompt || json?.mainImagePrompt || brief;
+      setImagePrompt(newMainPrompt);
+    } catch (e) {
+      // Silent fail in UI; user can still chat or try again
+    } finally {
+      setDoctorBusy(false);
+    }
+  };
+
   const handleQuickPrompt = async () => {
     try {
       const base = (creativeChatInput || imagePrompt || "High-converting creative idea").trim();
@@ -2537,6 +2562,23 @@ function CreativesTab(props: {
         </div>
 
         <div className="flex-1 flex flex-col">
+          {/* Title + Description -> Ideogram Prompt helper */}
+          <div className="px-4 py-2 border-b border-slate-800 grid gap-2 md:grid-cols-12 items-end">
+            <div className="md:col-span-3">
+              <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Title</label>
+              <input value={doctorTitle} onChange={(e)=>setDoctorTitle(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs" placeholder="Eg. Win big today" />
+            </div>
+            <div className="md:col-span-7">
+              <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Description</label>
+              <input value={doctorDescription} onChange={(e)=>setDoctorDescription(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs" placeholder="Eg. Deposit bonus, instant withdrawals, mobile-first" />
+            </div>
+            <div className="md:col-span-2 flex gap-2">
+              <button onClick={generateIdeogramPromptFromCopy} disabled={doctorBusy || (!doctorTitle.trim() && !doctorDescription.trim())} className="flex-1 text-[11px] px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50" title="Make an image prompt from your copy">
+                {doctorBusy?"Making…":"Make Ideogram Prompt"}
+              </button>
+            </div>
+          </div>
+
           <div className="flex-1 overflow-auto px-4 py-2 space-y-2 text-xs">
             {creativeChatMessages.map((m, idx) => (
               <div
