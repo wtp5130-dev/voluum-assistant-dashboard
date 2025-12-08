@@ -2593,7 +2593,7 @@ function CreativesTab(props: {
   return (
     <section className="grid gap-6 lg:grid-cols-2">
       {/* Creative Doctor chat */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/80 flex flex-col h-[420px] min-h-0">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/80 flex flex-col h-[560px] min-h-0">
         <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
