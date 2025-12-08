@@ -7,17 +7,16 @@ function getOpenAI() {
 
 export async function POST(req: Request): Promise<Response> {
   try {
-    let body: any;
-    try {
-      body = await req.json();
-    } catch {
-      return new Response(
-        JSON.stringify({ error: "Invalid JSON body" }),
-        {
-          status: 400,
-          headers: { "Content-Type": "application/json" },
-        }
-      );
+    // Support both JSON and multipart bodies
+    const contentType = req.headers.get("content-type") || "";
+    let body: any = {};
+    let form: FormData | null = null;
+    if (contentType.includes("multipart/form-data")) {
+      form = await (req as any).formData();
+      const entries = form ? Array.from(form.entries()) : [];
+      body = Object.fromEntries(entries.map(([k, v]) => [k, typeof v === "string" ? v : v]));
+    } else {
+      try { body = await req.json(); } catch { body = {}; }
     }
 
     const prompt = body?.prompt;
@@ -48,22 +47,38 @@ export async function POST(req: Request): Promise<Response> {
       const height = Math.max(256, Math.min(2048, parseInt(hStr || "1024", 10) || 1024));
       const model = process.env.IDEOGRAM_MODEL || "ideogram-3";
       const renderingSpeed = process.env.IDEOGRAM_RENDERING_SPEED || "TURBO"; // TURBO | QUALITY
-      const bodyJson: any = {
-        prompt,
-        width,
-        height,
-        model,
-        rendering_speed: renderingSpeed,
-      };
-      const res = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Api-Key": key,
-          "Content-Type": "application/json",
-          "Accept": "application/json",
-        },
-        body: JSON.stringify(bodyJson),
-      });
+      const stylePreset = body?.style_preset || body?.stylePreset || undefined;
+      const negative = body?.negative_prompt || body?.negativePrompt || undefined;
+      const seedVal = body?.seed || undefined;
+      let res: Response;
+      if (form && (form.getAll("character_reference_images").length > 0 || form.get("image"))) {
+        // Forward as multipart with files
+        const upstream = new FormData();
+        upstream.append("prompt", String(prompt));
+        upstream.append("width", String(width));
+        upstream.append("height", String(height));
+        upstream.append("model", String(model));
+        upstream.append("rendering_speed", String(renderingSpeed));
+        if (stylePreset) upstream.append("style_preset", String(stylePreset));
+        if (negative) upstream.append("negative_prompt", String(negative));
+        if (seedVal) upstream.append("seed", String(seedVal));
+        for (const f of form.getAll("character_reference_images")) {
+          if (typeof f !== "string") upstream.append("character_reference_images", f as any);
+        }
+        const img = form.get("image");
+        if (img && typeof img !== "string") upstream.append("image", img as any);
+        res = await fetch(endpoint, { method: "POST", headers: { "Api-Key": key }, body: upstream as any });
+      } else {
+        const bodyJson: any = { prompt, width, height, model, rendering_speed: renderingSpeed };
+        if (stylePreset) bodyJson.style_preset = stylePreset;
+        if (negative) bodyJson.negative_prompt = negative;
+        if (seedVal) bodyJson.seed = seedVal;
+        res = await fetch(endpoint, {
+          method: "POST",
+          headers: { "Api-Key": key, "Content-Type": "application/json", "Accept": "application/json" },
+          body: JSON.stringify(bodyJson),
+        });
+      }
       const txt = await res.text();
       if (!res.ok) {
         return new Response(

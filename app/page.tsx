@@ -451,9 +451,15 @@ const [mainImageSize, setMainImageSize] = useState("1024x1024");
 const [imageLoading, setImageLoading] = useState(false);
 const [imageError, setImageError] = useState<string | null>(null);
 const [imageUrl, setImageUrl] = useState<string | null>(null);
-  const [imageProvider, setImageProvider] = useState<string>(IMAGE_PROVIDER_DEFAULT);
+const [imageProvider, setImageProvider] = useState<string>(IMAGE_PROVIDER_DEFAULT);
 const [assetsLoading, setAssetsLoading] = useState(false);
 const [assetsError, setAssetsError] = useState<string | null>(null);
+// Ideogram advanced controls
+const [stylePreset, setStylePreset] = useState<string>("");
+const [negativePrompt, setNegativePrompt] = useState<string>("");
+const [seed, setSeed] = useState<string>("");
+const [charRefFiles, setCharRefFiles] = useState<File[]>([]);
+const [imageRefFile, setImageRefFile] = useState<File | null>(null);
 
   /**
    * Fetch dashboard data whenever dateRange or custom dates change
@@ -850,15 +856,40 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
     setImageUrl(null);
 
     try {
-      const imageRes = await fetch(CREATIVE_IMAGE_API_URL, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: promptText,
-          size: sizeOverride || mainImageSize,
-          provider: imageProvider,
-        }),
-      });
+      let imageRes: Response;
+      // Use multipart for Ideogram when advanced fields/files are present
+      const useMultipart = imageProvider === "ideogram" && (
+        Boolean(stylePreset) || Boolean(negativePrompt) || Boolean(seed) || (charRefFiles && charRefFiles.length > 0) || Boolean(imageRefFile)
+      );
+      if (useMultipart) {
+        const form = new FormData();
+        form.append("prompt", promptText);
+        form.append("size", sizeOverride || mainImageSize);
+        form.append("provider", imageProvider);
+        if (stylePreset) form.append("style_preset", stylePreset);
+        if (negativePrompt) form.append("negative_prompt", negativePrompt);
+        if (seed) form.append("seed", seed);
+        if (Array.isArray(charRefFiles)) {
+          for (const f of charRefFiles) {
+            if (f) form.append("character_reference_images", f);
+          }
+        }
+        if (imageRefFile) form.append("image", imageRefFile);
+        imageRes = await fetch(CREATIVE_IMAGE_API_URL, { method: "POST", body: form });
+      } else {
+        imageRes = await fetch(CREATIVE_IMAGE_API_URL, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            prompt: promptText,
+            size: sizeOverride || mainImageSize,
+            provider: imageProvider,
+            style_preset: stylePreset || undefined,
+            negative_prompt: negativePrompt || undefined,
+            seed: seed || undefined,
+          }),
+        });
+      }
 
       if (!imageRes.ok) {
         const text = await imageRes.text();
@@ -1163,6 +1194,14 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           generateCreativeBundle={generateCreativeBundle}
           imageProvider={imageProvider}
           setImageProvider={setImageProvider}
+          stylePreset={stylePreset}
+          setStylePreset={setStylePreset}
+          negativePrompt={negativePrompt}
+          setNegativePrompt={setNegativePrompt}
+          seed={seed}
+          setSeed={setSeed}
+          setCharRefFiles={setCharRefFiles}
+          setImageRefFile={setImageRefFile}
         />
       )}
 
@@ -2445,6 +2484,14 @@ function CreativesTab(props: {
   generateCreativeBundle: () => void;
   imageProvider: string;
   setImageProvider: (v: string) => void;
+  stylePreset: string;
+  setStylePreset: (v: string) => void;
+  negativePrompt: string;
+  setNegativePrompt: (v: string) => void;
+  seed: string;
+  setSeed: (v: string) => void;
+  setCharRefFiles: (v: File[]) => void;
+  setImageRefFile: (v: File | null) => void;
 }) {
   const {
     creativeChatMessages,
@@ -2469,6 +2516,14 @@ function CreativesTab(props: {
     generateCreativeBundle,
     imageProvider,
     setImageProvider,
+    stylePreset,
+    setStylePreset,
+    negativePrompt,
+    setNegativePrompt,
+    seed,
+    setSeed,
+    setCharRefFiles,
+    setImageRefFile,
   } = props;
 
   // Quick actions for Creative Doctor
@@ -2580,6 +2635,35 @@ function CreativesTab(props: {
           </div>
 
           <div className="flex-1 overflow-auto px-4 py-2 space-y-2 text-xs">
+            {/* Style / Negative / Seed / References */}
+            <div className="grid gap-2 md:grid-cols-12">
+              <div className="md:col-span-3">
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Style preset</label>
+                <select value={stylePreset} onChange={(e)=>setStylePreset(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs">
+                  <option value="">(None)</option>
+                  <option value="JAPANDI_FUSION">JAPANDI_FUSION</option>
+                  <option value="MIXED_MEDIA">MIXED_MEDIA</option>
+                  <option value="90S_NOSTALGIA">90S_NOSTALGIA</option>
+                  <option value="ART_BRUT">ART_BRUT</option>
+                </select>
+              </div>
+              <div className="md:col-span-3">
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Seed</label>
+                <input value={seed} onChange={(e)=>setSeed(e.target.value.replace(/[^0-9]/g, ''))} placeholder="(optional)" className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs" />
+              </div>
+              <div className="md:col-span-6">
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Negative prompt</label>
+                <input value={negativePrompt} onChange={(e)=>setNegativePrompt(e.target.value)} placeholder="Eg. no text overlays, no watermarks" className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs" />
+              </div>
+              <div className="md:col-span-6">
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Character references (images)</label>
+                <input type="file" multiple accept="image/*" onChange={(e)=>{ const files = Array.from(e.target.files || []); setCharRefFiles(files as File[]); }} className="block w-full text-[11px]" />
+              </div>
+              <div className="md:col-span-6">
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Image reference (remix)</label>
+                <input type="file" accept="image/*" onChange={(e)=>{ const f = (e.target.files && e.target.files[0]) || null; setImageRefFile(f as any); }} className="block w-full text-[11px]" />
+              </div>
+            </div>
             {creativeChatMessages.map((m, idx) => (
               <div
                 key={idx}
