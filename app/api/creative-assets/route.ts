@@ -50,8 +50,14 @@ const AD_TYPE_DETAILS: Record<
 
 const systemPrompt = `
 You are a Propeller ads creative planner. Given a short creative brief and ad type, respond **only** with JSON that contains
-the following keys: title, description, mainImagePrompt, iconPrompt, mainImageSize, iconSize.
+the following keys: title, description, mainImagePrompt, iconPrompt, mainImageSize, iconSize, ideogramBalance.
 Provide copy plus image prompts that respect the ad type (mention CTAs, benefits, and dimensions). Do not wrap the JSON in markdown. Even if you cannot fill a field, return it as an empty string.
+
+About ideogramBalance:
+- ideogramBalance is a string to guide generation when using ideogram.ai.
+- Allowed values: "low" | "medium" | "high".
+- Use "low" when the image should be minimalistic or text-light; "medium" for balanced visuals; "high" when rich visual detail or typography emphasis is desired.
+- Choose a sensible default based on the ad type and brief; if unsure, use "medium".
 `;
 
 function extractJsonPayload(text: string): Record<string, unknown> {
@@ -123,6 +129,13 @@ export async function POST(req: Request): Promise<Response> {
       completion.choices?.[0]?.message?.content ?? "";
     const parsed = extractJsonPayload(assistantContent);
 
+    const rawBalance = String((parsed as any).ideogramBalance ?? "")
+      .toLowerCase()
+      .trim();
+    const normalizedBalance = ["low", "medium", "high"].includes(rawBalance)
+      ? (rawBalance as "low" | "medium" | "high")
+      : ("medium" as const);
+
     const result = {
       title: String(parsed.title ?? "") ?? "",
       description: String(parsed.description ?? "") ?? "",
@@ -134,6 +147,7 @@ export async function POST(req: Request): Promise<Response> {
         metadata.mainImageSize,
       iconSize:
         String(parsed.iconSize ?? metadata.iconSize ?? "") || null,
+      ideogramBalance: normalizedBalance,
     };
 
     return new Response(JSON.stringify(result), {
@@ -159,7 +173,7 @@ export async function GET(): Promise<Response> {
   return new Response(
     JSON.stringify({
       message:
-        "POST JSON to this endpoint with { prompt: string, adType?: 'push-classic' | 'inpage-push' | 'interstitial' | 'onclick' }",
+        "POST JSON to this endpoint with { prompt: string, adType?: 'push-classic' | 'inpage-push' | 'interstitial' | 'onclick' }. Response includes ideogramBalance ('low'|'medium'|'high').",
     }),
     {
       status: 200,
