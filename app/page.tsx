@@ -2659,32 +2659,10 @@ function CreativesTab(props: {
               Creative Doctor
             </h3>
             <p className="text-[11px] text-slate-400">
-              Paste your angles or headlines and I’ll diagnose + improve them.
+              Generate on-brand, high-converting Ideogram prompts. Enter a Title and Description, tune your Brand Style, and optionally embed the caption as in‑image text.
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="text-[10px] text-slate-500 mr-2">
-              Tokens: {" "}
-              <span className="text-slate-200 font-semibold">
-                {creativeTokenCount.toLocaleString()}
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={handleQuickPrompt}
-              className="text-[10px] px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700"
-              title="Generate Prompt for Creative"
-            >
-              Generate Prompt for Creative
-            </button>
-            <button
-              type="button"
-              onClick={handleQuickPerfSummary}
-              className="text-[10px] px-2 py-1 rounded-md bg-slate-800 hover:bg-slate-700 border border-slate-700"
-            >
-              Performance summary (7d)
-            </button>
-          </div>
+          <div className="flex items-center gap-2"></div>
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col">
@@ -2757,10 +2735,34 @@ function CreativesTab(props: {
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Style preset</label>
                 <select value={stylePreset} onChange={(e)=>setStylePreset(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs">
                   <option value="">(None)</option>
-                  <option value="JAPANDI_FUSION">JAPANDI_FUSION</option>
                   <option value="MIXED_MEDIA">MIXED_MEDIA</option>
                   <option value="90S_NOSTALGIA">90S_NOSTALGIA</option>
+                  <option value="SPOTLIGHT_80S">SPOTLIGHT_80S</option>
+                  <option value="C4D_CARTOON">C4D_CARTOON</option>
+                  <option value="JAPANDI_FUSION">JAPANDI_FUSION</option>
+                  <option value="CYBERPUNK">CYBERPUNK</option>
+                  <option value="NEON_NOIR">NEON_NOIR</option>
+                  <option value="RETRO_FUTURISM">RETRO_FUTURISM</option>
+                  <option value="VAPORWAVE">VAPORWAVE</option>
+                  <option value="POP_ART">POP_ART</option>
+                  <option value="COMIC_BOOK">COMIC_BOOK</option>
+                  <option value="ANIME">ANIME</option>
+                  <option value="PIXEL_ART">PIXEL_ART</option>
+                  <option value="LOWPOLY">LOWPOLY</option>
+                  <option value="WATERCOLOR">WATERCOLOR</option>
+                  <option value="OIL_PAINTING">OIL_PAINTING</option>
                   <option value="ART_BRUT">ART_BRUT</option>
+                  <option value="LINE_ART">LINE_ART</option>
+                  <option value="ISOMETRIC">ISOMETRIC</option>
+                  <option value="3D_RENDER">3D_RENDER</option>
+                  <option value="ULTRA_REALISTIC">ULTRA_REALISTIC</option>
+                  <option value="CINEMATIC">CINEMATIC</option>
+                  <option value="FILM_GRAIN">FILM_GRAIN</option>
+                  <option value="BLACK_WHITE">BLACK_WHITE</option>
+                  <option value="DUOTONE">DUOTONE</option>
+                  <option value="LONG_EXPOSURE">LONG_EXPOSURE</option>
+                  <option value="BOKEH">BOKEH</option>
+                  <option value="TYPOGRAPHY_BOLD">TYPOGRAPHY_BOLD</option>
                 </select>
               </div>
               <div className="md:col-span-3">
@@ -2780,43 +2782,6 @@ function CreativesTab(props: {
                 <input type="file" accept="image/*" onChange={(e)=>{ const f = (e.target.files && e.target.files[0]) || null; setImageRefFile(f as any); }} className="block w-full text-[11px]" />
               </div>
             </div>
-            {creativeChatMessages.map((m, idx) => (
-              <div
-                key={idx}
-                className={`max-w-[90%] rounded-lg px-3 py-2 ${
-                  m.role === "user"
-                    ? "ml-auto bg-emerald-600/70"
-                    : "mr-auto bg-slate-800/80"
-                }`}
-              >
-                <div className="whitespace-pre-wrap break-words max-h-56 overflow-auto">
-                  {m.content}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="border-t border-slate-800 px-3 py-2 flex items-center gap-2">
-            <textarea
-              rows={2}
-              className="flex-1 resize-none bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
-              placeholder="Eg. Telegram casino MX – I want a more aggressive push title and description…"
-              value={creativeChatInput}
-              onChange={(e) => setCreativeChatInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  sendCreativeChat();
-                }
-              }}
-            />
-            <button
-              onClick={() => sendCreativeChat()}
-              disabled={creativeChatLoading || !creativeChatInput.trim()}
-              className="text-xs px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              {creativeChatLoading ? "..." : "Send"}
-            </button>
           </div>
         </div>
       </div>
@@ -2854,7 +2819,6 @@ function CreativesTab(props: {
                 value={imageProvider}
                 onChange={(e) => setImageProvider(e.target.value)}
               >
-                <option value="openai">OpenAI</option>
                 <option value="ideogram">Ideogram</option>
               </select>
             </div>
@@ -2872,7 +2836,7 @@ function CreativesTab(props: {
               Brief / angle
             </label>
             <textarea
-              rows={3}
+              rows={6}
               className="w-full resize-none bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-emerald-500"
               value={imagePrompt}
               onChange={(e) => setImagePrompt(e.target.value)}
