@@ -94,28 +94,36 @@ async function pauseZoneInPropeller(
   const url = `${baseUrl}${path}`;
 
   try {
-    const res = await fetch(url, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify({
-        // Adjust to whatever Propeller expects, e.g. ["12345"]
-        zone_ids: [zone.zoneId],
-      }),
-    });
+    const key = process.env.PROPELLER_ADD_ZONE_KEY || "zone_ids";
+    const payload: Record<string, any> = { [key]: [zone.zoneId] };
+    const preferred = (process.env.PROPELLER_ADD_METHOD || "PATCH").toUpperCase();
+    const tryOrder = preferred === "PUT" ? ["PUT", "PATCH"] : ["PATCH", "PUT"]; // fallback between PATCH/PUT
 
-    if (!res.ok) {
-      const text = await res.text();
-      return {
-        ok: false,
-        message: `Propeller API error (${res.status}): ${text || res.statusText}`,
-      };
+    let lastStatus = 0;
+    let lastText = "";
+    for (const method of tryOrder) {
+      const res = await fetch(url, {
+        method,
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+      if (res.ok) {
+        return { ok: true, message: `Zone blacklisted via Propeller API (${method}).` };
+      }
+      lastStatus = res.status;
+      lastText = await res.text();
+      // If not method-related error, don't try alternate method
+      if (res.status !== 405) break;
     }
 
-    return { ok: true, message: "Zone blacklisted via Propeller API." };
+    return {
+      ok: false,
+      message: `Propeller API error (${lastStatus}): ${lastText || ""}`.trim(),
+    };
   } catch (err: any) {
     console.error("Propeller API call failed:", err);
     return {
