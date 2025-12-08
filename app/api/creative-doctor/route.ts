@@ -65,6 +65,28 @@ export async function POST(req: Request): Promise<Response> {
 
     const context = body?.context ?? legacyContext;
 
+    // Optional brand support: if brandUrl is provided and we have a stored brand style, attach concise style notes
+    let brandStyleNotes = "";
+    const brandUrl = String(body?.brandUrl || body?.brand || "").trim();
+    if (brandUrl) {
+      try {
+        const host = new URL(brandUrl).host;
+        const saved = (await kv.get(`brand:style:${host}`)) as any;
+        if (saved?.profile) {
+          const p = saved.profile;
+          brandStyleNotes = [
+            `Brand: ${p.name || host}`,
+            p.tone ? `Tone: ${p.tone}` : null,
+            p.voice ? `Voice: ${p.voice}` : null,
+            Array.isArray(p.colors) && p.colors.length ? `Colors: ${p.colors.join(", ")}` : null,
+            Array.isArray(p.keywords) && p.keywords.length ? `Keywords: ${p.keywords.slice(0, 10).join(", ")}` : null,
+            Array.isArray(p.ctas) && p.ctas.length ? `CTAs: ${p.ctas.join(", ")}` : null,
+            p.summary ? `Summary: ${p.summary}` : null,
+          ].filter(Boolean).join("\n");
+        }
+      } catch {}
+    }
+
     const chatMessages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
       { role: "system", content: systemPrompt },
     ];
@@ -85,6 +107,11 @@ export async function POST(req: Request): Promise<Response> {
         "Context JSON (campaigns/selection/date range if provided):\n\n" +
         JSON.stringify(context ?? {}, null, 2),
     });
+
+    // Prepend brand style notes if present
+    if (brandStyleNotes) {
+      chatMessages.push({ role: "user", content: `Apply these brand style notes when evaluating and rewriting creatives (respect the tone, voice, and CTAs):\n\n${brandStyleNotes}` });
+    }
 
     const completion = await client.chat.completions.create({
       model: "gpt-4.1-mini",
