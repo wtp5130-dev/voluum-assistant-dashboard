@@ -95,29 +95,58 @@ async function pauseZoneInPropeller(
 
   try {
     const key = process.env.PROPELLER_ADD_ZONE_KEY || "zone_ids";
-    const payload: Record<string, any> = { [key]: [zone.zoneId] };
+    const template = process.env.PROPELLER_ADD_BLACKLIST_BODY_TEMPLATE; // JSON string with {zoneId} and {campaignId}
+    const basePayload: Record<string, any> = { [key]: [zone.zoneId] };
+    const scalarPayload: Record<string, any> = { [key]: zone.zoneId };
+    const payloads: Array<Record<string, any>> = [];
+    // 1) Template payload (highest priority if provided)
+    if (template) {
+      try {
+        const filled = template
+          .replaceAll("{zoneId}", String(zone.zoneId))
+          .replaceAll("{campaignId}", String(providerCid));
+        const parsed = JSON.parse(filled);
+        payloads.push(parsed);
+      } catch {}
+    }
+    // 2) Common variants
+    payloads.push(basePayload);
+    payloads.push(scalarPayload);
+    payloads.push({ zone: [zone.zoneId] });
+    payloads.push({ zones: [zone.zoneId] });
+    payloads.push({ exclude: { zone: [zone.zoneId] } });
+    payloads.push({ targeting: { exclude: { zone: [zone.zoneId] } } });
+
     const preferred = (process.env.PROPELLER_ADD_METHOD || "PATCH").toUpperCase();
     const tryOrder = preferred === "PUT" ? ["PUT", "PATCH"] : ["PATCH", "PUT"]; // fallback between PATCH/PUT
 
     let lastStatus = 0;
     let lastText = "";
     for (const method of tryOrder) {
-      const res = await fetch(url, {
-        method,
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify(payload),
-      });
-      if (res.ok) {
-        return { ok: true, message: `Zone blacklisted via Propeller API (${method}).` };
+      for (const p of payloads) {
+        const res = await fetch(url, {
+          method,
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
+          },
+          body: JSON.stringify(p),
+        });
+        if (res.ok) {
+          return { ok: true, message: `Zone blacklisted via Propeller API (${method}).` };
+        }
+        lastStatus = res.status;
+        lastText = await res.text();
+        // If clearly method not allowed, try next method; if empty data, try next payload; otherwise stop
+        if (res.status === 405) break; // switch method
+        if (res.status === 400 && /Empty data/i.test(lastText)) {
+          continue; // try next payload shape
+        }
+        // Other errors: stop trying payload variants for this method
+        break;
       }
-      lastStatus = res.status;
-      lastText = await res.text();
-      // If not method-related error, don't try alternate method
-      if (res.status !== 405) break;
+      // If we got 405, loop will try the other method; otherwise we already tried variants, move on
     }
 
     return {
