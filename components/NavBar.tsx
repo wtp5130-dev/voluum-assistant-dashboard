@@ -144,27 +144,48 @@ export default function NavBar() {
             <span>Refresh</span>
           )}
         </button>
-        {/* Main tabs on home page */}
-        {pathname === "/" && (
-          <div className="hidden md:flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 p-1 shadow-sm text-[12px]">
-            <button onClick={() => selectTab("dashboard")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "dashboard" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Dashboard</button>
-            {(me?.role === "admin" || me?.perms?.optimizer || !me) && (
-              <button onClick={() => selectTab("optimizer")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "optimizer" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Optimizer</button>
-            )}
-            {(me?.role === "admin" || me?.perms?.creatives || !me) && (
-              <button onClick={() => selectTab("creatives")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "creatives" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Creatives</button>
-            )}
-            {(me?.role === "admin" || me?.perms?.builder || !me) && (
-              <button onClick={() => selectTab("builder")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "builder" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Campaign Builder</button>
-            )}
-            {me?.role === "admin" && (
-              <button onClick={() => selectTab("audit")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "audit" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Audit Trail</button>
-            )}
-            {me?.role === "admin" && (
-              <button onClick={() => selectTab("updates")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "updates" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Updates</button>
-            )}
-          </div>
-        )}
+        {/* Main tabs – visible on all pages. Use buttons on home, links elsewhere */}
+        <div className="hidden md:flex items-center gap-1 rounded-full border border-slate-800 bg-slate-900/70 p-1 shadow-sm text-[12px]">
+          {pathname === "/" ? (
+            <>
+              <button onClick={() => selectTab("dashboard")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "dashboard" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Dashboard</button>
+              {(me?.role === "admin" || me?.perms?.optimizer || !me) && (
+                <button onClick={() => selectTab("optimizer")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "optimizer" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Optimizer</button>
+              )}
+              {(me?.role === "admin" || me?.perms?.creatives || !me) && (
+                <button onClick={() => selectTab("creatives")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "creatives" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Creatives</button>
+              )}
+              {(me?.role === "admin" || me?.perms?.builder || !me) && (
+                <button onClick={() => selectTab("builder")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "builder" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Campaign Builder</button>
+              )}
+              {me?.role === "admin" && (
+                <button onClick={() => selectTab("audit")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "audit" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Audit Trail</button>
+              )}
+              {me?.role === "admin" && (
+                <button onClick={() => selectTab("updates")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "updates" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Updates</button>
+              )}
+            </>
+          ) : (
+            <>
+              <a href="/?tab=dashboard#dashboard" className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Dashboard</a>
+              {(me?.role === "admin" || me?.perms?.optimizer || !me) && (
+                <a href="/?tab=optimizer#optimizer" className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Optimizer</a>
+              )}
+              {(me?.role === "admin" || me?.perms?.creatives || !me) && (
+                <a href="/?tab=creatives#creatives" className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Creatives</a>
+              )}
+              {(me?.role === "admin" || me?.perms?.builder || !me) && (
+                <a href="/?tab=builder#builder" className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Campaign Builder</a>
+              )}
+              {me?.role === "admin" && (
+                <a href="/?tab=audit#audit" className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Audit Trail</a>
+              )}
+              {me?.role === "admin" && (
+                <a href="/?tab=updates#updates" className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Updates</a>
+              )}
+            </>
+          )}
+        </div>
 
         <div className="flex items-center gap-2 ml-auto">
           <a
