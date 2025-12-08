@@ -2531,6 +2531,41 @@ function CreativesTab(props: {
   const [doctorDescription, setDoctorDescription] = useState<string>("");
   const [doctorBusy, setDoctorBusy] = useState<boolean>(false);
   const [embedCaption, setEmbedCaption] = useState<boolean>(true);
+  const [brandName, setBrandName] = useState<string>("");
+  const [brandColors, setBrandColors] = useState<string>("");
+  const [brandStyle, setBrandStyle] = useState<string>("");
+  const [brandNegative, setBrandNegative] = useState<string>("");
+  const [applyBrand, setApplyBrand] = useState<boolean>(true);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const res = await fetch("/api/brand", { cache: "no-store" });
+        const json = await res.json().catch(() => null);
+        if (json?.brand) {
+          setBrandName(String(json.brand.name || ""));
+          setBrandColors(Array.isArray(json.brand.colors) ? json.brand.colors.join(", ") : String(json.brand.colors || ""));
+          setBrandStyle(String(json.brand.style || ""));
+          setBrandNegative(String(json.brand.negative || ""));
+        }
+      } catch {}
+    })();
+  }, []);
+
+  const saveBrand = async () => {
+    try {
+      await fetch("/api/brand", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: brandName,
+          colors: brandColors,
+          style: brandStyle,
+          negative: brandNegative,
+        }),
+      });
+    } catch {}
+  };
 
   const generateIdeogramPromptFromCopy = async () => {
     const titleText = doctorTitle.trim();
@@ -2554,8 +2589,12 @@ function CreativesTab(props: {
         : "";
       const typographyHints = " Clean layout, strong focal point, ad-friendly composition.";
       const styleHint = stylePreset ? ` Style preset: ${stylePreset}.` : "";
-      const negHint = negativePrompt ? ` Avoid: ${negativePrompt}.` : "";
-      const newMainPrompt = `High-converting ${adLabel} visual. ${basePrompt}.${captionDirective}${typographyHints}${styleHint}${negHint}`.replace(/\s+/g, " ").trim();
+      const negAll = [negativePrompt, applyBrand ? brandNegative : ""].filter(Boolean).join(", ");
+      const negHint = negAll ? ` Avoid: ${negAll}.` : "";
+      const brandHint = applyBrand && (brandName || brandColors || brandStyle)
+        ? ` Follow ${brandName || "the brand"} art direction: ${brandStyle || ""}. Palette: ${(brandColors || "").replace(/\s+/g, " ")}.`
+        : "";
+      const newMainPrompt = `High-converting ${adLabel} visual. ${basePrompt}.${captionDirective}${typographyHints}${styleHint}${brandHint}${negHint}`.replace(/\s+/g, " ").trim();
       setImagePrompt(newMainPrompt);
     } catch (e) {
       // Silent fail in UI; user can still chat or try again
@@ -2655,6 +2694,34 @@ function CreativesTab(props: {
           <div className="flex-1 overflow-auto px-4 py-2 space-y-2 text-xs">
             {/* Style / Negative / Seed / References */}
             <div className="grid gap-2 md:grid-cols-12">
+              {/* Brand style */}
+              <div className="md:col-span-12 rounded-md border border-slate-800 bg-slate-900/70 p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Brand Style</h4>
+                  <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" className="accent-emerald-500" checked={applyBrand} onChange={(e)=>setApplyBrand(e.target.checked)} />Apply in prompts</label>
+                </div>
+                <div className="mt-2 grid gap-2 md:grid-cols-12 text-[11px]">
+                  <div className="md:col-span-3">
+                    <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Brand name</label>
+                    <input value={brandName} onChange={(e)=>setBrandName(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1" placeholder="Your brand" />
+                  </div>
+                  <div className="md:col-span-5">
+                    <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Colors (comma-separated)</label>
+                    <input value={brandColors} onChange={(e)=>setBrandColors(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1" placeholder="#00ff88, #0a0f1a" />
+                  </div>
+                  <div className="md:col-span-4">
+                    <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Negative (avoid)</label>
+                    <input value={brandNegative} onChange={(e)=>setBrandNegative(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1" placeholder="kiddie style, pastel, watermark" />
+                  </div>
+                  <div className="md:col-span-12">
+                    <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Style notes</label>
+                    <textarea value={brandStyle} onChange={(e)=>setBrandStyle(e.target.value)} rows={2} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1" placeholder="High-contrast, glossy casino UI, neon accents, realistic chips & cards, cinematic lighting." />
+                  </div>
+                  <div className="md:col-span-12 flex justify-end">
+                    <button onClick={saveBrand} className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Save brand</button>
+                  </div>
+                </div>
+              </div>
               <div className="md:col-span-3">
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Style preset</label>
                 <select value={stylePreset} onChange={(e)=>setStylePreset(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs">
