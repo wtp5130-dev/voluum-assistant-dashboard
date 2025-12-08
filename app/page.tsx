@@ -2593,7 +2593,7 @@ function CreativesTab(props: {
   return (
     <section className="grid gap-6 lg:grid-cols-2">
       {/* Creative Doctor chat */}
-      <div className="rounded-xl border border-slate-800 bg-slate-900/80 flex flex-col h-[420px]">
+      <div className="rounded-xl border border-slate-800 bg-slate-900/80 flex flex-col h-[420px] min-h-0">
         <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
           <div>
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
@@ -2628,7 +2628,7 @@ function CreativesTab(props: {
           </div>
         </div>
 
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 min-h-0 flex flex-col">
           {/* Title + Description -> Ideogram Prompt helper */}
           <div className="px-4 py-2 border-b border-slate-800 grid gap-2 md:grid-cols-12 items-end">
             <div className="md:col-span-3">
@@ -2639,12 +2639,14 @@ function CreativesTab(props: {
               <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Description</label>
               <input value={doctorDescription} onChange={(e)=>setDoctorDescription(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs" placeholder="Eg. Deposit bonus, instant withdrawals, mobile-first" />
             </div>
-            <div className="md:col-span-2 flex gap-2 items-center">
+            <div className="md:col-span-2 flex items-center justify-start md:justify-end">
               <label className="flex items-center gap-2 text-[11px] text-slate-300 whitespace-nowrap">
                 <input type="checkbox" checked={embedCaption} onChange={(e)=>setEmbedCaption(e.target.checked)} className="accent-emerald-500" />
                 Embed caption
               </label>
-              <button onClick={generateIdeogramPromptFromCopy} disabled={doctorBusy || (!doctorTitle.trim() && !doctorDescription.trim())} className="flex-1 text-[11px] px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50" title="Make an image prompt from your copy">
+            </div>
+            <div className="md:col-span-12 flex justify-end pt-1">
+              <button onClick={generateIdeogramPromptFromCopy} disabled={doctorBusy || (!doctorTitle.trim() && !doctorDescription.trim())} className="text-[11px] px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50" title="Make an image prompt from your copy">
                 {doctorBusy?"Making…":"Make Ideogram Prompt"}
               </button>
             </div>
@@ -2689,7 +2691,7 @@ function CreativesTab(props: {
                     : "mr-auto bg-slate-800/80"
                 }`}
               >
-                <div className="whitespace-pre-wrap break-words">
+                <div className="whitespace-pre-wrap break-words max-h-56 overflow-auto">
                   {m.content}
                 </div>
               </div>
