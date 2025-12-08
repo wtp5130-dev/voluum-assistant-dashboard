@@ -102,6 +102,7 @@ type PreviewResponse = {
       baseMinCost: number;
       hardRoiCut: number;
     };
+    filteredOutBlacklisted?: number;
   };
 };
 
@@ -124,6 +125,9 @@ export async function POST(req: NextRequest): Promise<Response> {
 
     const { dashboard, trafficSourceFilter } = body;
     const { campaigns, from, to, dateRange } = dashboard;
+    // Load KV client dynamically to avoid type issues in edge runtimes
+    // @ts-ignore – types may not be available in this context
+    const { kv } = await import("@vercel/kv");
 
     if (!Array.isArray(campaigns) || campaigns.length === 0) {
       return new Response(
@@ -156,6 +160,29 @@ export async function POST(req: NextRequest): Promise<Response> {
       if (!trafficSourceFilter || trafficSourceFilter === "all") return true;
       return c.trafficSource === trafficSourceFilter;
     });
+
+    // Load blacklist from KV so we can exclude already blacklisted zones
+    type BlItem = { id?: string; campaignId: string; zoneId: string };
+    const blItems = ((await kv.lrange("blacklist:zones", 0, -1)) as BlItem[]) || [];
+    const blacklisted = new Set<string>();
+    for (const it of blItems) {
+      if (!it || !it.campaignId || !it.zoneId) continue;
+      blacklisted.add(`${String(it.campaignId)}__${String(it.zoneId)}`);
+    }
+    // Load manual mappings to resolve provider IDs for comparison
+    const mappings = (await kv.get("mapping:dashboardToProvider")) as
+      | Record<string, string>
+      | null;
+    function resolveProviderCampaignId(dashboardId: string, campaignName?: string): string {
+      if (/^\d+$/.test(dashboardId)) return dashboardId;
+      if (mappings && mappings[dashboardId]) return String(mappings[dashboardId]);
+      if (campaignName && mappings && mappings[campaignName]) return String(mappings[campaignName]);
+      if (campaignName) {
+        const m = campaignName.match(/(?:^|[^0-9])(\d{6,})(?=$|[^0-9])/);
+        if (m && m[1]) return m[1];
+      }
+      return dashboardId;
+    }
 
     // 2) Flatten zones + compute some global stats
     let totalVisits = 0;
@@ -210,6 +237,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const hardRoiCut = -200; // -200% and below
 
     const zonesToPauseNow: ZonePreview[] = [];
+    let filteredOutBlacklisted = 0;
 
     // 4) Classify zones
     for (const { campaign, zone } of allZones) {
@@ -219,6 +247,14 @@ export async function POST(req: NextRequest): Promise<Response> {
       const revenue = zone.revenue ?? 0;
       const roi = zone.roi ?? 0;
       const zoneId = zone.id?.toString() || "unknown";
+
+      // Exclude if already blacklisted (match using both dashboard and provider IDs)
+      const dashKey = `${campaign.id}__${zoneId}`;
+      const provKey = `${resolveProviderCampaignId(campaign.id, campaign.name)}__${zoneId}`;
+      if (blacklisted.has(dashKey) || blacklisted.has(provKey)) {
+        filteredOutBlacklisted++;
+        continue;
+      }
 
       const hasRevenue = revenue > 0; // deposit-aware: revenue means at least one FTD
       const hasTraffic = visits >= baseMinVisits || cost >= baseMinCost;
@@ -341,6 +377,7 @@ export async function POST(req: NextRequest): Promise<Response> {
           baseMinCost: parseFloat(baseMinCost.toFixed(2)),
           hardRoiCut,
         },
+        filteredOutBlacklisted,
       },
     };
 
