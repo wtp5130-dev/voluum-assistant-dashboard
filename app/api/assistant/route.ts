@@ -156,7 +156,20 @@ export async function POST(req: Request): Promise<Response> {
       completion.choices?.[0]?.message?.content ??
       "No answer text returned from assistant.";
 
-    return new Response(JSON.stringify({ answer }), {
+    // Map usage structure across possible SDK field names
+    const rawUsage: any = (completion as any)?.usage || null;
+    const usage = rawUsage
+      ? {
+          promptTokens:
+            rawUsage.prompt_tokens ?? rawUsage.promptTokens ?? rawUsage.input_tokens ?? null,
+          completionTokens:
+            rawUsage.completion_tokens ?? rawUsage.completionTokens ?? rawUsage.output_tokens ?? null,
+          totalTokens:
+            rawUsage.total_tokens ?? rawUsage.totalTokens ?? null,
+        }
+      : null;
+
+    return new Response(JSON.stringify({ answer, usage }), {
       status: 200,
       headers: { "Content-Type": "application/json" },
     });

@@ -48,6 +48,11 @@ type DateRangeKey = "today" | "yesterday" | "last7days";
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  usage?: {
+    promptTokens?: number | null;
+    completionTokens?: number | null;
+    totalTokens?: number | null;
+  };
 };
 
 export default function DashboardVoluumAssistant() {
@@ -339,9 +344,12 @@ export default function DashboardVoluumAssistant() {
         json.message ||
         "No answer text returned from assistant.";
 
+      const usage = json.usage || null;
+
       const aiMessage: ChatMessage = {
         role: "assistant",
         content: answer,
+        usage,
       };
 
       setChatMessages((prev) => [...prev, aiMessage]);
@@ -838,8 +846,18 @@ export default function DashboardVoluumAssistant() {
                         : "bg-slate-800/80 text-slate-50"
                     }`}
                   >
-                    <div className="text-[10px] mb-0.5 opacity-70">
-                      {m.role === "user" ? "You" : "Assistant"}
+                    <div className="text-[10px] mb-0.5 opacity-70 flex items-center justify-between">
+                      <span>{m.role === "user" ? "You" : "Assistant"}</span>
+                      {m.role === "assistant" && m.usage && (
+                        <span className="text-[10px] text-slate-400">
+                          Tokens: in {m.usage.promptTokens ?? "-"} • out {m.usage.completionTokens ?? "-"}
+                          {typeof m.usage.totalTokens === "number" && (
+                            <>
+                              {" "}• total {m.usage.totalTokens}
+                            </>
+                          )}
+                        </span>
+                      )}
                     </div>
 
                     <pre className="whitespace-pre-wrap text-[11px] leading-relaxed">
