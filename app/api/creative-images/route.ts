@@ -36,7 +36,7 @@ export async function POST(req: Request): Promise<Response> {
 
     if (provider === "ideogram") {
       const key = process.env.IDEOGRAM_API_KEY;
-      const endpoint = process.env.IDEOGRAM_TTI_ENDPOINT;
+      const endpoint = process.env.IDEOGRAM_TTI_ENDPOINT || "https://api.ideogram.ai/v1/ideogram-v3/generate";
       if (!key || !endpoint) {
         return new Response(
           JSON.stringify({ error: "Missing IDEOGRAM_API_KEY or IDEOGRAM_TTI_ENDPOINT on server" }),
@@ -46,18 +46,19 @@ export async function POST(req: Request): Promise<Response> {
       const [wStr, hStr] = String(size).split("x");
       const width = Math.max(256, Math.min(2048, parseInt(wStr || "1024", 10) || 1024));
       const height = Math.max(256, Math.min(2048, parseInt(hStr || "1024", 10) || 1024));
-      const model = process.env.IDEOGRAM_MODEL || "ideogram-2";
+      const model = process.env.IDEOGRAM_MODEL || "ideogram-3";
+      const renderingSpeed = process.env.IDEOGRAM_RENDERING_SPEED || "TURBO"; // TURBO | QUALITY
       const bodyJson: any = {
         prompt,
         width,
         height,
         model,
+        rendering_speed: renderingSpeed,
       };
       const res = await fetch(endpoint, {
         method: "POST",
         headers: {
-          "Authorization": `Bearer ${key}`,
-          "api-key": key,
+          "Api-Key": key,
           "Content-Type": "application/json",
           "Accept": "application/json",
         },
