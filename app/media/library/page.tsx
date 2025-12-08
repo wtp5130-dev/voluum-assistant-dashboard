@@ -1,5 +1,5 @@
 "use client";
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 
 export default function MediaLibraryPage() {
   const [items, setItems] = useState<Array<any>>([]);
@@ -8,6 +8,9 @@ export default function MediaLibraryPage() {
   const [file, setFile] = useState<File | null>(null);
   const [brandName, setBrandName] = useState("");
   const [tags, setTags] = useState("");
+  const [kind, setKind] = useState<"character" | "layout" | "other" | "">("");
+  const [fBrand, setFBrand] = useState("");
+  const [fTag, setFTag] = useState("");
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -22,6 +25,7 @@ export default function MediaLibraryPage() {
     fd.append("file", file);
     if (brandName) fd.append("brandName", brandName);
     if (tags) fd.append("tags", tags);
+    if (kind) fd.append("kind", kind);
     try { const r = await fetch("/api/media", { method: "POST", body: fd }); if(!r.ok){ const t=await r.text(); throw new Error(t);} await load(); setFile(null);} catch(e:any){ setError(e?.message||String(e)); }
   };
 
@@ -53,8 +57,32 @@ export default function MediaLibraryPage() {
         </div>
         {error && <div className="text-rose-400 text-sm">{error}</div>}
         {loading && <div className="text-sm text-slate-400">Loading…</div>}
+        <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-[11px] grid gap-3 md:grid-cols-12 items-end">
+          <div className="md:col-span-3">
+            <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Filter brand</label>
+            <input value={fBrand} onChange={(e)=>setFBrand(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 w-full" />
+          </div>
+          <div className="md:col-span-3">
+            <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Filter tag</label>
+            <input value={fTag} onChange={(e)=>setFTag(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 w-full" />
+          </div>
+          <div className="md:col-span-3">
+            <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Filter kind</label>
+            <select value={kind} onChange={(e)=>setKind(e.target.value as any)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 w-full">
+              <option value="">All</option>
+              <option value="character">character</option>
+              <option value="layout">layout</option>
+              <option value="other">other</option>
+            </select>
+          </div>
+        </div>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((it)=> (
+          {items.filter((it)=>{
+            const okB = !fBrand || String(it.brandName||"").toLowerCase().includes(fBrand.toLowerCase());
+            const okT = !fTag || (Array.isArray(it.tags) && it.tags.some((t:string)=>t.toLowerCase().includes(fTag.toLowerCase())));
+            const okK = !kind || it.kind === kind;
+            return okB && okT && okK;
+          }).map((it)=> (
             <div key={it.id} className="rounded-xl border border-slate-800 bg-slate-900/70 overflow-hidden">
               <div className="aspect-video bg-slate-950 flex items-center justify-center overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -65,6 +93,7 @@ export default function MediaLibraryPage() {
                 <div className="text-slate-500">{new Date(it.createdAt).toLocaleString()}</div>
                 {it.brandName && <div className="text-slate-400">Brand: <span className="text-slate-200">{it.brandName}</span></div>}
                 {it.tags && <div className="text-slate-400">Tags: <span className="text-slate-200">{Array.isArray(it.tags)?it.tags.join(', '):''}</span></div>}
+                {it.kind && <div className="text-slate-400">Kind: <span className="text-slate-200">{it.kind}</span></div>}
                 <div className="flex items-center justify-end gap-2">
                   <a href={it.url} download className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Download</a>
                   <button onClick={()=>navigator.clipboard.writeText(it.url)} className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Copy URL</button>

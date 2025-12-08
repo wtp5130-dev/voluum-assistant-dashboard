@@ -2683,6 +2683,18 @@ function CreativesTab(props: {
     );
   }
 
+  // Modal picker for media library
+  const [showPicker, setShowPicker] = useState<{ open: boolean; mode: "chars" | "image" }>({ open: false, mode: "chars" });
+  const [pickerItems, setPickerItems] = useState<Array<any>>([]);
+  const [pickerBrand, setPickerBrand] = useState<string>("");
+  const [pickerTag, setPickerTag] = useState<string>("");
+  useEffect(() => {
+    if (!showPicker.open) return;
+    (async () => {
+      try { const r = await fetch("/api/media", { cache: "no-store" }); const j = await r.json(); setPickerItems(Array.isArray(j?.items)? j.items : []);} catch {}
+    })();
+  }, [showPicker.open]);
+
   return (
     <section className="grid gap-6 lg:grid-cols-2">
       {/* Creative Doctor chat */}
@@ -2809,13 +2821,17 @@ function CreativesTab(props: {
               </div>
               <div className="md:col-span-6">
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Character references (images)</label>
-                <input type="file" multiple accept="image/*" onChange={(e)=>{ const files = Array.from(e.target.files || []); setCharRefFiles(files as File[]); }} className="block w-full text-[11px]" />
-                <LibraryStrip mode="chars" onUse={async (url: string)=>{ try{ const b = await fetch(url).then(r=>r.blob()); const f = new File([b], url.split('/').pop()||'ref.png', { type: (b as any).type||'image/png' }); setCharRefFiles([...(charRefFiles||[]), f]); }catch{} }} />
+                <div className="flex items-center gap-2">
+                  <input type="file" multiple accept="image/*" onChange={(e)=>{ const files = Array.from(e.target.files || []); setCharRefFiles(files as File[]); }} className="block w-full text-[11px]" />
+                  <button type="button" onClick={()=>setShowPicker({ open: true, mode: 'chars' })} className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Pick…</button>
+                </div>
               </div>
               <div className="md:col-span-6">
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Image reference (remix)</label>
-                <input type="file" accept="image/*" onChange={(e)=>{ const f = (e.target.files && e.target.files[0]) || null; setImageRefFile(f as any); }} className="block w-full text-[11px]" />
-                <LibraryStrip mode="image" onUse={async (url: string)=>{ try{ const b = await fetch(url).then(r=>r.blob()); const f = new File([b], url.split('/').pop()||'ref.png', { type: (b as any).type||'image/png' }); setImageRefFile(f); }catch{} }} />
+                <div className="flex items-center gap-2">
+                  <input type="file" accept="image/*" onChange={(e)=>{ const f = (e.target.files && e.target.files[0]) || null; setImageRefFile(f as any); }} className="block w-full text-[11px]" />
+                  <button type="button" onClick={()=>setShowPicker({ open: true, mode: 'image' })} className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Pick…</button>
+                </div>
               </div>
             </div>
           </div>
@@ -2955,6 +2971,50 @@ function CreativesTab(props: {
           </div>
         )}
       </div>
+
+      {showPicker.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          <div className="absolute inset-0 bg-black/60" onClick={()=>setShowPicker({ open:false, mode: showPicker.mode })} />
+          <div className="relative bg-slate-900 border border-slate-800 rounded-xl p-4 w-[860px] max-w-[95vw] shadow-xl">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-semibold text-slate-200">Pick from Media Library</h4>
+              <button onClick={()=>setShowPicker({ open:false, mode: showPicker.mode })} className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Close</button>
+            </div>
+            <div className="mt-3 grid gap-2 md:grid-cols-12 text-[11px]">
+              <div className="md:col-span-4">
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Filter brand</label>
+                <input value={pickerBrand} onChange={(e)=>setPickerBrand(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1" />
+              </div>
+              <div className="md:col-span-4">
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Filter tag</label>
+                <input value={pickerTag} onChange={(e)=>setPickerTag(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1" />
+              </div>
+            </div>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2 md:grid-cols-3">
+              {pickerItems.filter((it)=>{
+                const okB = !pickerBrand || String(it.brandName||"").toLowerCase().includes(pickerBrand.toLowerCase());
+                const okT = !pickerTag || (Array.isArray(it.tags) && it.tags.some((t:string)=>t.toLowerCase().includes(pickerTag.toLowerCase())));
+                return okB && okT;
+              }).slice(0,30).map((it)=>(
+                <button key={it.id} className="rounded-lg overflow-hidden border border-slate-800 bg-slate-950 text-left" onClick={async ()=>{
+                  try { const b = await fetch(it.url).then(r=>r.blob()); const f = new File([b], it.filename || 'ref.png', { type: (b as any).type||'image/png' });
+                    if (showPicker.mode === 'chars') {
+                      setCharRefFiles([...(Array.isArray(charRefFiles)?charRefFiles:[]), f]);
+                    } else {
+                      setImageRefFile(f);
+                    }
+                    setShowPicker({ open:false, mode: showPicker.mode });
+                  } catch {}
+                }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img src={it.url} alt={it.filename} className="w-full aspect-video object-cover" />
+                  <div className="p-2 text-[11px] text-slate-300 truncate">{it.filename}</div>
+                </button>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

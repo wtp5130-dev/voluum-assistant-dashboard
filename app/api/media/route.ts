@@ -13,6 +13,7 @@ type MediaItem = {
   brandId?: string;
   brandName?: string;
   tags?: string[];
+  kind?: "character" | "layout" | "other";
   createdAt: string;
 };
 
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const brandId = form.get("brandId") ? String(form.get("brandId")) : undefined;
     const brandName = form.get("brandName") ? String(form.get("brandName")) : undefined;
     const rawTags = form.get("tags") ? String(form.get("tags")) : "";
+    const kind = form.get("kind") ? String(form.get("kind")) as any : undefined;
     const tags = rawTags ? rawTags.split(/[\s,]+/).filter(Boolean) : undefined;
 
     const token = process.env.BLOB_READ_WRITE_TOKEN;
@@ -62,6 +64,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       brandId,
       brandName,
       tags,
+      kind: kind === "character" || kind === "layout" ? kind : undefined,
       createdAt: new Date().toISOString(),
     };
 
