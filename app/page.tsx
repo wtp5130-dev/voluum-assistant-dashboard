@@ -2879,7 +2879,7 @@ function CreativesTab(props: {
                             showBrandToast("Index complete. Generating style…", "info");
                             setBrandProgress(60);
                             setBrandStep("Generating style…");
-                            const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) });
+                            const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u, noCache: true, clearExisting: true, forceHostName: true }) });
                             if (!r2.ok) {
                               const txt = await r2.text().catch(()=>"");
                               showBrandToast(`Style generation failed (${r2.status}). Ensure OPENAI_API_KEY is set.` + (txt? ` ${txt}`:""), "error");
@@ -2915,7 +2915,7 @@ function CreativesTab(props: {
                         startBrandStream(u);
                         showBrandToast("Generating style from last crawl…", "info");
                         try {
-                          const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) });
+                          const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u, noCache: true, clearExisting: true, forceHostName: true }) });
                           if (!r2.ok) throw new Error(String(r2.status));
                           await loadBrands();
                           setBrandProgress(100);
