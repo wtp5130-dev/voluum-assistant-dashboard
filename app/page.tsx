@@ -2581,6 +2581,8 @@ function CreativesTab(props: {
   // Small status toast/spinner for brand indexing/style ops
   const [brandOpBusy, setBrandOpBusy] = useState<boolean>(false);
   const [brandToast, setBrandToast] = useState<null | { kind: "info" | "success" | "error"; msg: string }>(null);
+  const [brandProgress, setBrandProgress] = useState<number>(0);
+  const [brandStep, setBrandStep] = useState<string>("");
   const showBrandToast = (msg: string, kind: "info" | "success" | "error" = "info") => {
     setBrandToast({ kind, msg });
     // auto-hide after 4s
@@ -2791,31 +2793,43 @@ function CreativesTab(props: {
                         const u = brandUrl.trim();
                         if(!u){ showBrandToast("Please enter a Brand URL first.", "error"); return; }
                         setBrandOpBusy(true);
+                        setBrandProgress(10);
+                        setBrandStep("Starting crawl…");
                         showBrandToast("Indexing brand…", "info");
                         try {
                           const r1 = await fetch("/api/brand/index", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u, maxPages: 500 }) });
                           if (!r1.ok) {
                             const txt = await r1.text().catch(()=>"");
                             showBrandToast(`Index failed (${r1.status}). ${txt || ""}`.trim(), "error");
+                            setBrandStep("Crawl failed");
                             return;
                           }
                           if (!hasOpenAI) {
                             showBrandToast("Index complete. Set OPENAI_API_KEY to generate style.", "info");
+                            setBrandProgress(100);
+                            setBrandStep("Crawl complete");
                           } else {
                             showBrandToast("Index complete. Generating style…", "info");
+                            setBrandProgress(60);
+                            setBrandStep("Generating style…");
                             const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) });
                             if (!r2.ok) {
                               const txt = await r2.text().catch(()=>"");
                               showBrandToast(`Style generation failed (${r2.status}). Ensure OPENAI_API_KEY is set.` + (txt? ` ${txt}`:""), "error");
+                              setBrandStep("Style failed");
                               return;
                             }
                             await loadBrands();
+                            setBrandProgress(100);
+                            setBrandStep("Done");
                             showBrandToast("Brand style ready.", "success");
                           }
                         } catch (e) {
                           showBrandToast("Unexpected error during brand indexing.", "error");
+                          setBrandStep("Error");
                         } finally {
                           setBrandOpBusy(false);
+                          try { if (brandProgress === 100) setTimeout(()=> setBrandProgress(0), 2500); } catch {}
                         }
                       }}
                     >Index brand</button>
@@ -2828,16 +2842,22 @@ function CreativesTab(props: {
                         const u = brandUrl.trim();
                         if(!u){ showBrandToast("Please enter a Brand URL first.", "error"); return; }
                         setBrandOpBusy(true);
+                        setBrandProgress(60);
+                        setBrandStep("Generating style…");
                         showBrandToast("Generating style from last crawl…", "info");
                         try {
                           const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) });
                           if (!r2.ok) throw new Error(String(r2.status));
                           await loadBrands();
+                          setBrandProgress(100);
+                          setBrandStep("Done");
                           showBrandToast("Brand style ready.", "success");
                         } catch (e) {
                           showBrandToast("Brand style generation failed.", "error");
+                          setBrandStep("Style failed");
                         } finally {
                           setBrandOpBusy(false);
+                          try { if (brandProgress === 100) setTimeout(()=> setBrandProgress(0), 2500); } catch {}
                         }
                       }}
                     >Generate style</button>
@@ -2846,6 +2866,14 @@ function CreativesTab(props: {
                         <span className="inline-block h-3 w-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
                         Working…
                       </span>
+                    )}
+                    {(brandOpBusy || brandProgress > 0) && (
+                      <div className="w-full mt-2">
+                        <div className="h-2 w-full rounded bg-slate-800 overflow-hidden">
+                          <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.min(brandProgress,100)}%` }} />
+                        </div>
+                        <div className="mt-1 text-[10px] text-slate-400">{brandStep} {brandProgress > 0 && brandProgress < 100 ? `${brandProgress}%` : brandProgress===100? "100%" : ""}</div>
+                      </div>
                     )}
                   </div>
                   <div className="md:col-span-3">

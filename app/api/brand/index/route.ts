@@ -117,6 +117,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const host = new URL(baseUrl).host;
 
     // seed set
+    try { await kv.set(`brand:status:${host}`, { step: "starting", progress: 5, ts: new Date().toISOString() }); } catch {}
     const seeded = new Set<string>();
     const sitemapUrls = await fetchSitemap(origin).catch(() => []);
     for (const u of sitemapUrls) if (new URL(u).origin === origin) seeded.add(u);
@@ -161,6 +162,11 @@ export async function POST(req: NextRequest): Promise<Response> {
       } catch {
         pages.push({ url: next, status: status });
       }
+      // update progress up to 50% during crawl
+      try {
+        const progress = Math.min(50, Math.floor((pages.length / Math.max(1, maxPages)) * 50));
+        await kv.set(`brand:status:${host}`, { step: "crawling", progress, pages: pages.length, ts: new Date().toISOString() });
+      } catch {}
     }
 
     const key = `brand:crawl:${host}`;
@@ -168,6 +174,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     const allImages = Array.from(new Set(pages.flatMap(p => p.images || []))).slice(0, 60);
     const snapshot = { host, origin, baseUrl, pages, images: allImages, ts: new Date().toISOString() };
     await kv.set(key, snapshot);
+    try { await kv.set(`brand:status:${host}`, { step: "crawl_complete", progress: 60, pages: pages.length, ts: new Date().toISOString() }); } catch {}
 
     return new Response(
       JSON.stringify({ ok: true, host, pagesIndexed: pages.length, fromSitemap: sitemapUrls.length, key }),

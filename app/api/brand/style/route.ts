@@ -18,6 +18,9 @@ export async function POST(req: NextRequest): Promise<Response> {
       return new Response(JSON.stringify({ error: "no_crawl_data", message: "Run /api/brand/index first." }), { status: 400, headers: { "Content-Type": "application/json" } });
     }
 
+    // Status: style generation starting
+    try { await kv.set(`brand:status:${host}`, { step: "style_generating", progress: 80, ts: new Date().toISOString() }); } catch {}
+
     // Aggregate text from top pages (prioritize homepage and marketing pages)
     const pages = crawl.pages as Array<{ url: string; title?: string; text?: string }>;
     const prioritized = pages
@@ -54,6 +57,7 @@ Rules:\n- colors: 5-8 entries (array), prefer hex if obvious from images, else c
     const key = `brand:style:${host}`;
     const saved = { host, baseUrl: crawl.baseUrl, profile, ts: new Date().toISOString() };
     await kv.set(key, saved);
+    try { await kv.set(`brand:status:${host}`, { step: "done", progress: 100, ts: new Date().toISOString() }); } catch {}
     return new Response(JSON.stringify({ ok: true, host, key, profile }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e?.message || String(e) }), { status: 500, headers: { "Content-Type": "application/json" } });
