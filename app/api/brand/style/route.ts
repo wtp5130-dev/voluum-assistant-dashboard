@@ -67,10 +67,32 @@ Rules:\n- colors: 5-8 entries (array), prefer hex if obvious from images, else c
         { status: 200, headers: { "Content-Type": "application/json" } }
       );
     }
-    // Use a vision-capable lightweight model
-    const model = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
-    const completion = await client.chat.completions.create({ model, temperature: 0.2, messages });
-    const content = completion.choices?.[0]?.message?.content || "";
+    // Use a vision-capable model with fallbacks
+    const modelCandidates = [
+      process.env.OPENAI_VISION_MODEL || "",
+      "gpt-4o",
+      "gpt-4.1-mini",
+      "gpt-4o-mini",
+    ].filter(Boolean) as string[];
+    let content = "";
+    let lastErr: any = null;
+    for (const mdl of modelCandidates) {
+      try {
+        const completion = await client.chat.completions.create({ model: mdl, temperature: 0.2, messages });
+        content = completion.choices?.[0]?.message?.content || "";
+        break;
+      } catch (e: any) {
+        lastErr = e;
+        const msg = String(e?.message || "");
+        if (msg.includes("does not exist") || msg.includes("do not have access") || msg.includes("404")) {
+          continue;
+        }
+        break;
+      }
+    }
+    if (!content) {
+      return new Response(JSON.stringify({ error: lastErr?.message || "OpenAI call failed" }), { status: 500, headers: { "Content-Type": "application/json" } });
+    }
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return new Response(JSON.stringify({ error: "no_json" }), { status: 500, headers: { "Content-Type": "application/json" } });
     const profile = JSON.parse(jsonMatch[0]);
