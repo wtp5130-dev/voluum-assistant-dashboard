@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { kv } from "@vercel/kv";
+import OpenAI from "openai";
 
 const LIST_KEY = "updates:entries";
 
@@ -60,32 +61,75 @@ export async function POST(req: NextRequest): Promise<Response> {
       return NextResponse.json({ ok: true, added: 0 });
     }
 
-    // Build entries from commits
-    const entries = commits.map((c: any) => {
-      const message: string = String(c?.message || "").trim();
-      const firstLine = message.split("\n")[0];
-      const lower = firstLine.toLowerCase();
-      let kind: "feature" | "fix" | "note" = "note";
-      if (lower.startsWith("feat") || lower.startsWith("feature")) kind = "feature";
-      else if (lower.startsWith("fix") || lower.startsWith("bug")) kind = "fix";
-      const url = c?.url || c?.html_url || "";
+    const apiKey = process.env.OPENAI_API_KEY;
+    const model = process.env.OPENAI_SUMMARY_MODEL || "gpt-4o-mini";
+    const client = apiKey ? new OpenAI({ apiKey }) : null;
 
-      const details = [
-        url ? `Commit: ${url}` : null,
-        repo ? `Repo: ${repo}` : null,
-        c?.id ? `SHA: ${String(c.id).slice(0, 7)}` : null,
-        c?.author?.name ? `Author: ${c.author.name}` : null,
-      ].filter(Boolean).join("\n");
+    // Build entries from commits with a short conversation-style summary in Details
+    const entries = await Promise.all(
+      commits.map(async (c: any) => {
+        const message: string = String(c?.message || "").trim();
+        const firstLine = message.split(/\r?\n/)[0];
+        const lower = (firstLine || "").toLowerCase();
+        let kind: "feature" | "fix" | "note" = "note";
+        if (lower.startsWith("feat") || lower.startsWith("feature")) kind = "feature";
+        else if (lower.startsWith("fix") || lower.startsWith("bug")) kind = "fix";
+        const url = c?.url || c?.html_url || "";
 
-      return {
-        id: crypto.randomUUID(),
-        title: firstLine || "Commit",
-        kind,
-        content: details || message,
-        createdAt: c?.timestamp || new Date().toISOString(),
-        author: pusher,
-      } as const;
-    });
+        // Default details metadata (fallback)
+        const meta = [
+          url ? `Commit: ${url}` : null,
+          repo ? `Repo: ${repo}` : null,
+          c?.id ? `SHA: ${String(c.id).slice(0, 7)}` : null,
+          c?.author?.name ? `Author: ${c.author.name}` : null,
+        ]
+          .filter(Boolean)
+          .join("\n");
+
+        // Try to generate a short, user-facing summary
+        let summary: string | null = null;
+        if (client) {
+          try {
+            const files = ([] as string[])
+              .concat(Array.isArray(c?.added) ? c.added : [])
+              .concat(Array.isArray(c?.modified) ? c.modified : [])
+              .concat(Array.isArray(c?.removed) ? c.removed : []);
+            const prompt = [
+              "Summarize this git commit for non-technical release notes.",
+              "- 1-3 concise bullets max",
+              "- combine related changes",
+              "- avoid code-level jargon",
+              "",
+              `Title: ${firstLine || "(no title)"}`,
+              files.length ? `Changed files: ${files.slice(0, 15).join(", ")}${files.length > 15 ? ", ..." : ""}` : "",
+              message && message !== firstLine ? `\nFull message:\n${message}` : "",
+            ]
+              .filter(Boolean)
+              .join("\n");
+            const completion = await client.chat.completions.create({
+              model,
+              temperature: 0.3,
+              messages: [
+                { role: "system", content: "You write concise, user-facing release notes from commit context." },
+                { role: "user", content: prompt },
+              ],
+            });
+            summary = completion.choices?.[0]?.message?.content?.trim() || null;
+          } catch {}
+        }
+
+        const details = summary ? `${summary}\n\n${meta}`.trim() : meta || message;
+
+        return {
+          id: crypto.randomUUID(),
+          title: firstLine || "Commit",
+          kind,
+          content: details,
+          createdAt: c?.timestamp || new Date().toISOString(),
+          author: pusher,
+        } as const;
+      })
+    );
 
     // Push to KV newest-first (lpush each), then cap the list
     for (let i = entries.length - 1; i >= 0; i--) {
