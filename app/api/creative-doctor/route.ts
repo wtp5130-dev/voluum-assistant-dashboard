@@ -69,10 +69,11 @@ export async function POST(req: Request): Promise<Response> {
     // Optional brand support: if brandUrl is provided and we have a stored brand style, attach concise style notes
     let brandStyleNotes = "";
     const brandUrl = String(body?.brandUrl || body?.brand || "").trim();
+    const brandNoCache = Boolean(body?.brandNoCache);
     if (brandUrl) {
       try {
         const host = new URL(brandUrl).host;
-        const saved = (await kv.get(`brand:style:${host}`)) as any;
+        const saved = brandNoCache ? null : ((await kv.get(`brand:style:${host}`)) as any);
         if (saved?.profile) {
           const p = saved.profile;
           brandStyleNotes = [

@@ -13,6 +13,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     if (!ok) return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: { "Content-Type": "application/json" } });
     const body = await req.json().catch(() => ({}));
     const baseUrl = String(body?.baseUrl || body?.url || "");
+    const noCache = Boolean(body?.noCache);
+    const clearExisting = Boolean(body?.clearExisting);
+    const forceHostName = Boolean(body?.forceHostName);
     if (!baseUrl) return new Response(JSON.stringify({ error: "missing_baseUrl" }), { status: 400, headers: { "Content-Type": "application/json" } });
     const host = new URL(baseUrl).host;
     const crawl = (await kv.get(`brand:crawl:${host}`)) as any;
@@ -96,11 +99,21 @@ Rules:\n- colors: 5-8 entries (array), prefer hex if obvious from images, else c
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) return new Response(JSON.stringify({ error: "no_json" }), { status: 500, headers: { "Content-Type": "application/json" } });
     const profile = JSON.parse(jsonMatch[0]);
+    if (forceHostName && typeof profile === "object" && profile) {
+      try { (profile as any).name = host; } catch {}
+    }
     const key = `brand:style:${host}`;
-    const saved = { host, baseUrl: crawl.baseUrl, profile, ts: new Date().toISOString() };
-    await kv.set(key, saved);
+    if (clearExisting) {
+      try { await kv.del(key); } catch {}
+    }
+    if (!noCache) {
+      const saved = { host, baseUrl: crawl.baseUrl, profile, ts: new Date().toISOString() };
+      await kv.set(key, saved);
+      try { await kv.set(`brand:status:${host}`, { step: "done", progress: 100, ts: new Date().toISOString() }); } catch {}
+      return new Response(JSON.stringify({ ok: true, host, key, profile }), { status: 200, headers: { "Content-Type": "application/json" } });
+    }
     try { await kv.set(`brand:status:${host}`, { step: "done", progress: 100, ts: new Date().toISOString() }); } catch {}
-    return new Response(JSON.stringify({ ok: true, host, key, profile }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response(JSON.stringify({ ok: true, host, profile, cached: false }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e?.message || String(e) }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
