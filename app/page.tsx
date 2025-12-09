@@ -2557,6 +2557,17 @@ function CreativesTab(props: {
   const [brandNegative, setBrandNegative] = useState<string>("");
   const [applyBrand, setApplyBrand] = useState<boolean>(true);
 
+  // Derive a preview list of colors from the comma-/space-separated input
+  const colorList = useMemo(() => {
+    const raw = (brandColors || "").split(/[,\n]+/).map((s) => s.trim()).filter(Boolean);
+    // If user separated by spaces only, try splitting further but keep hex codes intact
+    if (raw.length <= 1) {
+      const bySpace = (brandColors || "").split(/\s+/).map((s) => s.trim()).filter(Boolean);
+      return Array.from(new Set(bySpace)).slice(0, 20);
+    }
+    return Array.from(new Set(raw)).slice(0, 20);
+  }, [brandColors]);
+
   const [brandList, setBrandList] = useState<Array<{ id: string; name: string; colors: string[]; style: string; negative?: string }>>([]);
   const [selectedBrandId, setSelectedBrandId] = useState<string>("");
   // Small status toast/spinner for brand indexing/style ops
@@ -2882,6 +2893,20 @@ function CreativesTab(props: {
                   <div className="md:col-span-5">
                     <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Colors (comma-separated)</label>
                     <input value={brandColors} onChange={(e)=>setBrandColors(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1" placeholder="#00ff88, #0a0f1a" />
+                    {colorList.length > 0 && (
+                      <div className="mt-1 flex flex-wrap gap-2">
+                        {colorList.map((c, i) => (
+                          <div key={`${c}-${i}`} className="flex items-center gap-1">
+                            <span
+                              className="inline-block w-4 h-4 rounded-sm border border-slate-700"
+                              style={{ backgroundColor: c }}
+                              title={c}
+                            />
+                            <span className="text-[10px] text-slate-400">{c}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                   <div className="md:col-span-4">
                     <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Negative (avoid)</label>
