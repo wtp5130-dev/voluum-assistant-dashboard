@@ -287,6 +287,9 @@ export default function DashboardPage() {
       } catch {}
     }
   }, []);
+
+  // Load initial brands on mount
+  useEffect(() => { loadBrands(); }, [loadBrands]);
   const handleSync = useCallback(async () => {
     setSyncLoading(true);
     setLastSyncResult(null);
@@ -2570,6 +2573,12 @@ function CreativesTab(props: {
 
   const [brandList, setBrandList] = useState<Array<{ id: string; name: string; colors: string[]; style: string; negative?: string }>>([]);
   const [selectedBrandId, setSelectedBrandId] = useState<string>("");
+  const [hasOpenAI, setHasOpenAI] = useState<boolean>(false);
+  useEffect(() => {
+    (async () => {
+      try { const r = await fetch("/api/env/openai", { cache: "no-store" }); const j = await r.json(); setHasOpenAI(Boolean(j?.hasOpenAI)); } catch { setHasOpenAI(false); }
+    })();
+  }, []);
   // Small status toast/spinner for brand indexing/style ops
   const [brandOpBusy, setBrandOpBusy] = useState<boolean>(false);
   const [brandToast, setBrandToast] = useState<null | { kind: "info" | "success" | "error"; msg: string }>(null);
@@ -2584,7 +2593,6 @@ function CreativesTab(props: {
       const json = await res.json().catch(() => null);
       const items = Array.isArray(json?.brands) ? json.brands : [];
       if (items.length === 0) {
-        // Seed SOL88 default on first run
         await fetch("/api/brand", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -2598,7 +2606,6 @@ function CreativesTab(props: {
         return loadBrands();
       }
       setBrandList(items);
-      // Select first brand by default
       const b = items[0];
       setSelectedBrandId(b.id);
       setBrandName(b.name || "");
@@ -2607,51 +2614,6 @@ function CreativesTab(props: {
       setBrandNegative(b.negative || "");
     } catch {}
   }, []);
-  useEffect(() => { loadBrands(); }, [loadBrands]);
-
-  // Fetch summarized brand style for the given URL and apply to fields, then persist as a saved brand
-  const applyBrandProfileFromServer = useCallback(async (u: string) => {
-    try {
-      const r = await fetch(`/api/brand/style?baseUrl=${encodeURIComponent(u)}`, { cache: "no-store" });
-      const j = await r.json().catch(() => null);
-      const data = j?.data;
-      const p = data?.profile || null;
-      if (!p) return false;
-
-      const newName = String(p.name || brandName || "");
-      const newColors = Array.isArray(p.colors) ? p.colors.filter((x:any)=>x).join(", ") : (brandColors || "");
-      // Prefer explicit styleNotes from profile; fallback to summary/tone/voice/ctas
-      let newStyle = "";
-      if (Array.isArray(p.styleNotes) && p.styleNotes.length) {
-        newStyle = p.styleNotes.join("\n");
-      } else {
-        const parts: string[] = [];
-        if (p.summary) parts.push(String(p.summary));
-        if (p.tone) parts.push(`Tone: ${p.tone}`);
-        if (p.voice) parts.push(`Voice: ${p.voice}`);
-        if (Array.isArray(p.ctas) && p.ctas.length) parts.push(`CTAs: ${p.ctas.join(", ")}`);
-        newStyle = parts.join("\n");
-      }
-      const newNegative = Array.isArray(p.donts) && p.donts.length ? p.donts.join(", ") : (brandNegative || "");
-
-      setBrandName(newName);
-      setBrandColors(newColors);
-      setBrandStyle(newStyle);
-      setBrandNegative(newNegative);
-
-      try {
-        await fetch("/api/brand", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id: selectedBrandId || undefined, name: newName, colors: newColors, style: newStyle, negative: newNegative }),
-        });
-        await loadBrands();
-      } catch {}
-      return true;
-    } catch {
-      return false;
-    }
-  }, [brandName, brandColors, brandNegative, loadBrands, selectedBrandId]);
 
   const saveBrand = async () => {
     try {
@@ -2833,14 +2795,26 @@ function CreativesTab(props: {
                         showBrandToast("Indexing brand…", "info");
                         try {
                           const r1 = await fetch("/api/brand/index", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u, maxPages: 500 }) });
-                          if (!r1.ok) throw new Error(String(r1.status));
-                          showBrandToast("Index complete. Generating style…", "info");
-                          const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) });
-                          if (!r2.ok) throw new Error(String(r2.status));
-                          const applied = await applyBrandProfileFromServer(u);
-                          showBrandToast(applied ? "Brand style ready and applied." : "Brand style ready.", "success");
+                          if (!r1.ok) {
+                            const txt = await r1.text().catch(()=>"");
+                            showBrandToast(`Index failed (${r1.status}). ${txt || ""}`.trim(), "error");
+                            return;
+                          }
+                          if (!hasOpenAI) {
+                            showBrandToast("Index complete. Set OPENAI_API_KEY to generate style.", "info");
+                          } else {
+                            showBrandToast("Index complete. Generating style…", "info");
+                            const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) });
+                            if (!r2.ok) {
+                              const txt = await r2.text().catch(()=>"");
+                              showBrandToast(`Style generation failed (${r2.status}). Ensure OPENAI_API_KEY is set.` + (txt? ` ${txt}`:""), "error");
+                              return;
+                            }
+                            await loadBrands();
+                            showBrandToast("Brand style ready.", "success");
+                          }
                         } catch (e) {
-                          showBrandToast("Brand indexing failed. Check permissions/API key.", "error");
+                          showBrandToast("Unexpected error during brand indexing.", "error");
                         } finally {
                           setBrandOpBusy(false);
                         }
@@ -2848,9 +2822,9 @@ function CreativesTab(props: {
                     >Index brand</button>
                     <button
                       type="button"
-                      disabled={brandOpBusy}
+                      disabled={brandOpBusy || !hasOpenAI}
                       className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
-                      title="Only generate style notes from the last crawl"
+                      title={hasOpenAI ? "Only generate style notes from the last crawl" : "Set OPENAI_API_KEY in Vercel to enable style generation"}
                       onClick={async()=>{
                         const u = brandUrl.trim();
                         if(!u){ showBrandToast("Please enter a Brand URL first.", "error"); return; }
@@ -2859,8 +2833,8 @@ function CreativesTab(props: {
                         try {
                           const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) });
                           if (!r2.ok) throw new Error(String(r2.status));
-                          const applied = await applyBrandProfileFromServer(u);
-                          showBrandToast(applied ? "Brand style ready and applied." : "Brand style ready.", "success");
+                          await loadBrands();
+                          showBrandToast("Brand style ready.", "success");
                         } catch (e) {
                           showBrandToast("Brand style generation failed.", "error");
                         } finally {
