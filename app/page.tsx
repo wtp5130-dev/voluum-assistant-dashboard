@@ -2559,6 +2559,14 @@ function CreativesTab(props: {
 
   const [brandList, setBrandList] = useState<Array<{ id: string; name: string; colors: string[]; style: string; negative?: string }>>([]);
   const [selectedBrandId, setSelectedBrandId] = useState<string>("");
+  // Small status toast/spinner for brand indexing/style ops
+  const [brandOpBusy, setBrandOpBusy] = useState<boolean>(false);
+  const [brandToast, setBrandToast] = useState<null | { kind: "info" | "success" | "error"; msg: string }>(null);
+  const showBrandToast = (msg: string, kind: "info" | "success" | "error" = "info") => {
+    setBrandToast({ kind, msg });
+    // auto-hide after 4s
+    try { setTimeout(() => setBrandToast(null), 4000); } catch {}
+  };
   const loadBrands = useCallback(async () => {
     try {
       const res = await fetch("/api/brand", { cache: "no-store" });
@@ -2760,20 +2768,53 @@ function CreativesTab(props: {
                   <div className="md:col-span-4 flex items-end gap-2">
                     <button
                       type="button"
-                      className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                      disabled={brandOpBusy || !brandUrl.trim()}
+                      className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
                       title="Index all public pages for this brand"
                       onClick={async()=>{
                         const u = brandUrl.trim(); if(!u) return;
-                        try { await fetch("/api/brand/index", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u, maxPages: 500 }) }); } catch {}
-                        try { await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) }); } catch {}
+                        setBrandOpBusy(true);
+                        showBrandToast("Indexing brand…", "info");
+                        try {
+                          const r1 = await fetch("/api/brand/index", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u, maxPages: 500 }) });
+                          if (!r1.ok) throw new Error(String(r1.status));
+                          showBrandToast("Index complete. Generating style…", "info");
+                          const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) });
+                          if (!r2.ok) throw new Error(String(r2.status));
+                          showBrandToast("Brand style ready.", "success");
+                        } catch (e) {
+                          showBrandToast("Brand indexing failed. Check permissions/API key.", "error");
+                        } finally {
+                          setBrandOpBusy(false);
+                        }
                       }}
                     >Index brand</button>
                     <button
                       type="button"
-                      className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                      disabled={brandOpBusy || !brandUrl.trim()}
+                      className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
                       title="Only generate style notes from the last crawl"
-                      onClick={async()=>{ const u = brandUrl.trim(); if(!u) return; try { await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) }); } catch {} }}
+                      onClick={async()=>{
+                        const u = brandUrl.trim(); if(!u) return;
+                        setBrandOpBusy(true);
+                        showBrandToast("Generating style from last crawl…", "info");
+                        try {
+                          const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) });
+                          if (!r2.ok) throw new Error(String(r2.status));
+                          showBrandToast("Brand style ready.", "success");
+                        } catch (e) {
+                          showBrandToast("Brand style generation failed.", "error");
+                        } finally {
+                          setBrandOpBusy(false);
+                        }
+                      }}
                     >Generate style</button>
+                    {brandOpBusy && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-slate-400">
+                        <span className="inline-block h-3 w-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
+                        Working…
+                      </span>
+                    )}
                   </div>
                   <div className="md:col-span-3">
                     <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Select brand</label>
@@ -2867,6 +2908,12 @@ function CreativesTab(props: {
           </div>
         </div>
       </div>
+      {/* Small toast */}
+      {brandToast && (
+        <div className={`fixed bottom-4 right-4 z-50 px-3 py-2 rounded-md text-[11px] shadow-lg border ${brandToast.kind === 'success' ? 'bg-emerald-900/80 text-emerald-100 border-emerald-700' : brandToast.kind === 'error' ? 'bg-rose-900/80 text-rose-100 border-rose-700' : 'bg-slate-900/80 text-slate-100 border-slate-700'}`}>
+          {brandToast.msg}
+        </div>
+      )}
 
       {/* Creative generator */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 flex flex-col gap-3">
