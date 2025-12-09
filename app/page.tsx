@@ -2598,6 +2598,45 @@ function CreativesTab(props: {
   }, []);
   useEffect(() => { loadBrands(); }, [loadBrands]);
 
+  // Fetch summarized brand style for the given URL and apply to fields, then persist as a saved brand
+  const applyBrandProfileFromServer = useCallback(async (u: string) => {
+    try {
+      const r = await fetch(`/api/brand/style?baseUrl=${encodeURIComponent(u)}`, { cache: "no-store" });
+      const j = await r.json().catch(() => null);
+      const data = j?.data;
+      const p = data?.profile || null;
+      if (!p) return false;
+
+      const newName = String(p.name || brandName || "");
+      const newColors = Array.isArray(p.colors) ? p.colors.filter((x:any)=>x).join(", ") : (brandColors || "");
+      const parts: string[] = [];
+      if (p.summary) parts.push(String(p.summary));
+      if (p.tone) parts.push(`Tone: ${p.tone}`);
+      if (p.voice) parts.push(`Voice: ${p.voice}`);
+      if (Array.isArray(p.keywords) && p.keywords.length) parts.push(`Keywords: ${p.keywords.join(", ")}`);
+      if (Array.isArray(p.ctas) && p.ctas.length) parts.push(`CTAs: ${p.ctas.join(", ")}`);
+      const newStyle = parts.join("\n");
+      const newNegative = Array.isArray(p.donts) && p.donts.length ? p.donts.join(", ") : (brandNegative || "");
+
+      setBrandName(newName);
+      setBrandColors(newColors);
+      setBrandStyle(newStyle);
+      setBrandNegative(newNegative);
+
+      try {
+        await fetch("/api/brand", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: selectedBrandId || undefined, name: newName, colors: newColors, style: newStyle, negative: newNegative }),
+        });
+        await loadBrands();
+      } catch {}
+      return true;
+    } catch {
+      return false;
+    }
+  }, [brandName, brandColors, brandNegative, loadBrands, selectedBrandId]);
+
   const saveBrand = async () => {
     try {
       const res = await fetch("/api/brand", {
@@ -2782,7 +2821,8 @@ function CreativesTab(props: {
                           showBrandToast("Index complete. Generating style…", "info");
                           const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) });
                           if (!r2.ok) throw new Error(String(r2.status));
-                          showBrandToast("Brand style ready.", "success");
+                          const applied = await applyBrandProfileFromServer(u);
+                          showBrandToast(applied ? "Brand style ready and applied." : "Brand style ready.", "success");
                         } catch (e) {
                           showBrandToast("Brand indexing failed. Check permissions/API key.", "error");
                         } finally {
@@ -2803,7 +2843,8 @@ function CreativesTab(props: {
                         try {
                           const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) });
                           if (!r2.ok) throw new Error(String(r2.status));
-                          showBrandToast("Brand style ready.", "success");
+                          const applied = await applyBrandProfileFromServer(u);
+                          showBrandToast(applied ? "Brand style ready and applied." : "Brand style ready.", "success");
                         } catch (e) {
                           showBrandToast("Brand style generation failed.", "error");
                         } finally {
