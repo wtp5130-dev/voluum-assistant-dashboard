@@ -1209,6 +1209,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           assetDescription={assetDescription}
           mainImagePrompt={mainImagePrompt}
           mainImageSize={mainImageSize}
+          setMainImageSize={setMainImageSize}
           imageLoading={imageLoading}
           imageError={imageError}
           assetsLoading={assetsLoading}
@@ -2508,6 +2509,7 @@ function CreativesTab(props: {
   assetDescription: string;
   mainImagePrompt: string;
   mainImageSize: string;
+  setMainImageSize: (v: string) => void;
   imageLoading: boolean;
   imageError: string | null;
   assetsLoading: boolean;
@@ -2549,6 +2551,7 @@ function CreativesTab(props: {
     assetDescription,
     mainImagePrompt,
     mainImageSize,
+    setMainImageSize,
     imageLoading,
     imageError,
     assetsLoading,
@@ -2612,6 +2615,71 @@ function CreativesTab(props: {
     }
     return Array.from(new Set(raw)).slice(0, 20);
   }, [brandColors]);
+
+  // Prompt Builder state
+  const [pbObjective, setPbObjective] = useState<string>("High-CTR casino signup banner");
+  const [pbSize, setPbSize] = useState<string>(mainImageSize || "1024x1024");
+  const [pbVisuals, setPbVisuals] = useState<string>("gold coins explosion, roulette wheel glow");
+  const [pbColors, setPbColors] = useState<string>("");
+  const [pbTextStyle, setPbTextStyle] = useState<string>("bold clean typography");
+  const [pbHeadline, setPbHeadline] = useState<string>("200% Deposit Bonus");
+  const [pbCTA, setPbCTA] = useState<string>("Play Now");
+  const [pbAudience, setPbAudience] = useState<string>("LATAM — bright vivid colors, energetic action");
+  const [pbNetwork, setPbNetwork] = useState<string>("PropellerAds");
+  const [pbExploreOnly, setPbExploreOnly] = useState<boolean>(false);
+  const [pbTextLock, setPbTextLock] = useState<boolean>(true);
+  const [pbCompliance, setPbCompliance] = useState<boolean>(true);
+
+  const composePrompt = (): string => {
+    const sizeStr = pbSize || mainImageSize || "1024x1024";
+    const brandBlock = applyBrand
+      ? [
+          brandName ? `brand: ${brandName}` : null,
+          brandColors ? `color palette: ${brandColors}` : null,
+          brandStyle ? `brand style: ${brandStyle}` : null,
+        ].filter(Boolean).join(", ")
+      : "";
+    const base = [
+      pbObjective,
+      sizeStr,
+      brandBlock,
+      pbVisuals,
+      pbColors || "",
+      pbTextStyle,
+      pbAudience,
+      pbNetwork ? `designed for ${pbNetwork}` : "",
+      pbCompliance ? "compliant for PropellerAds, no misleading claims, clean ad space, easy-to-read CTA" : "",
+    ].filter(Boolean).join(", ");
+    const headlineCta = pbExploreOnly
+      ? "no text, focus on visuals"
+      : `headline \"${pbHeadline}\", CTA button \"${pbCTA}\"`;
+    const lock = pbTextLock ? ", perfect spelling, accurate text placement, clean typography, sharp readable text, no distortion" : "";
+    return `${base}, ${headlineCta}${lock}, uncluttered layout, professional, sharp, high contrast.`;
+  };
+
+  const runBuilderOnce = async () => {
+    const p = composePrompt();
+    setImageProvider("ideogram");
+    setImagePrompt(p);
+    if (pbSize && pbSize !== mainImageSize) setMainImageSize(pbSize);
+    try { await generateCreativeBundle(); } catch {}
+  };
+
+  const addVariantSuggestions = () => {
+    const swaps = [
+      { visuals: "gold coins explosion, roulette wheel glow" },
+      { visuals: "3D slot reels with 777, glowing coins" },
+      { visuals: "shining gems, jackpot burst" },
+      { visuals: "classic Vegas glamour, marquee lights" },
+    ];
+    const variants = swaps.map((s) => ({
+      title: "Variant",
+      prompt: composePrompt().replace(pbVisuals, s.visuals),
+      style_preset: stylePreset || undefined,
+      negative_prompt: negativePrompt || undefined,
+    }));
+    setIdeogramSuggestions([...(ideogramSuggestions||[]), ...variants]);
+  };
 
   const [brandList, setBrandList] = useState<Array<{ id: string; name: string; colors: string[]; style: string; negative?: string }>>([]);
   const [selectedBrandId, setSelectedBrandId] = useState<string>("");
@@ -3056,6 +3124,85 @@ function CreativesTab(props: {
                   </div>
                 </div>
               )}
+
+              {/* Prompt Builder */}
+              <div className="md:col-span-12 rounded-md border border-slate-800 bg-slate-900/70 p-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Prompt Builder</h4>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                      onClick={()=>{
+                        setPbObjective("High-CTR casino signup banner");
+                        setPbSize(mainImageSize);
+                        setPbVisuals("gold coins explosion, roulette wheel glow");
+                        setPbColors("");
+                        setPbTextStyle("bold clean typography");
+                        setPbHeadline("200% Deposit Bonus");
+                        setPbCTA("Play Now");
+                        setPbAudience("LATAM — bright vivid colors, energetic action");
+                        setStylePreset(stylePreset||"CINEMATIC");
+                      }}>Premium</button>
+                    <button
+                      className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                      onClick={()=>{
+                        setPbObjective("High-CTR slot machine banner");
+                        setPbSize(mainImageSize);
+                        setPbVisuals("3D slot reels with 777 result, glowing coins");
+                        setPbColors("neon purple and gold palette");
+                        setPbTextStyle("bold clean text");
+                        setPbHeadline("Free Spins Inside!");
+                        setPbCTA("Spin Now");
+                        setPbAudience("Mobile-first layout");
+                        setStylePreset("NEON_NOIR");
+                      }}>Slots</button>
+                    <button
+                      className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                      onClick={()=>{
+                        setPbObjective("Crypto casino banner");
+                        setPbSize(mainImageSize);
+                        setPbVisuals("3D coins with blockchain textures, glowing grid background");
+                        setPbColors("cyber neon blue and gold palette");
+                        setPbTextStyle("sharp modern typography");
+                        setPbHeadline("Deposit with Crypto, Get 300% Bonus");
+                        setPbCTA("Start Now");
+                        setPbAudience("Futuristic appeal");
+                        setStylePreset("ULTRA_REALISTIC");
+                      }}>Crypto</button>
+                  </div>
+                </div>
+                <div className="mt-2 grid gap-2 md:grid-cols-12 text-[11px]">
+                  <div className="md:col-span-3"><label className="block text-[10px] text-slate-400">Objective</label><input value={pbObjective} onChange={(e)=>setPbObjective(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1"/></div>
+                  <div className="md:col-span-2"><label className="block text-[10px] text-slate-400">Size</label>
+                    <select value={pbSize} onChange={(e)=>{ setPbSize(e.target.value); setMainImageSize(e.target.value); }} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1">
+                      <option value="300x250">300x250</option>
+                      <option value="320x480">320x480</option>
+                      <option value="1200x628">1200x628</option>
+                      <option value="1024x1024">1024x1024</option>
+                    </select>
+                  </div>
+                  <div className="md:col-span-7"><label className="block text-[10px] text-slate-400">Visual elements</label><input value={pbVisuals} onChange={(e)=>setPbVisuals(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1"/></div>
+                  <div className="md:col-span-12 grid grid-cols-3 gap-2">
+                    <div><label className="block text-[10px] text-slate-400">Color scheme</label><input value={pbColors} onChange={(e)=>setPbColors(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1"/></div>
+                    <div><label className="block text-[10px] text-slate-400">Text style</label><input value={pbTextStyle} onChange={(e)=>setPbTextStyle(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1"/></div>
+                    <div><label className="block text-[10px] text-slate-400">Audience</label><input value={pbAudience} onChange={(e)=>setPbAudience(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1"/></div>
+                  </div>
+                  <div className="md:col-span-6"><label className="block text-[10px] text-slate-400">Headline</label><input value={pbHeadline} onChange={(e)=>setPbHeadline(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1"/></div>
+                  <div className="md:col-span-6"><label className="block text-[10px] text-slate-400">CTA</label><input value={pbCTA} onChange={(e)=>setPbCTA(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1"/></div>
+                  <div className="md:col-span-12 flex flex-wrap items-center gap-3">
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-emerald-500" checked={pbExploreOnly} onChange={(e)=>setPbExploreOnly(e.target.checked)} />Style exploration (no text)</label>
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-emerald-500" checked={pbTextLock} onChange={(e)=>setPbTextLock(e.target.checked)} />Text lock</label>
+                    <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-emerald-500" checked={pbCompliance} onChange={(e)=>setPbCompliance(e.target.checked)} />Propeller compliance</label>
+                    <span className="text-slate-500">Network:</span>
+                    <select value={pbNetwork} onChange={(e)=>setPbNetwork(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1">
+                      <option>PropellerAds</option>
+                      <option>Other</option>
+                    </select>
+                    <button className="text-[11px] px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500" onClick={runBuilderOnce}>Build & Generate</button>
+                    <button className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={addVariantSuggestions}>Generate Variants</button>
+                  </div>
+                </div>
+              </div>
               <div className="md:col-span-3">
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Style preset</label>
                 <select value={stylePreset} onChange={(e)=>setStylePreset(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs">
