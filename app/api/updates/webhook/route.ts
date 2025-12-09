@@ -38,29 +38,20 @@ export async function POST(req: NextRequest): Promise<Response> {
       return new Response(JSON.stringify({ ok: true, added: 0 }), { status: 200, headers: { "Content-Type": "application/json" } });
     }
 
-    let added = 0;
+    // Build a messages list from commit first lines
     const messages: string[] = [];
     for (const c of commits) {
       const msg: string = String(c?.message || "").trim();
       if (!msg) continue;
       const firstLine = msg.split(/\r?\n/)[0];
       messages.push(`- ${firstLine}`);
-      const entry: Entry = {
-        id: crypto.randomUUID(),
-        title: firstLine,
-        kind: mapKind(firstLine),
-        content: `Commit ${c?.id?.slice(0,7) || ""} by ${c?.author?.name || pusher || "unknown"} in ${repo}.\n\n${msg}`,
-        createdAt: new Date().toISOString(),
-        author: c?.author?.name || pusher || undefined,
-      };
-      await kv.lpush(LIST_KEY, entry);
-      added++;
     }
-    await kv.ltrim(LIST_KEY, 0, 499);
 
-    // Optional: AI summary for the push
+    // Summary-only mode
+    let added = 0;
     try {
       const apiKey = process.env.OPENAI_API_KEY;
+      let summary: string | null = null;
       if (apiKey && messages.length > 0) {
         const client = new OpenAI({ apiKey });
         const prompt = `Summarize these git commit titles into a short, user-facing release note (2-4 bullets max), combine related items, and keep it concise and non-technical.\n\n${messages.join("\n")}`;
@@ -72,18 +63,23 @@ export async function POST(req: NextRequest): Promise<Response> {
             { role: "user", content: prompt },
           ],
         });
-        const summary = completion.choices?.[0]?.message?.content?.trim() || messages.join("\n");
-        const summaryEntry: Entry = {
-          id: crypto.randomUUID(),
-          title: `Deployment summary (${commits.length} commit${commits.length===1?"":"s"})`,
-          kind: "note",
-          content: summary,
-          createdAt: new Date().toISOString(),
-          author: pusher || undefined,
-        };
-        await kv.lpush(LIST_KEY, summaryEntry);
-        await kv.ltrim(LIST_KEY, 0, 499);
+        summary = completion.choices?.[0]?.message?.content?.trim() || null;
       }
+      if (!summary) {
+        // Fallback: simple bullet list
+        summary = messages.length ? messages.join("\n") : "Minor internal adjustments.";
+      }
+      const summaryEntry: Entry = {
+        id: crypto.randomUUID(),
+        title: `Deployment summary (${commits.length} commit${commits.length===1?"":"s"})`,
+        kind: "note",
+        content: summary,
+        createdAt: new Date().toISOString(),
+        author: pusher || undefined,
+      };
+      await kv.lpush(LIST_KEY, summaryEntry);
+      await kv.ltrim(LIST_KEY, 0, 499);
+      added = 1;
     } catch {}
 
     return new Response(JSON.stringify({ ok: true, added }), { status: 200, headers: { "Content-Type": "application/json" } });
