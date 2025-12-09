@@ -2629,6 +2629,17 @@ function CreativesTab(props: {
   const [pbExploreOnly, setPbExploreOnly] = useState<boolean>(false);
   const [pbTextLock, setPbTextLock] = useState<boolean>(true);
   const [pbCompliance, setPbCompliance] = useState<boolean>(true);
+  
+
+  // One-click two-step chain
+  const runExploreThenTextLock = async () => {
+    const prevExplore = pbExploreOnly; const prevLock = pbTextLock;
+    setPbExploreOnly(true); setPbTextLock(false);
+    await runBuilderOnce();
+    setPbExploreOnly(false); setPbTextLock(true);
+    await runBuilderOnce();
+    setPbExploreOnly(prevExplore); setPbTextLock(prevLock);
+  };
 
   const composePrompt = (): string => {
     const sizeStr = pbSize || mainImageSize || "1024x1024";
@@ -2694,6 +2705,44 @@ function CreativesTab(props: {
   const [brandToast, setBrandToast] = useState<null | { kind: "info" | "success" | "error"; msg: string }>(null);
   const [brandProgress, setBrandProgress] = useState<number>(0);
   const [brandStep, setBrandStep] = useState<string>("");
+  // Templates state (after brand selection is available)
+  const [tplName, setTplName] = useState<string>("");
+  const [tplList, setTplList] = useState<Array<any>>([]);
+  const loadTemplates = useCallback(async (id?: string) => {
+    try { const r = await fetch(`/api/prompt-templates?brandId=${encodeURIComponent(id || "")}`, { cache: "no-store" }); const j = await r.json(); setTplList(Array.isArray(j?.items) ? j.items : []);} catch {}
+  }, []);
+  useEffect(() => { loadTemplates(selectedBrandId); }, [selectedBrandId, loadTemplates]);
+  const saveTemplate = async () => {
+    const fields = {
+      objective: pbObjective, size: pbSize, visuals: pbVisuals, colors: pbColors, textStyle: pbTextStyle,
+      headline: pbHeadline, cta: pbCTA, audience: pbAudience, network: pbNetwork,
+      exploreOnly: pbExploreOnly, textLock: pbTextLock, compliance: pbCompliance,
+      style_preset: stylePreset, negative_prompt: negativePrompt
+    };
+    const res = await fetch("/api/prompt-templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId: selectedBrandId || undefined, name: tplName || `Template ${new Date().toLocaleString()}`, fields }) });
+    if (res.ok) { setTplName(""); loadTemplates(selectedBrandId); }
+  };
+  const applyTemplate = (t: any) => {
+    const f = t?.fields || {};
+    if (f.objective) setPbObjective(f.objective);
+    if (f.size) { setPbSize(f.size); setMainImageSize(f.size); }
+    if (f.visuals) setPbVisuals(f.visuals);
+    if (f.colors) setPbColors(f.colors);
+    if (f.textStyle) setPbTextStyle(f.textStyle);
+    if (f.headline) setPbHeadline(f.headline);
+    if (f.cta) setPbCTA(f.cta);
+    if (f.audience) setPbAudience(f.audience);
+    if (f.network) setPbNetwork(f.network);
+    setPbExploreOnly(Boolean(f.exploreOnly));
+    setPbTextLock(Boolean(f.textLock));
+    setPbCompliance(Boolean(f.compliance));
+    if (f.style_preset) setStylePreset(String(f.style_preset));
+    if (f.negative_prompt) setNegativePrompt(String(f.negative_prompt));
+  };
+  const deleteTemplate = async (id: string) => {
+    const res = await fetch("/api/prompt-templates", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId: selectedBrandId || undefined, id }) });
+    if (res.ok) loadTemplates(selectedBrandId);
+  };
   const brandStreamRef = useRef<EventSource | null>(null);
   const stopBrandStream = useCallback(async (base: string) => {
     try { if (brandStreamRef.current) { brandStreamRef.current.close(); brandStreamRef.current = null; } } catch {}
@@ -3129,7 +3178,16 @@ function CreativesTab(props: {
               <div className="md:col-span-12 rounded-md border border-slate-800 bg-slate-900/70 p-3">
                 <div className="flex items-center justify-between">
                   <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Prompt Builder</h4>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <input value={tplName} onChange={(e)=>setTplName(e.target.value)} placeholder="Template name" className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[11px] w-36" />
+                    <button className="text-[11px] px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500" onClick={saveTemplate} title="Save current fields as template">Save</button>
+                    <select className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[11px] max-w-[180px]" onChange={(e)=>{ const t = tplList.find((x:any)=>x.id===e.target.value); if (t) applyTemplate(t); }}>
+                      <option value="">(Templates)</option>
+                      {tplList.map((t:any)=>(<option key={t.id} value={t.id}>{t.name}</option>))}
+                    </select>
+                    {tplList.length>0 && (
+                      <button className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={()=>{ const id = (tplList[0]||{}).id; if (id) deleteTemplate(id); }} title="Delete most recent template">Delete</button>
+                    )}
                     <button
                       className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
                       onClick={()=>{
@@ -3193,12 +3251,25 @@ function CreativesTab(props: {
                     <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-emerald-500" checked={pbExploreOnly} onChange={(e)=>setPbExploreOnly(e.target.checked)} />Style exploration (no text)</label>
                     <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-emerald-500" checked={pbTextLock} onChange={(e)=>setPbTextLock(e.target.checked)} />Text lock</label>
                     <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-emerald-500" checked={pbCompliance} onChange={(e)=>setPbCompliance(e.target.checked)} />Propeller compliance</label>
+                    <span className="text-slate-500">GEO:</span>
+                    <div className="flex flex-wrap gap-1">
+                      {[
+                        {k:"MY", v:"Asia — neon lights, cyber aesthetics, vibrant glowing gold"},
+                        {k:"MX", v:"LATAM — bright vivid colors, energetic action"},
+                        {k:"TH", v:"Asia — neon cyber, festive color accents"},
+                        {k:"SG", v:"Tier 1 Asia — premium minimalism, clean modern tech aesthetic"},
+                        {k:"ID", v:"SEA — energetic vibrant palette, mobile-first composition"},
+                      ].map((g)=> (
+                        <button key={g.k} className="text-[10px] px-2 py-0.5 rounded-full border border-slate-700 hover:border-slate-500" onClick={()=>setPbAudience(g.v)}>{g.k}</button>
+                      ))}
+                    </div>
                     <span className="text-slate-500">Network:</span>
                     <select value={pbNetwork} onChange={(e)=>setPbNetwork(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1">
                       <option>PropellerAds</option>
                       <option>Other</option>
                     </select>
                     <button className="text-[11px] px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500" onClick={runBuilderOnce}>Build & Generate</button>
+                    <button className="text-[11px] px-3 py-1 rounded-md bg-sky-600 hover:bg-sky-500" onClick={runExploreThenTextLock} title="Run style exploration, then add text with lock">Explore → Text & Lock</button>
                     <button className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={addVariantSuggestions}>Generate Variants</button>
                   </div>
                 </div>
