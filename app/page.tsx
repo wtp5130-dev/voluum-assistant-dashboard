@@ -318,6 +318,7 @@ export default function DashboardPage() {
   const [creativeChatInput, setCreativeChatInput] = useState("");
   const [creativeChatLoading, setCreativeChatLoading] = useState(false);
   const [creativeTokenCount, setCreativeTokenCount] = useState<number>(0);
+  const [brandUrl, setBrandUrl] = useState<string>("");
 
   // Fetch current user for permissions
   useEffect(() => {
@@ -806,6 +807,7 @@ const [saveToGallery, setSaveToGallery] = useState<boolean>(true);
             campaigns: filteredCampaigns,
             selectedCampaignId,
           },
+          brandUrl: brandUrl || undefined,
         }),
       });
 
@@ -1181,6 +1183,8 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           setCreativeChatInput={setCreativeChatInput}
           sendCreativeChat={sendCreativeChat}
           creativeTokenCount={creativeTokenCount}
+          brandUrl={brandUrl}
+          setBrandUrl={setBrandUrl}
           imagePrompt={imagePrompt}
           setImagePrompt={setImagePrompt}
           adType={adType}
@@ -2474,6 +2478,8 @@ function CreativesTab(props: {
   setCreativeChatInput: (v: string) => void;
   sendCreativeChat: (overrideMessage?: string) => void;
   creativeTokenCount: number;
+  brandUrl: string;
+  setBrandUrl: (v: string) => void;
   imagePrompt: string;
   setImagePrompt: (v: string) => void;
   adType: string;
@@ -2509,6 +2515,8 @@ function CreativesTab(props: {
     setCreativeChatInput,
     sendCreativeChat,
     creativeTokenCount,
+    brandUrl,
+    setBrandUrl,
     imagePrompt,
     setImagePrompt,
     adType,
@@ -2745,6 +2753,28 @@ function CreativesTab(props: {
                   <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" className="accent-emerald-500" checked={applyBrand} onChange={(e)=>setApplyBrand(e.target.checked)} />Apply in prompts</label>
                 </div>
                 <div className="mt-2 grid gap-2 md:grid-cols-12 text-[11px]">
+                  <div className="md:col-span-8">
+                    <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Brand URL (optional)</label>
+                    <input value={brandUrl} onChange={(e)=>setBrandUrl(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1" placeholder="https://www.sol88.mx/" />
+                  </div>
+                  <div className="md:col-span-4 flex items-end gap-2">
+                    <button
+                      type="button"
+                      className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                      title="Index all public pages for this brand"
+                      onClick={async()=>{
+                        const u = brandUrl.trim(); if(!u) return;
+                        try { await fetch("/api/brand/index", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u, maxPages: 500 }) }); } catch {}
+                        try { await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) }); } catch {}
+                      }}
+                    >Index brand</button>
+                    <button
+                      type="button"
+                      className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                      title="Only generate style notes from the last crawl"
+                      onClick={async()=>{ const u = brandUrl.trim(); if(!u) return; try { await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) }); } catch {} }}
+                    >Generate style</button>
+                  </div>
                   <div className="md:col-span-3">
                     <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Select brand</label>
                     <select value={selectedBrandId} onChange={(e)=>{
