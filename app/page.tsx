@@ -288,8 +288,7 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // Load initial brands on mount
-  useEffect(() => { loadBrands(); }, [loadBrands]);
+  // (moved) Brands are loaded inside CreativesTab
   const handleSync = useCallback(async () => {
     setSyncLoading(true);
     setLastSyncResult(null);
