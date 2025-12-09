@@ -137,6 +137,15 @@ export async function POST(req: NextRequest): Promise<Response> {
       try {
         const res = await fetch(next, { headers: { "User-Agent": "VoluumAssistantBot/1.0" } });
         status = res.status;
+        // Guard: if the very first request redirects to another host, stop with an explicit error
+        const finalOrigin = (()=>{ try { return new URL(res.url).origin; } catch { return null; } })();
+        if (next === baseUrl && finalOrigin && finalOrigin !== origin) {
+          try { await kv.set(`brand:status:${host}`, { step: "error", progress: 0, ts: new Date().toISOString(), reason: "redirect_other_host", finalUrl: res.url }); } catch {}
+          return new Response(
+            JSON.stringify({ error: "redirect_other_host", message: `Base URL redirected to a different host: ${res.url}`, finalUrl: res.url }),
+            { status: 400, headers: { "Content-Type": "application/json" } }
+          );
+        }
         const ct = res.headers.get("content-type") || "";
         if (!ct.includes("text/html")) {
           pages.push({ url: next, status, contentType: ct });
