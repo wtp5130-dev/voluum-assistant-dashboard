@@ -91,3 +91,29 @@ export async function DELETE(req: NextRequest): Promise<Response> {
     return new Response(JSON.stringify({ error: e?.message || String(e) }), { status: 500, headers: { "Content-Type": "application/json" } });
   }
 }
+
+export async function PATCH(req: NextRequest): Promise<Response> {
+  try {
+    const body = await req.json().catch(() => ({}));
+    const id = String(body?.id || "").trim();
+    if (!id) return new Response(JSON.stringify({ error: "missing id" }), { status: 400, headers: { "Content-Type": "application/json" } });
+    const items = (await kv.lrange<MediaItem>(LIST_KEY, 0, -1)) || [];
+    const idx = items.findIndex((x: MediaItem) => x.id === id);
+    if (idx < 0) return new Response(JSON.stringify({ error: "not_found" }), { status: 404, headers: { "Content-Type": "application/json" } });
+    const current = items[idx];
+    const next: MediaItem = {
+      ...current,
+      brandId: body?.brandId !== undefined ? String(body.brandId || "") || undefined : current.brandId,
+      brandName: body?.brandName !== undefined ? String(body.brandName || "") || undefined : current.brandName,
+      kind: body?.kind === "character" || body?.kind === "layout" ? body.kind : (body?.kind === "other" ? "other" : current.kind),
+      tags: Array.isArray(body?.tags) ? body.tags.map((t: any) => String(t)) : (typeof body?.tags === "string" ? String(body.tags).split(/[\s,]+/).filter(Boolean) : current.tags),
+    };
+    const updated = [...items];
+    updated[idx] = next;
+    await kv.del(LIST_KEY);
+    for (let i = updated.length - 1; i >= 0; i--) await kv.lpush(LIST_KEY, updated[i]);
+    return new Response(JSON.stringify({ ok: true, item: next }), { status: 200, headers: { "Content-Type": "application/json" } });
+  } catch (e: any) {
+    return new Response(JSON.stringify({ error: e?.message || String(e) }), { status: 500, headers: { "Content-Type": "application/json" } });
+  }
+}
