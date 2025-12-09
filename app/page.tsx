@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
 
 /**
  * ===========
@@ -2583,6 +2583,31 @@ function CreativesTab(props: {
   const [brandToast, setBrandToast] = useState<null | { kind: "info" | "success" | "error"; msg: string }>(null);
   const [brandProgress, setBrandProgress] = useState<number>(0);
   const [brandStep, setBrandStep] = useState<string>("");
+  const brandStreamRef = useRef<EventSource | null>(null);
+  const stopBrandStream = useCallback(async (base: string) => {
+    try { if (brandStreamRef.current) { brandStreamRef.current.close(); brandStreamRef.current = null; } } catch {}
+    try { if (base) await fetch(`/api/brand/status?baseUrl=${encodeURIComponent(base)}`, { method: "DELETE" }); } catch {}
+  }, []);
+  const startBrandStream = useCallback((base: string) => {
+    try {
+      if (!base) return;
+      const url = `/api/brand/status/stream?baseUrl=${encodeURIComponent(base)}`;
+      const es = new EventSource(url);
+      brandStreamRef.current = es;
+      es.onmessage = (ev) => {
+        try {
+          const data = JSON.parse(ev.data || "{}");
+          const st = data?.status || null;
+          if (st && typeof st.progress === "number") setBrandProgress(st.progress);
+          if (st && st.step) setBrandStep(String(st.step));
+          if (st && st.progress >= 100) {
+            stopBrandStream(base);
+          }
+        } catch {}
+      };
+      es.onerror = () => { try { es.close(); } catch {} };
+    } catch {}
+  }, [stopBrandStream]);
   const showBrandToast = (msg: string, kind: "info" | "success" | "error" = "info") => {
     setBrandToast({ kind, msg });
     // auto-hide after 4s
@@ -2778,6 +2803,14 @@ function CreativesTab(props: {
                   <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Brand Style</h4>
                   <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" className="accent-emerald-500" checked={applyBrand} onChange={(e)=>setApplyBrand(e.target.checked)} />Apply in prompts</label>
                 </div>
+                {(brandOpBusy || brandProgress > 0) && (
+                  <div className="mt-2">
+                    <div className="h-3 w-full rounded bg-slate-800 overflow-hidden">
+                      <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.min(brandProgress,100)}%` }} />
+                    </div>
+                    <div className="mt-1 text-[10px] text-slate-400">{brandStep} {brandProgress > 0 && brandProgress < 100 ? `${brandProgress}%` : brandProgress===100? "100%" : ""}</div>
+                  </div>
+                )}
                 <div className="mt-2 grid gap-2 md:grid-cols-12 text-[11px]">
                   <div className="md:col-span-8">
                     <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Brand URL (optional)</label>
@@ -2795,6 +2828,8 @@ function CreativesTab(props: {
                         setBrandOpBusy(true);
                         setBrandProgress(10);
                         setBrandStep("Starting crawl…");
+                        // start SSE stream
+                        startBrandStream(u);
                         showBrandToast("Indexing brand…", "info");
                         try {
                           const r1 = await fetch("/api/brand/index", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u, maxPages: 500 }) });
@@ -2808,6 +2843,7 @@ function CreativesTab(props: {
                             showBrandToast("Index complete. Set OPENAI_API_KEY to generate style.", "info");
                             setBrandProgress(100);
                             setBrandStep("Crawl complete");
+                            await stopBrandStream(u);
                           } else {
                             showBrandToast("Index complete. Generating style…", "info");
                             setBrandProgress(60);
@@ -2823,6 +2859,7 @@ function CreativesTab(props: {
                             setBrandProgress(100);
                             setBrandStep("Done");
                             showBrandToast("Brand style ready.", "success");
+                            await stopBrandStream(u);
                           }
                         } catch (e) {
                           showBrandToast("Unexpected error during brand indexing.", "error");
@@ -2844,6 +2881,7 @@ function CreativesTab(props: {
                         setBrandOpBusy(true);
                         setBrandProgress(60);
                         setBrandStep("Generating style…");
+                        startBrandStream(u);
                         showBrandToast("Generating style from last crawl…", "info");
                         try {
                           const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u }) });
@@ -2852,6 +2890,7 @@ function CreativesTab(props: {
                           setBrandProgress(100);
                           setBrandStep("Done");
                           showBrandToast("Brand style ready.", "success");
+                          await stopBrandStream(u);
                         } catch (e) {
                           showBrandToast("Brand style generation failed.", "error");
                           setBrandStep("Style failed");
@@ -2866,14 +2905,6 @@ function CreativesTab(props: {
                         <span className="inline-block h-3 w-3 border-2 border-emerald-400 border-t-transparent rounded-full animate-spin" />
                         Working…
                       </span>
-                    )}
-                    {(brandOpBusy || brandProgress > 0) && (
-                      <div className="w-full mt-2">
-                        <div className="h-2 w-full rounded bg-slate-800 overflow-hidden">
-                          <div className="h-full bg-emerald-500 transition-all" style={{ width: `${Math.min(brandProgress,100)}%` }} />
-                        </div>
-                        <div className="mt-1 text-[10px] text-slate-400">{brandStep} {brandProgress > 0 && brandProgress < 100 ? `${brandProgress}%` : brandProgress===100? "100%" : ""}</div>
-                      </div>
                     )}
                   </div>
                   <div className="md:col-span-3">

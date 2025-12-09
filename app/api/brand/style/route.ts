@@ -37,11 +37,11 @@ Output strict JSON with keys exactly: { name, tone, voice, audience, colors, cta
 Rules:\n- colors: 5-8 entries (array), prefer hex if obvious from images, else common color names\n- styleNotes: 3-6 bullet-like short lines describing visual style (composition, lighting, textures, typography) inferred from the images\n- dos/donts: short imperative phrases for what to emphasize vs avoid (e.g., "High contrast UI", "No watermarks")\n- ctas: 3-6 brand-appropriate calls-to-action\n- tone/voice: short phrases\n- audience: 1-2 sentences\n- summary: 1 short paragraph, no fluff\n- Do NOT include a 'keywords' field.`;
 
     // Build multimodal message: text + images
-    const userParts: any[] = [
+    const userParts: Array<{ type: "text"; text: string } | { type: "image_url"; image_url: { url: string } }> = [
       { type: "text", text: `Website host: ${host}\nBase URL: ${crawl.baseUrl}\n\nCONTENT:\n${corpus}` },
     ];
     for (const url of imageList) {
-      userParts.push({ type: "input_image", image_url: url });
+      userParts.push({ type: "image_url", image_url: { url } });
     }
     const messages: OpenAI.ChatCompletionMessageParam[] = [
       { role: "system", content: system },
