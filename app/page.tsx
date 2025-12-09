@@ -977,7 +977,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
   if (loading && !data) {
     return (
       <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
-        <div className="text-lg font-medium">Loading Voluum data…</div>
+        <div className="text-lg font-medium">Loading, BE PATIENT!!</div>
       </main>
     );
   }
