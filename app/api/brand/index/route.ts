@@ -8,6 +8,7 @@ type CrawlResult = {
   title?: string;
   text?: string;
   contentType?: string | null;
+  images?: string[];
 };
 
 function normalizeUrl(u: string): string | null {
@@ -33,6 +34,31 @@ function extractLinks(html: string, base: string): string[] {
     } catch {}
   }
   return out;
+}
+
+function extractImageUrls(html: string, base: string): string[] {
+  const out: string[] = [];
+  // <img src="...">
+  const imgRe = /<img\s+[^>]*src=["']([^"']+)["'][^>]*>/gi;
+  let m: RegExpExecArray | null;
+  while ((m = imgRe.exec(html))) {
+    const src = m[1];
+    try { out.push(new URL(src, base).toString()); } catch {}
+  }
+  // og:image
+  const ogRe = /<meta\s+property=["']og:image["']\s+content=["']([^"']+)["'][^>]*>/gi;
+  while ((m = ogRe.exec(html))) {
+    const src = m[1];
+    try { out.push(new URL(src, base).toString()); } catch {}
+  }
+  // link rel=image_src
+  const linkRe = /<link\s+rel=["']image_src["'][^>]*href=["']([^"']+)["'][^>]*>/gi;
+  while ((m = linkRe.exec(html))) {
+    const src = m[1];
+    try { out.push(new URL(src, base).toString()); } catch {}
+  }
+  // de-duplicate
+  return Array.from(new Set(out));
 }
 
 function extractTitle(html: string): string | undefined {
@@ -100,6 +126,8 @@ export async function POST(req: NextRequest): Promise<Response> {
     const seen = new Set<string>();
     const pages: CrawlResult[] = [];
 
+    const collectedImages: string[] = [];
+    const MAX_IMAGES = 60;
     while (queue.length && pages.length < maxPages) {
       const next = queue.shift()!;
       if (seen.has(next)) continue;
@@ -116,7 +144,13 @@ export async function POST(req: NextRequest): Promise<Response> {
         const html = await res.text();
         const title = extractTitle(html);
         const text = extractText(html);
-        pages.push({ url: next, status, contentType: ct, title, text });
+        const imgs = extractImageUrls(html, next);
+        // Accumulate a limited set of images across the crawl (prefer earlier pages)
+        for (const img of imgs) {
+          if (collectedImages.length >= MAX_IMAGES) break;
+          collectedImages.push(img);
+        }
+        pages.push({ url: next, status, contentType: ct, title, text, images: imgs });
         // enqueue links from same origin
         for (const href of extractLinks(html, next)) {
           const nu = normalizeUrl(href);
@@ -130,7 +164,9 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     const key = `brand:crawl:${host}`;
-    const snapshot = { host, origin, baseUrl, pages, ts: new Date().toISOString() };
+    // Provide top-level image shortlist for downstream analysis (unique, capped)
+    const allImages = Array.from(new Set(pages.flatMap(p => p.images || []))).slice(0, 60);
+    const snapshot = { host, origin, baseUrl, pages, images: allImages, ts: new Date().toISOString() };
     await kv.set(key, snapshot);
 
     return new Response(

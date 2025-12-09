@@ -2609,13 +2609,18 @@ function CreativesTab(props: {
 
       const newName = String(p.name || brandName || "");
       const newColors = Array.isArray(p.colors) ? p.colors.filter((x:any)=>x).join(", ") : (brandColors || "");
-      const parts: string[] = [];
-      if (p.summary) parts.push(String(p.summary));
-      if (p.tone) parts.push(`Tone: ${p.tone}`);
-      if (p.voice) parts.push(`Voice: ${p.voice}`);
-      if (Array.isArray(p.keywords) && p.keywords.length) parts.push(`Keywords: ${p.keywords.join(", ")}`);
-      if (Array.isArray(p.ctas) && p.ctas.length) parts.push(`CTAs: ${p.ctas.join(", ")}`);
-      const newStyle = parts.join("\n");
+      // Prefer explicit styleNotes from profile; fallback to summary/tone/voice/ctas
+      let newStyle = "";
+      if (Array.isArray(p.styleNotes) && p.styleNotes.length) {
+        newStyle = p.styleNotes.join("\n");
+      } else {
+        const parts: string[] = [];
+        if (p.summary) parts.push(String(p.summary));
+        if (p.tone) parts.push(`Tone: ${p.tone}`);
+        if (p.voice) parts.push(`Voice: ${p.voice}`);
+        if (Array.isArray(p.ctas) && p.ctas.length) parts.push(`CTAs: ${p.ctas.join(", ")}`);
+        newStyle = parts.join("\n");
+      }
       const newNegative = Array.isArray(p.donts) && p.donts.length ? p.donts.join(", ") : (brandNegative || "");
 
       setBrandName(newName);
