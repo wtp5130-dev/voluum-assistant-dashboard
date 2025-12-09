@@ -6,11 +6,13 @@ export default function MediaLibraryPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [file, setFile] = useState<File | null>(null);
+  const [brandId, setBrandId] = useState("");
   const [brandName, setBrandName] = useState("");
   const [tags, setTags] = useState("");
   const [kind, setKind] = useState<"character" | "layout" | "other" | "">("");
   const [fBrand, setFBrand] = useState("");
   const [fTag, setFTag] = useState("");
+  const [brands, setBrands] = useState<Array<{ id: string; name: string }>>([]);
 
   const load = async () => {
     setLoading(true); setError(null);
@@ -18,11 +20,13 @@ export default function MediaLibraryPage() {
     setLoading(false);
   };
   useEffect(() => { load(); }, []);
+  useEffect(() => { (async ()=>{ try{ const r = await fetch("/api/brand", { cache: "no-store" }); const j = await r.json(); setBrands(Array.isArray(j?.brands)? j.brands: []);}catch{}})(); }, []);
 
   const upload = async () => {
     if (!file) return;
     const fd = new FormData();
     fd.append("file", file);
+    if (brandId) fd.append("brandId", brandId);
     if (brandName) fd.append("brandName", brandName);
     if (tags) fd.append("tags", tags);
     if (kind) fd.append("kind", kind);
@@ -44,8 +48,11 @@ export default function MediaLibraryPage() {
             <input type="file" accept="image/*" onChange={(e)=>setFile((e.target.files && e.target.files[0]) || null)} className="block w-full text-[11px]" />
           </div>
           <div className="md:col-span-3">
-            <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Brand name</label>
-            <input value={brandName} onChange={(e)=>setBrandName(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 w-full" />
+            <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Brand</label>
+            <select value={brandId} onChange={(e)=>{ const id = e.target.value; setBrandId(id); const b = brands.find(x=>x.id===id); setBrandName(b?.name||""); }} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 w-full">
+              <option value="">(None)</option>
+              {brands.map((b)=> (<option key={b.id} value={b.id}>{b.name}</option>))}
+            </select>
           </div>
           <div className="md:col-span-3">
             <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Tags (comma)</label>

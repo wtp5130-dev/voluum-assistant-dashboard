@@ -3144,7 +3144,8 @@ function CreativesTab(props: {
               {pickerItems.filter((it)=>{
                 const okB = !pickerBrand || String(it.brandName||"").toLowerCase().includes(pickerBrand.toLowerCase());
                 const okT = !pickerTag || (Array.isArray(it.tags) && it.tags.some((t:string)=>t.toLowerCase().includes(pickerTag.toLowerCase())));
-                return okB && okT;
+                const okK = showPicker.mode === 'chars' ? it.kind === 'character' : it.kind === 'layout';
+                return okB && okT && okK;
               }).slice(0,30).map((it)=>(
                 <button key={it.id} className="rounded-lg overflow-hidden border border-slate-800 bg-slate-950 text-left" onClick={async ()=>{
                   try { const b = await fetch(it.url).then(r=>r.blob()); const f = new File([b], it.filename || 'ref.png', { type: (b as any).type||'image/png' });

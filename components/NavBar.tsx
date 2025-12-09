@@ -125,7 +125,7 @@ export default function NavBar() {
             }`}
             title={detail || (status === "live" ? "Live" : status)}
           />
-          <span className="text-sm font-semibold">Voluum Assistant</span>
+          <span className="text-sm font-semibold">PropellarAds Sidekick</span>
           <span className="ml-2 text-[11px] text-slate-400 hidden sm:inline" title={detail || undefined}>
             {status === "live" ? "Live" : status === "degraded" ? "Degraded" : "Down"}
           </span>

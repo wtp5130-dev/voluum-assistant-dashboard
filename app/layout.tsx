@@ -7,7 +7,7 @@ import NavBar from "@/components/NavBar";
 // const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "PropellarAds Dashboard", // 👈 change this to whatever you want
+  title: "PropellarAds Sidekick",
   description: "AI-powered assistant for Voluum + PropellerAds optimization.",
 };
 
