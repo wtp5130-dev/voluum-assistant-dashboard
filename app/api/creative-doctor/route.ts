@@ -1,6 +1,7 @@
 // app/api/creative-doctor/route.ts
 import OpenAI from "openai";
 import { requirePermission } from "@/app/lib/permissions";
+import { kv } from "@vercel/kv";
 
 const client = new OpenAI({
   apiKey: process.env.OPENAI_API_KEY,
