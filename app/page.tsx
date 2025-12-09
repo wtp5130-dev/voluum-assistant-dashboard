@@ -323,6 +323,8 @@ export default function DashboardPage() {
   const [brandUrl, setBrandUrl] = useState<string>("");
   // Brand-aligned Ideogram prompt suggestions (top-level, shared with CreativesTab)
   const [ideogramSuggestions, setIdeogramSuggestions] = useState<any[]>([]);
+  // Creative Doctor: skip cached brand style when sending chat
+  const [brandNoCacheChat, setBrandNoCacheChat] = useState<boolean>(false);
 
   // Fetch current user for permissions
   useEffect(() => {
@@ -812,6 +814,7 @@ const [saveToGallery, setSaveToGallery] = useState<boolean>(true);
             selectedCampaignId,
           },
           brandUrl: brandUrl || undefined,
+          brandNoCache: brandNoCacheChat || undefined,
         }),
       });
 
@@ -1194,6 +1197,8 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           creativeTokenCount={creativeTokenCount}
           ideogramSuggestions={ideogramSuggestions}
           setIdeogramSuggestions={setIdeogramSuggestions}
+          brandNoCacheChat={brandNoCacheChat}
+          setBrandNoCacheChat={setBrandNoCacheChat}
           brandUrl={brandUrl}
           setBrandUrl={setBrandUrl}
           imagePrompt={imagePrompt}
@@ -2491,6 +2496,8 @@ function CreativesTab(props: {
   creativeTokenCount: number;
   ideogramSuggestions: any[];
   setIdeogramSuggestions: (v: any[]) => void;
+  brandNoCacheChat: boolean;
+  setBrandNoCacheChat: (v: boolean) => void;
   brandUrl: string;
   setBrandUrl: (v: string) => void;
   imagePrompt: string;
@@ -2530,6 +2537,8 @@ function CreativesTab(props: {
     creativeTokenCount,
     ideogramSuggestions,
     setIdeogramSuggestions,
+    brandNoCacheChat,
+    setBrandNoCacheChat,
     brandUrl,
     setBrandUrl,
     imagePrompt,
@@ -2571,6 +2580,9 @@ function CreativesTab(props: {
   const [brandStyle, setBrandStyle] = useState<string>("");
   const [brandNegative, setBrandNegative] = useState<string>("");
   const [applyBrand, setApplyBrand] = useState<boolean>(true);
+  const [brandNoCache, setBrandNoCache] = useState<boolean>(true);
+  const [brandClearExisting, setBrandClearExisting] = useState<boolean>(true);
+  const [brandForceHostName, setBrandForceHostName] = useState<boolean>(true);
 
   // Recommend Ideogram style presets from brand style text
   const recommendedPresets = useMemo(() => {
@@ -2832,7 +2844,15 @@ function CreativesTab(props: {
               <div className="md:col-span-12 rounded-md border border-slate-800 bg-slate-900/70 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Brand Style</h4>
-                  <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" className="accent-emerald-500" checked={applyBrand} onChange={(e)=>setApplyBrand(e.target.checked)} />Apply in prompts</label>
+                  <div className="flex items-center gap-3">
+                    <label className="flex items-center gap-2 text-[11px] text-slate-300"><input type="checkbox" className="accent-emerald-500" checked={applyBrand} onChange={(e)=>setApplyBrand(e.target.checked)} />Apply in prompts</label>
+                    <label className="flex items-center gap-1 text-[10px] text-slate-400"><input type="checkbox" className="accent-emerald-500" checked={brandNoCacheChat} onChange={(e)=>setBrandNoCacheChat(e.target.checked)} />Chat: skip cached style</label>
+                  </div>
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2 text-[10px] text-slate-400">
+                  <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-emerald-500" checked={brandNoCache} onChange={(e)=>setBrandNoCache(e.target.checked)} />No cache</label>
+                  <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-emerald-500" checked={brandClearExisting} onChange={(e)=>setBrandClearExisting(e.target.checked)} />Clear existing</label>
+                  <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-emerald-500" checked={brandForceHostName} onChange={(e)=>setBrandForceHostName(e.target.checked)} />Force host name</label>
                 </div>
                 {(brandOpBusy || brandProgress > 0) && (
                   <div className="mt-2">
@@ -2879,7 +2899,7 @@ function CreativesTab(props: {
                             showBrandToast("Index complete. Generating style…", "info");
                             setBrandProgress(60);
                             setBrandStep("Generating style…");
-                            const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u, noCache: true, clearExisting: true, forceHostName: true }) });
+                            const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u, noCache: brandNoCache, clearExisting: brandClearExisting, forceHostName: brandForceHostName }) });
                             if (!r2.ok) {
                               const txt = await r2.text().catch(()=>"");
                               showBrandToast(`Style generation failed (${r2.status}). Ensure OPENAI_API_KEY is set.` + (txt? ` ${txt}`:""), "error");
@@ -2915,7 +2935,7 @@ function CreativesTab(props: {
                         startBrandStream(u);
                         showBrandToast("Generating style from last crawl…", "info");
                         try {
-                          const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u, noCache: true, clearExisting: true, forceHostName: true }) });
+                          const r2 = await fetch("/api/brand/style", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ baseUrl: u, noCache: brandNoCache, clearExisting: brandClearExisting, forceHostName: brandForceHostName }) });
                           if (!r2.ok) throw new Error(String(r2.status));
                           await loadBrands();
                           setBrandProgress(100);
