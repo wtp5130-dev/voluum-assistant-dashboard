@@ -2768,11 +2768,12 @@ function CreativesTab(props: {
                   <div className="md:col-span-4 flex items-end gap-2">
                     <button
                       type="button"
-                      disabled={brandOpBusy || !brandUrl.trim()}
+                      disabled={brandOpBusy}
                       className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
                       title="Index all public pages for this brand"
                       onClick={async()=>{
-                        const u = brandUrl.trim(); if(!u) return;
+                        const u = brandUrl.trim();
+                        if(!u){ showBrandToast("Please enter a Brand URL first.", "error"); return; }
                         setBrandOpBusy(true);
                         showBrandToast("Indexing brand…", "info");
                         try {
@@ -2791,11 +2792,12 @@ function CreativesTab(props: {
                     >Index brand</button>
                     <button
                       type="button"
-                      disabled={brandOpBusy || !brandUrl.trim()}
+                      disabled={brandOpBusy}
                       className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
                       title="Only generate style notes from the last crawl"
                       onClick={async()=>{
-                        const u = brandUrl.trim(); if(!u) return;
+                        const u = brandUrl.trim();
+                        if(!u){ showBrandToast("Please enter a Brand URL first.", "error"); return; }
                         setBrandOpBusy(true);
                         showBrandToast("Generating style from last crawl…", "info");
                         try {
