@@ -468,6 +468,9 @@ const [seed, setSeed] = useState<string>("");
 const [charRefFiles, setCharRefFiles] = useState<File[]>([]);
 const [imageRefFile, setImageRefFile] = useState<File | null>(null);
 const [saveToGallery, setSaveToGallery] = useState<boolean>(true);
+// Reference influence for character/image refs
+const [charRefInfluence, setCharRefInfluence] = useState<number>(70);
+const [remixInfluence, setRemixInfluence] = useState<number>(70);
 
   /**
    * Fetch dashboard data whenever dateRange or custom dates change
@@ -885,6 +888,12 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
         if (stylePreset) form.append("style_preset", stylePreset);
         if (negativePrompt) form.append("negative_prompt", negativePrompt);
         if (seed) form.append("seed", seed);
+        if (Array.isArray(charRefFiles) && charRefFiles.length > 0) {
+          form.append("reference_influence", String(charRefInfluence));
+        }
+        if (imageRefFile) {
+          form.append("image_reference_influence", String(remixInfluence));
+        }
         if (Array.isArray(charRefFiles)) {
           for (const f of charRefFiles) {
             if (f) form.append("character_reference_images", f);
@@ -903,6 +912,8 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
             style_preset: stylePreset || undefined,
             negative_prompt: negativePrompt || undefined,
             seed: seed || undefined,
+            reference_influence: (Array.isArray(charRefFiles) && charRefFiles.length > 0) ? charRefInfluence : undefined,
+            image_reference_influence: imageRefFile ? remixInfluence : undefined,
             saveToGallery,
           }),
         });
@@ -956,10 +967,9 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
 
       const newTitle = json.title ?? "";
       const newDescription = json.description ?? "";
-      const newMainPrompt =
-        json.imagePrompt ?? json.mainImagePrompt ?? prompt;
-      const newMainSize =
-        json.mainImageSize ?? AD_TYPES[adType]?.mainImageSize ?? "1024x1024";
+      // Lock to builder-composed prompt and currently selected size
+      const newMainPrompt = prompt;
+      const newMainSize = mainImageSize || AD_TYPES[adType]?.mainImageSize || "1024x1024";
 
       setAssetTitle(newTitle);
       setAssetDescription(newDescription);
@@ -1229,6 +1239,10 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           setImageRefFile={setImageRefFile}
           saveToGallery={saveToGallery}
           setSaveToGallery={setSaveToGallery}
+          charRefInfluence={charRefInfluence}
+          setCharRefInfluence={setCharRefInfluence}
+          remixInfluence={remixInfluence}
+          setRemixInfluence={setRemixInfluence}
         />
       )}
 
@@ -2529,6 +2543,10 @@ function CreativesTab(props: {
   setImageRefFile: (v: File | null) => void;
   saveToGallery: boolean;
   setSaveToGallery: (v: boolean) => void;
+  charRefInfluence: number;
+  setCharRefInfluence: (v: number) => void;
+  remixInfluence: number;
+  setRemixInfluence: (v: number) => void;
 }) {
   const {
     creativeChatMessages,
@@ -2571,6 +2589,10 @@ function CreativesTab(props: {
     setImageRefFile,
     saveToGallery,
     setSaveToGallery,
+    charRefInfluence,
+    setCharRefInfluence,
+    remixInfluence,
+    setRemixInfluence,
   } = props;
 
   // Quick actions for Creative Doctor
@@ -2630,6 +2652,8 @@ function CreativesTab(props: {
   const [pbExploreOnly, setPbExploreOnly] = useState<boolean>(false);
   const [pbTextLock, setPbTextLock] = useState<boolean>(true);
   const [pbCompliance, setPbCompliance] = useState<boolean>(true);
+  // Reference influence (0-100) for character/image references
+  const [refInfluence, setRefInfluence] = useState<number>(70);
   
 
   // One-click two-step chain
@@ -3342,12 +3366,37 @@ function CreativesTab(props: {
                   <input type="file" multiple accept="image/*" onChange={(e)=>{ const files = Array.from(e.target.files || []); setCharRefFiles(files as File[]); }} className="block w-full text-[11px]" />
                   <button type="button" onClick={()=>setShowPicker({ open: true, mode: 'chars' })} className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Pick…</button>
                 </div>
+                {Array.isArray(charRefFiles) && charRefFiles.length > 0 && (
+                  <div className="mt-1 text-[10px] text-slate-400">
+                    {charRefFiles.length} file(s) selected: {charRefFiles.slice(0,3).map((f:any)=>f?.name||"image").join(", ")}{charRefFiles.length>3?"…":""}
+                  </div>
+                )}
               </div>
               <div className="md:col-span-6">
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Image reference (remix)</label>
                 <div className="flex items-center gap-2">
                   <input type="file" accept="image/*" onChange={(e)=>{ const f = (e.target.files && e.target.files[0]) || null; setImageRefFile(f as any); }} className="block w-full text-[11px]" />
                   <button type="button" onClick={()=>setShowPicker({ open: true, mode: 'image' })} className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Pick…</button>
+                </div>
+              </div>
+              <div className="md:col-span-6">
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Character refs influence: <span className="text-slate-300">{charRefInfluence}%</span></label>
+                <div className="flex items-center gap-2">
+                  <input type="range" min={0} max={100} value={charRefInfluence} onChange={(e)=>setCharRefInfluence(parseInt(e.target.value||"0",10))} className="w-full" />
+                  <input type="number" min={0} max={100} step={1} value={charRefInfluence} onChange={(e)=>{
+                    const v = parseInt(e.target.value||"0",10);
+                    setCharRefInfluence(Math.max(0, Math.min(100, isNaN(v)?0:v)));
+                  }} className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px]" />
+                </div>
+              </div>
+              <div className="md:col-span-6">
+                <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Remix image influence: <span className="text-slate-300">{remixInfluence}%</span></label>
+                <div className="flex items-center gap-2">
+                  <input type="range" min={0} max={100} value={remixInfluence} onChange={(e)=>setRemixInfluence(parseInt(e.target.value||"0",10))} className="w-full" />
+                  <input type="number" min={0} max={100} step={1} value={remixInfluence} onChange={(e)=>{
+                    const v = parseInt(e.target.value||"0",10);
+                    setRemixInfluence(Math.max(0, Math.min(100, isNaN(v)?0:v)));
+                  }} className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-[11px]" />
                 </div>
               </div>
             </div>
@@ -3449,7 +3498,7 @@ function CreativesTab(props: {
                 Main image prompt ({mainImageSize || "1024x1024"})
               </div>
               <div className="bg-slate-900 border border-slate-800 rounded-md px-2 py-1 min-h-[38px]">
-                {mainImagePrompt || "-"}
+                {mainImagePrompt || imagePrompt || "-"}
               </div>
             </div>
           </div>

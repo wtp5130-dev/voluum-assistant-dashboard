@@ -59,9 +59,19 @@ export async function POST(req: Request): Promise<Response> {
         upstream.append("height", String(height));
         upstream.append("model", String(model));
         upstream.append("rendering_speed", String(renderingSpeed));
+        // Hint to Ideogram V3 that we may use character/image references
+        try {
+          const hasCharRefs = form.getAll("character_reference_images").length > 0;
+          const hasImage = Boolean(form.get("image"));
+          if (hasCharRefs || hasImage) upstream.append("style_type", "AUTO");
+        } catch {}
         if (stylePreset) upstream.append("style_preset", String(stylePreset));
         if (negative) upstream.append("negative_prompt", String(negative));
         if (seedVal) upstream.append("seed", String(seedVal));
+        const refInf = form.get("reference_influence");
+        if (refInf != null) upstream.append("reference_influence", String(refInf));
+        const imgInf = (form as any).get?.("image_reference_influence");
+        if (imgInf != null) upstream.append("image_reference_influence", String(imgInf));
         for (const f of form.getAll("character_reference_images")) {
           if (typeof f !== "string") upstream.append("character_reference_images", f as any);
         }
@@ -73,6 +83,8 @@ export async function POST(req: Request): Promise<Response> {
         if (stylePreset) bodyJson.style_preset = stylePreset;
         if (negative) bodyJson.negative_prompt = negative;
         if (seedVal) bodyJson.seed = seedVal;
+        if (body?.reference_influence != null) bodyJson.reference_influence = Number(body.reference_influence);
+        if (body?.image_reference_influence != null) bodyJson.image_reference_influence = Number(body.image_reference_influence);
         res = await fetch(endpoint, {
           method: "POST",
           headers: { "Api-Key": key, "Content-Type": "application/json", "Accept": "application/json" },
