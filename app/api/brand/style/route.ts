@@ -32,7 +32,19 @@ export async function POST(req: NextRequest): Promise<Response> {
     const corpus = prioritized.map((p) => `URL: ${p.url}\nTITLE: ${p.title || ""}\nTEXT: ${p.text || ""}`).join("\n\n---\n\n");
 
     // Gather image shortlist (from crawl-level list or from pages)
-    const imageList: string[] = Array.isArray(crawl?.images) ? crawl.images.slice(0, 24) : [];
+    const rawImages: string[] = Array.isArray(crawl?.images) ? crawl.images.slice(0, 60) : [];
+    const ALLOWED_EXT = /\.(png|jpe?g|gif|webp)(?:$|[?#])/i;
+    function isAllowedImage(u: string): boolean {
+      try {
+        const url = new URL(u);
+        if (url.protocol !== "https:") return false; // OpenAI requires https
+        return ALLOWED_EXT.test(url.pathname);
+      } catch {
+        return false;
+      }
+    }
+    // Prefer valid https URLs with supported extensions; cap to 12 for safety
+    const imageList: string[] = rawImages.filter(isAllowedImage).slice(0, 12);
 
     const system = `You are a brand stylist. Given website copy AND a shortlist of image/banners, extract a brand profile optimized for ad creative production. Prioritize COLORS (from images), NEGATIVE/AVOID list (from both visuals and copy), and STYLE NOTES (succinct art direction).
 Output strict JSON with keys exactly: { name, tone, voice, audience, colors, ctas, dos, donts, styleNotes, summary }.
