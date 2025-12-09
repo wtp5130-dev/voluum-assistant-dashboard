@@ -2572,6 +2572,24 @@ function CreativesTab(props: {
   const [brandNegative, setBrandNegative] = useState<string>("");
   const [applyBrand, setApplyBrand] = useState<boolean>(true);
 
+  // Recommend Ideogram style presets from brand style text
+  const recommendedPresets = useMemo(() => {
+    const s = (brandStyle + " " + brandName + " " + brandColors).toLowerCase();
+    const rec: string[] = [];
+    const add = (v: string) => { if (!rec.includes(v)) rec.push(v); };
+    if (/cinematic|film|drama/.test(s)) add("CINEMATIC");
+    if (/realistic|photo|ultra[-\s]?realistic|photoreal/.test(s)) add("ULTRA_REALISTIC");
+    if (/neon|noir|night|glow/.test(s)) add("NEON_NOIR");
+    if (/retro|vintage|nostalgia|90s|80s/.test(s)) add("90S_NOSTALGIA");
+    if (/typography|bold text|headline|caption/.test(s)) add("TYPOGRAPHY_BOLD");
+    if (/anime|manga/.test(s)) add("ANIME");
+    if (/3d|c4d|render/.test(s)) add("C4D_CARTOON");
+    if (/watercolor|ink|paint|brush/.test(s)) add("WATERCOLOR");
+    if (/pop|comic/.test(s)) add("POP_ART");
+    if (rec.length === 0) add("MIXED_MEDIA");
+    return rec.slice(0, 4);
+  }, [brandStyle, brandName, brandColors]);
+
   // Derive a preview list of colors from the comma-/space-separated input
   const colorList = useMemo(() => {
     const raw = (brandColors || "").split(/[,\n]+/).map((s) => s.trim()).filter(Boolean);
@@ -2981,7 +2999,17 @@ function CreativesTab(props: {
                           <div className="text-[11px] text-slate-300 font-medium truncate" title={p?.title || "Prompt"}>{p?.title || `Suggestion ${idx+1}`}</div>
                           <div className="text-[11px] text-slate-400 line-clamp-4 whitespace-pre-wrap" title={p?.prompt}>{p?.prompt}</div>
                           <div className="text-[10px] text-slate-500">{p?.style_preset ? `Style: ${p.style_preset}` : "Style: AUTO"} · {size}</div>
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <label className="text-[10px] text-slate-400 inline-flex items-center gap-1">
+                              Chars
+                              <input type="file" multiple accept="image/*" onChange={(e)=>{ const files = Array.from(e.target.files||[]); if (files.length) setCharRefFiles([...(charRefFiles||[]), ...(files as any)]); }} className="hidden" />
+                              <span className="px-2 py-0.5 rounded border border-slate-700 bg-slate-900">{Array.isArray(charRefFiles)? charRefFiles.length: 0}</span>
+                            </label>
+                            <label className="text-[10px] text-slate-400 inline-flex items-center gap-1">
+                              Image
+                              <input type="file" accept="image/*" onChange={(e)=>{ const f = (e.target.files && e.target.files[0]) || null; setImageRefFile(f as any); }} className="hidden" />
+                              <span className="px-2 py-0.5 rounded border border-slate-700 bg-slate-900">ref</span>
+                            </label>
                             <button
                               className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
                               onClick={()=>{
@@ -3012,6 +3040,12 @@ function CreativesTab(props: {
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Style preset</label>
                 <select value={stylePreset} onChange={(e)=>setStylePreset(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs">
                   <option value="">(None)</option>
+                  {recommendedPresets.length > 0 && (
+                    <>
+                      {recommendedPresets.map((p)=> (<option key={`rec-${p}`} value={p}>{p} (recommended)</option>))}
+                      <option value="" disabled>──────────</option>
+                    </>
+                  )}
                   <option value="MIXED_MEDIA">MIXED_MEDIA</option>
                   <option value="90S_NOSTALGIA">90S_NOSTALGIA</option>
                   <option value="SPOTLIGHT_80S">SPOTLIGHT_80S</option>
