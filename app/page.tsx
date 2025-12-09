@@ -2574,6 +2574,7 @@ function CreativesTab(props: {
   } = props;
 
   // Quick actions for Creative Doctor
+  const BRAND_STYLE_ENABLED = false;
   const [doctorTitle, setDoctorTitle] = useState<string>("");
   const [doctorDescription, setDoctorDescription] = useState<string>("");
   const [doctorBusy, setDoctorBusy] = useState<boolean>(false);
@@ -2708,10 +2709,14 @@ function CreativesTab(props: {
   // Templates state (after brand selection is available)
   const [tplName, setTplName] = useState<string>("");
   const [tplList, setTplList] = useState<Array<any>>([]);
-  const loadTemplates = useCallback(async (id?: string) => {
-    try { const r = await fetch(`/api/prompt-templates?brandId=${encodeURIComponent(id || "")}`, { cache: "no-store" }); const j = await r.json(); setTplList(Array.isArray(j?.items) ? j.items : []);} catch {}
+  const [tplSelectedId, setTplSelectedId] = useState<string>("");
+  const loadTemplates = useCallback(async (id?: string, name?: string) => {
+    const qs = new URLSearchParams();
+    if (id) qs.set("brandId", id);
+    if (name) qs.set("brandName", name);
+    try { const r = await fetch(`/api/prompt-templates?${qs.toString()}`, { cache: "no-store" }); const j = await r.json(); setTplList(Array.isArray(j?.items) ? j.items : []);} catch {}
   }, []);
-  useEffect(() => { loadTemplates(selectedBrandId); }, [selectedBrandId, loadTemplates]);
+  useEffect(() => { loadTemplates(selectedBrandId, brandName || undefined); }, [selectedBrandId, brandName, loadTemplates]);
   const saveTemplate = async () => {
     const fields = {
       objective: pbObjective, size: pbSize, visuals: pbVisuals, colors: pbColors, textStyle: pbTextStyle,
@@ -2719,8 +2724,8 @@ function CreativesTab(props: {
       exploreOnly: pbExploreOnly, textLock: pbTextLock, compliance: pbCompliance,
       style_preset: stylePreset, negative_prompt: negativePrompt
     };
-    const res = await fetch("/api/prompt-templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId: selectedBrandId || undefined, name: tplName || `Template ${new Date().toLocaleString()}`, fields }) });
-    if (res.ok) { setTplName(""); loadTemplates(selectedBrandId); }
+    const res = await fetch("/api/prompt-templates", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId: selectedBrandId || undefined, brandName: brandName || undefined, name: tplName || `Template ${new Date().toLocaleString()}`, fields }) });
+    if (res.ok) { setTplName(""); loadTemplates(selectedBrandId, brandName || undefined); }
   };
   const applyTemplate = (t: any) => {
     const f = t?.fields || {};
@@ -2739,9 +2744,18 @@ function CreativesTab(props: {
     if (f.style_preset) setStylePreset(String(f.style_preset));
     if (f.negative_prompt) setNegativePrompt(String(f.negative_prompt));
   };
+  // Auto-apply most recent on brand switch once
+  const autoAppliedBrandRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (selectedBrandId && tplList.length > 0 && autoAppliedBrandRef.current !== selectedBrandId) {
+      applyTemplate(tplList[0]);
+      setTplSelectedId(tplList[0].id);
+      autoAppliedBrandRef.current = selectedBrandId;
+    }
+  }, [tplList, selectedBrandId]);
   const deleteTemplate = async (id: string) => {
-    const res = await fetch("/api/prompt-templates", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId: selectedBrandId || undefined, id }) });
-    if (res.ok) loadTemplates(selectedBrandId);
+    const res = await fetch("/api/prompt-templates", { method: "DELETE", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ brandId: selectedBrandId || undefined, brandName: brandName || undefined, id }) });
+    if (res.ok) loadTemplates(selectedBrandId, brandName || undefined);
   };
   const brandStreamRef = useRef<EventSource | null>(null);
   const stopBrandStream = useCallback(async (base: string) => {
@@ -2957,7 +2971,8 @@ function CreativesTab(props: {
           <div className="px-4 py-2 space-y-2 text-xs">
             {/* Style / Negative / Seed / References */}
             <div className="grid gap-2 md:grid-cols-12">
-              {/* Brand style */}
+              {/* Brand style (disabled) */}
+              {BRAND_STYLE_ENABLED && (
               <div className="md:col-span-12 rounded-md border border-slate-800 bg-slate-900/70 p-3">
                 <div className="flex items-center justify-between gap-2">
                   <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Brand Style</h4>
@@ -3121,6 +3136,7 @@ function CreativesTab(props: {
                   </div>
                 </div>
               </div>
+              )}
               {/* Brand-aligned Ideogram prompt suggestions */}
               {Array.isArray((ideogramSuggestions as any)) && (ideogramSuggestions as any).length > 0 && (
                 <div className="md:col-span-12 rounded-md border border-slate-800 bg-slate-900/70 p-3">
@@ -3181,13 +3197,11 @@ function CreativesTab(props: {
                   <div className="flex items-center gap-2 flex-wrap">
                     <input value={tplName} onChange={(e)=>setTplName(e.target.value)} placeholder="Template name" className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[11px] w-36" />
                     <button className="text-[11px] px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500" onClick={saveTemplate} title="Save current fields as template">Save</button>
-                    <select className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[11px] max-w-[180px]" onChange={(e)=>{ const t = tplList.find((x:any)=>x.id===e.target.value); if (t) applyTemplate(t); }}>
+                    <select className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[11px] max-w-[200px]" value={tplSelectedId} onChange={(e)=>{ setTplSelectedId(e.target.value); const t = tplList.find((x:any)=>x.id===e.target.value); if (t) applyTemplate(t); }}>
                       <option value="">(Templates)</option>
                       {tplList.map((t:any)=>(<option key={t.id} value={t.id}>{t.name}</option>))}
                     </select>
-                    {tplList.length>0 && (
-                      <button className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={()=>{ const id = (tplList[0]||{}).id; if (id) deleteTemplate(id); }} title="Delete most recent template">Delete</button>
-                    )}
+                    <button className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50" disabled={!tplSelectedId} onClick={()=>{ if (tplSelectedId) deleteTemplate(tplSelectedId); }} title="Delete selected template">Delete</button>
                     <button
                       className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
                       onClick={()=>{
