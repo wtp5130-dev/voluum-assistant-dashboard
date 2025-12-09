@@ -123,9 +123,63 @@ export async function POST(req: Request): Promise<Response> {
     const reply = completion.choices?.[0]?.message?.content?.trim() || "";
     const usage = (completion as any)?.usage || null;
 
+    // Optional: Ideogram prompt pack aligned to brand
+    let ideogramPrompts: Array<{
+      title?: string;
+      prompt: string;
+      negative_prompt?: string;
+      style_preset?: string;
+      rendering_speed?: "TURBO" | "QUALITY";
+      width?: number;
+      height?: number;
+      seed?: number;
+    }> | undefined;
+    let brandContext: any = undefined;
+    if (brandStyleNotes) {
+      try {
+        // Try to retrieve full saved brand profile for richer fields
+        const host = new URL(brandUrl).host;
+        const saved = (await kv.get(`brand:style:${host}`)) as any;
+        const profile = saved?.profile || null;
+        brandContext = profile
+          ? { name: profile.name, tone: profile.tone, voice: profile.voice, colors: profile.colors, ctas: profile.ctas, styleNotes: profile.styleNotes, dos: profile.dos, donts: profile.donts }
+          : undefined;
+
+        const promptForPrompts = `You are crafting image generation prompts for Ideogram's API. Create 4 distinct, brand-aligned prompts that are ready to send to Ideogram's /v1/ideogram-v3/generate endpoint. Each entry must be a compact object with keys: { title, prompt, negative_prompt, style_preset, rendering_speed, width, height }.
+
+Rules:
+- Keep prompts specific and visual; include subject, setting, composition, lighting, and any typography if appropriate.
+- Respect brand tone/voice, CTAs, color accents, and style notes.
+- Use rendering_speed = "TURBO" by default. width/height should be common ad-friendly sizes (e.g., 1024x1024 or 1200x628).
+- style_preset: choose a fitting preset (e.g., 90S_NOSTALGIA, ART_BRUT, C4D_CARTOON, JAPANDI_FUSION) or "AUTO" if uncertain.
+- negative_prompt: include short avoids from brand donts.
+
+Return strict JSON with key ideogramPrompts: [{...}]. No extra commentary.`;
+
+        const msg: OpenAI.ChatCompletionMessageParam[] = [
+          { role: "system", content: "You design brand-aligned Ideogram prompts for ad creatives." },
+          { role: "user", content: `Brand style notes:\n${brandStyleNotes}` },
+          { role: "user", content: `Optional brand profile JSON (if present):\n${JSON.stringify(brandContext || {}, null, 2)}` },
+          { role: "user", content: `Campaign/Creatives context:\n${JSON.stringify(context || {}, null, 2)}` },
+          { role: "user", content: promptForPrompts },
+        ];
+        const gen = await client.chat.completions.create({ model: "gpt-4.1-mini", temperature: 0.3, messages: msg });
+        const txt = gen.choices?.[0]?.message?.content || "";
+        const m = txt.match(/\{[\s\S]*\}/);
+        if (m) {
+          const parsed = JSON.parse(m[0]);
+          if (Array.isArray(parsed?.ideogramPrompts)) ideogramPrompts = parsed.ideogramPrompts;
+        }
+      } catch (e) {
+        // ignore prompt-pack errors and still return main reply
+      }
+    }
+
     return new Response(
       JSON.stringify({
         reply,
+        ideogramPrompts,
+        brandContext,
         tokenUsage: usage
           ? {
               total: usage.total_tokens,

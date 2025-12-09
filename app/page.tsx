@@ -321,6 +321,8 @@ export default function DashboardPage() {
   const [creativeChatLoading, setCreativeChatLoading] = useState(false);
   const [creativeTokenCount, setCreativeTokenCount] = useState<number>(0);
   const [brandUrl, setBrandUrl] = useState<string>("");
+  // Brand-aligned Ideogram prompt suggestions (top-level, shared with CreativesTab)
+  const [ideogramSuggestions, setIdeogramSuggestions] = useState<any[]>([]);
 
   // Fetch current user for permissions
   useEffect(() => {
@@ -823,6 +825,11 @@ const [saveToGallery, setSaveToGallery] = useState<boolean>(true);
         json.message ??
         "[No reply field in response from creative doctor API]";
 
+      // Capture brand-aligned Ideogram prompts if provided
+      if (Array.isArray(json?.ideogramPrompts)) {
+        setIdeogramSuggestions(json.ideogramPrompts);
+      }
+
       // tiny token counter (best-effort)
       const tokensFromServer =
         json.tokenUsage?.total ??
@@ -1185,6 +1192,8 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           setCreativeChatInput={setCreativeChatInput}
           sendCreativeChat={sendCreativeChat}
           creativeTokenCount={creativeTokenCount}
+          ideogramSuggestions={ideogramSuggestions}
+          setIdeogramSuggestions={setIdeogramSuggestions}
           brandUrl={brandUrl}
           setBrandUrl={setBrandUrl}
           imagePrompt={imagePrompt}
@@ -2480,6 +2489,8 @@ function CreativesTab(props: {
   setCreativeChatInput: (v: string) => void;
   sendCreativeChat: (overrideMessage?: string) => void;
   creativeTokenCount: number;
+  ideogramSuggestions: any[];
+  setIdeogramSuggestions: (v: any[]) => void;
   brandUrl: string;
   setBrandUrl: (v: string) => void;
   imagePrompt: string;
@@ -2517,6 +2528,8 @@ function CreativesTab(props: {
     setCreativeChatInput,
     sendCreativeChat,
     creativeTokenCount,
+    ideogramSuggestions,
+    setIdeogramSuggestions,
     brandUrl,
     setBrandUrl,
     imagePrompt,
@@ -2953,6 +2966,48 @@ function CreativesTab(props: {
                   </div>
                 </div>
               </div>
+              {/* Brand-aligned Ideogram prompt suggestions */}
+              {Array.isArray((ideogramSuggestions as any)) && (ideogramSuggestions as any).length > 0 && (
+                <div className="md:col-span-12 rounded-md border border-slate-800 bg-slate-900/70 p-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-[11px] font-semibold uppercase tracking-wide text-slate-300">Brand Prompt Suggestions</h4>
+                    <span className="text-[10px] text-slate-500">{(ideogramSuggestions as any).length} options</span>
+                  </div>
+                  <div className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-3">
+                    {(ideogramSuggestions as any).slice(0,6).map((p:any, idx:number)=>{
+                      const size = (p?.width && p?.height) ? `${p.width}x${p.height}` : mainImageSize;
+                      return (
+                        <div key={idx} className="rounded border border-slate-800 bg-slate-950 p-2 flex flex-col gap-2">
+                          <div className="text-[11px] text-slate-300 font-medium truncate" title={p?.title || "Prompt"}>{p?.title || `Suggestion ${idx+1}`}</div>
+                          <div className="text-[11px] text-slate-400 line-clamp-4 whitespace-pre-wrap" title={p?.prompt}>{p?.prompt}</div>
+                          <div className="text-[10px] text-slate-500">{p?.style_preset ? `Style: ${p.style_preset}` : "Style: AUTO"} · {size}</div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+                              onClick={()=>{
+                                setImagePrompt(String(p?.prompt||""));
+                                if (p?.style_preset) setStylePreset(String(p.style_preset));
+                                if (p?.negative_prompt) setNegativePrompt(String(p.negative_prompt));
+                              }}
+                            >Use</button>
+                            <button
+                              className="text-[11px] px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500"
+                              onClick={async()=>{
+                                // Apply prompt and brand params, then call the generator pipeline
+                                setImagePrompt(String(p?.prompt||""));
+                                if (p?.style_preset) setStylePreset(String(p.style_preset));
+                                if (p?.negative_prompt) setNegativePrompt(String(p.negative_prompt));
+                                setImageProvider("ideogram");
+                                try { await generateCreativeBundle(); } catch {}
+                              }}
+                            >Generate</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
               <div className="md:col-span-3">
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Style preset</label>
                 <select value={stylePreset} onChange={(e)=>setStylePreset(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs">
