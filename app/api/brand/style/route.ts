@@ -3,6 +3,8 @@ import { kv } from "@vercel/kv";
 import OpenAI from "openai";
 import { requirePermission } from "@/app/lib/permissions";
 
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 const client = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -47,6 +49,12 @@ Rules:\n- colors: 5-8 entries (array), prefer hex if obvious from images, else c
       { role: "system", content: system },
       { role: "user", content: userParts as any },
     ];
+    if (body?.debug) {
+      return new Response(
+        JSON.stringify({ ok: true, debug: { model: process.env.OPENAI_VISION_MODEL || "gpt-4o-mini", parts: userParts.map((p:any)=>p.type), imageCount: imageList.length } }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
     // Use a vision-capable lightweight model
     const model = process.env.OPENAI_VISION_MODEL || "gpt-4o-mini";
     const completion = await client.chat.completions.create({ model, temperature: 0.2, messages });
