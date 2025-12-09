@@ -75,7 +75,7 @@ export default function LoginPage() {
     <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-4">
-          <h1 className="text-2xl font-semibold">Voluum Assistant</h1>
+          <h1 className="text-2xl font-semibold">PropellarAds Sidekick</h1>
           <p className="text-[12px] text-slate-400">For Marketers. By Marketers</p>
         </div>
         <Suspense fallback={<div className="text-sm text-slate-400">Loading…</div>}>

@@ -380,7 +380,7 @@ export default function DashboardVoluumAssistant() {
       {/* Top bar */}
       <header className="border-b border-slate-800 px-6 py-4 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold">Voluum Assistant Dashboard</h1>
+          <h1 className="text-xl font-semibold">PropellarAds Sidekick Dashboard</h1>
           <p className="text-xs text-slate-400">
             Live data from your Voluum account, grouped by campaign.
           </p>

@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import OpenAI from "openai";
 // @ts-ignore dynamic import types may not be available
 import { kv } from "@vercel/kv";
 
@@ -38,10 +39,12 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     let added = 0;
+    const messages: string[] = [];
     for (const c of commits) {
       const msg: string = String(c?.message || "").trim();
       if (!msg) continue;
       const firstLine = msg.split(/\r?\n/)[0];
+      messages.push(`- ${firstLine}`);
       const entry: Entry = {
         id: crypto.randomUUID(),
         title: firstLine,
@@ -54,6 +57,34 @@ export async function POST(req: NextRequest): Promise<Response> {
       added++;
     }
     await kv.ltrim(LIST_KEY, 0, 499);
+
+    // Optional: AI summary for the push
+    try {
+      const apiKey = process.env.OPENAI_API_KEY;
+      if (apiKey && messages.length > 0) {
+        const client = new OpenAI({ apiKey });
+        const prompt = `Summarize these git commit titles into a short, user-facing release note (2-4 bullets max), combine related items, and keep it concise and non-technical.\n\n${messages.join("\n")}`;
+        const completion = await client.chat.completions.create({
+          model: process.env.OPENAI_SUMMARY_MODEL || "gpt-4o-mini",
+          temperature: 0.3,
+          messages: [
+            { role: "system", content: "You are an assistant that writes concise release notes for product changes." },
+            { role: "user", content: prompt },
+          ],
+        });
+        const summary = completion.choices?.[0]?.message?.content?.trim() || messages.join("\n");
+        const summaryEntry: Entry = {
+          id: crypto.randomUUID(),
+          title: `Deployment summary (${commits.length} commit${commits.length===1?"":"s"})`,
+          kind: "note",
+          content: summary,
+          createdAt: new Date().toISOString(),
+          author: pusher || undefined,
+        };
+        await kv.lpush(LIST_KEY, summaryEntry);
+        await kv.ltrim(LIST_KEY, 0, 499);
+      }
+    } catch {}
 
     return new Response(JSON.stringify({ ok: true, added }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (e: any) {

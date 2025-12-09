@@ -1014,7 +1014,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
       <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
         <div>
           <h1 className="text-2xl md:text-3xl font-semibold">
-            Voluum Assistant
+            PropellarAds Sidekick
           </h1>
           <p className="text-sm md:text-base text-slate-300 mt-1">
             For Marketers. By Marketers
