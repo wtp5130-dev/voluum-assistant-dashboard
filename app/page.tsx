@@ -1793,21 +1793,31 @@ function DashboardTab(props: {
   const [tourBox, setTourBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   useEffect(() => {
     if (!doctorTourOpen) return;
+    let rafId = 0;
+    let scrollTimer: any = null;
     const update = () => {
       const el = activeStep?.ref?.current as HTMLElement | null;
       if (el) {
         const r = el.getBoundingClientRect();
-        // Use viewport coordinates because overlay is fixed
         setTourBox({ top: r.top, left: r.left, width: r.width, height: r.height });
       } else {
         setTourBox(null);
       }
+      rafId = requestAnimationFrame(update);
     };
-    update();
-    window.addEventListener('scroll', update, true);
+    const start = () => {
+      const el = activeStep?.ref?.current as HTMLElement | null;
+      if (el) {
+        try { el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }); } catch {}
+      }
+      // allow scroll to animate, then start updates
+      scrollTimer = setTimeout(() => { update(); }, 50);
+    };
+    start();
     window.addEventListener('resize', update);
     return () => {
-      window.removeEventListener('scroll', update, true);
+      if (rafId) cancelAnimationFrame(rafId);
+      if (scrollTimer) clearTimeout(scrollTimer);
       window.removeEventListener('resize', update);
     };
   }, [doctorTourOpen, doctorTourStep, activeStep?.ref]);
@@ -3773,7 +3783,7 @@ function CreativesTab(props: {
           {tourBox && (() => {
             const overflowBottom = (tourBox.top + tourBox.height + 220) > window.innerHeight;
             const tipTop = overflowBottom ? Math.max(12, tourBox.top - 212) : (tourBox.top + tourBox.height + 12);
-            const tipLeft = Math.min(tourBox.left, window.innerWidth - 340);
+            const tipLeft = Math.max(12, Math.min(tourBox.left, window.innerWidth - 340));
             return (
               <>
                 <div
@@ -3802,6 +3812,18 @@ function CreativesTab(props: {
               </>
             );
           })()}
+          {!tourBox && (
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+              <div className="pointer-events-auto max-w-[320px] bg-slate-900 text-slate-100 border border-slate-700 rounded-lg p-3 shadow-xl">
+                <div className="text-xs font-semibold mb-1">Locating step…</div>
+                <div className="text-[11px] text-slate-300 mb-2">Scroll the page if needed, or click Next.</div>
+                <div className="flex items-center justify-end text-[11px] gap-2">
+                  <button className="px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={()=>setDoctorTourOpen(false)}>Close</button>
+                  <button className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500" onClick={()=>setDoctorTourStep((s)=>Math.min(tourSteps.length-1, s+1))}>Next</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
