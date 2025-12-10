@@ -1808,7 +1808,12 @@ function DashboardTab(props: {
     const start = () => {
       const el = activeStep?.ref?.current as HTMLElement | null;
       if (el) {
-        try { el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'nearest' }); } catch {}
+        try {
+          const rect = el.getBoundingClientRect();
+          const absoluteTop = rect.top + window.scrollY;
+          const targetTop = Math.max(0, absoluteTop - Math.round(window.innerHeight * 0.25));
+          window.scrollTo({ top: targetTop, behavior: 'smooth' });
+        } catch {}
       }
       // allow scroll to animate, then start updates
       scrollTimer = setTimeout(() => { update(); }, 50);
@@ -3779,7 +3784,7 @@ function CreativesTab(props: {
       {/* Guided tour overlay */}
       {doctorTourOpen && (
         <div className="fixed inset-0 z-[70]">
-          <div className="absolute inset-0 bg-black/60" onClick={()=>setDoctorTourOpen(false)} />
+          <div className="absolute inset-0 bg-black/60 pointer-events-none" />
           {tourBox && (() => {
             const overflowBottom = (tourBox.top + tourBox.height + 220) > window.innerHeight;
             const tipTop = overflowBottom ? Math.max(12, tourBox.top - 212) : (tourBox.top + tourBox.height + 12);
