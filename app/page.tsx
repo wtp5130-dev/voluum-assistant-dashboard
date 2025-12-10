@@ -3783,20 +3783,25 @@ function CreativesTab(props: {
 
       {/* Guided tour overlay */}
       {doctorTourOpen && (
-        <div className="fixed inset-0 z-[70]">
-          <div className="absolute inset-0 bg-black/60 pointer-events-none" />
+        <div className="fixed inset-0 z-[70] pointer-events-none">
+          <div className="absolute inset-0 bg-black/60" style={{ pointerEvents: 'none' }} />
           {tourBox && (() => {
             const overflowBottom = (tourBox.top + tourBox.height + 220) > window.innerHeight;
             const tipTop = overflowBottom ? Math.max(12, tourBox.top - 212) : (tourBox.top + tourBox.height + 12);
             const tipLeft = Math.max(12, Math.min(tourBox.left, window.innerWidth - 340));
+            const pad = 6;
+            const hiTop = Math.max(0, tourBox.top - pad);
+            const hiLeft = Math.max(0, tourBox.left - pad);
+            const hiWidth = Math.min(window.innerWidth - hiLeft - 1, tourBox.width + pad * 2);
+            const hiHeight = Math.min(window.innerHeight - hiTop - 1, tourBox.height + pad * 2);
             return (
               <>
                 <div
                   className="absolute border-2 border-emerald-400 rounded-lg shadow-lg"
-                  style={{ top: tourBox.top, left: tourBox.left, width: tourBox.width, height: tourBox.height, boxShadow: '0 0 0 4px rgba(16,185,129,0.25)' }}
+                  style={{ top: hiTop, left: hiLeft, width: hiWidth, height: hiHeight, boxShadow: '0 0 0 4px rgba(16,185,129,0.25)' }}
                 />
                 <div
-                  className="absolute max-w-[320px] bg-slate-900 text-slate-100 border border-slate-700 rounded-lg p-3 shadow-xl"
+                  className="absolute max-w-[320px] bg-slate-900 text-slate-100 border border-slate-700 rounded-lg p-3 shadow-xl pointer-events-auto"
                   style={{ top: tipTop, left: tipLeft }}
                 >
                   <div className="text-xs font-semibold mb-1">{activeStep?.title || 'Step'}</div>
@@ -3810,8 +3815,21 @@ function CreativesTab(props: {
                       ) : (
                         <button className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500" onClick={()=>setDoctorTourOpen(false)}>Done</button>
                       )}
-                      <button className="px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={()=>setDoctorTourOpen(false)}>Skip</button>
+                      <button className="px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={()=>setDoctorTourOpen(false)}>Close</button>
                     </div>
+                  </div>
+                </div>
+                {/* Pinned controls (always reachable) */}
+                <div className="fixed bottom-4 right-4 pointer-events-auto">
+                  <div className="flex items-center gap-2 bg-slate-900/90 border border-slate-700 rounded-lg px-3 py-2 shadow-xl">
+                    <span className="text-[11px] text-slate-400">{doctorTourStep+1}/{tourSteps.length}</span>
+                    <button className="text-[11px] px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50" disabled={doctorTourStep===0} onClick={()=>setDoctorTourStep((s)=>Math.max(0, s-1))}>Back</button>
+                    {doctorTourStep < tourSteps.length-1 ? (
+                      <button className="text-[11px] px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500" onClick={()=>setDoctorTourStep((s)=>Math.min(tourSteps.length-1, s+1))}>Next</button>
+                    ) : (
+                      <button className="text-[11px] px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500" onClick={()=>setDoctorTourOpen(false)}>Done</button>
+                    )}
+                    <button className="text-[11px] px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={()=>setDoctorTourOpen(false)}>Exit</button>
                   </div>
                 </div>
               </>
