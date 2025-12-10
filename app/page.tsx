@@ -1027,7 +1027,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6">
+    <main className="min-h-screen bg-slate-950 text-slate-100 pt-0 px-4 md:px-6 pb-6">
       <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
