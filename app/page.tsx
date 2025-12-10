@@ -2209,8 +2209,13 @@ function OptimizerTab(props: {
   const [verifyToast, setVerifyToast] = useState<null | { kind: "info" | "success" | "error"; msg: string }>(null);
   const showVerifyToast = (msg: string, kind: "info" | "success" | "error" = "info") => {
     setVerifyToast({ kind, msg });
-    try { setTimeout(() => setVerifyToast(null), 4000); } catch {}
   };
+
+  // Sync-all toggle + toast
+  const [syncAll, setSyncAll] = useState<boolean>(false);
+  const [syncAllBusy, setSyncAllBusy] = useState<boolean>(false);
+  const [syncToast, setSyncToast] = useState<null | { kind: "info" | "success" | "error"; msg: string }>(null);
+  const showSyncToast = (msg: string, kind: "info" | "success" | "error" = "info") => setSyncToast({ kind, msg });
 
   return (
     <section className="space-y-4">
@@ -2408,12 +2413,37 @@ function OptimizerTab(props: {
           <div className="flex items-center gap-3 text-[10px] text-slate-500">
             <span>{formatInteger(blacklistedZones.length)} entries</span>
             <button
-              onClick={() => { void handleSync(); }}
+              onClick={async () => {
+                if (syncAll) {
+                  if (syncAllBusy) return;
+                  setSyncAllBusy(true);
+                  showSyncToast("Syncing all provider campaigns…", "info");
+                  try {
+                    const res = await fetch("/api/optimizer/sync-blacklist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ all: true, dryRun: false }) });
+                    const json = await res.json().catch(() => ({}));
+                    if (!res.ok) {
+                      showSyncToast(`Sync all failed (${res.status})`, "error");
+                    } else {
+                      const added = typeof json?.added === "number" ? json.added : 0;
+                      const campaigns = typeof json?.campaigns === "number" ? json.campaigns : 0;
+                      showSyncToast(`Sync all complete: ${added} zone(s) added from ${campaigns} campaign(s).`, "success");
+                    }
+                    refreshBlacklist();
+                  } catch {
+                    showSyncToast("Sync all failed.", "error");
+                  } finally {
+                    setSyncAllBusy(false);
+                  }
+                } else {
+                  void handleSync();
+                }
+              }}
               className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
               title="Pull zones from provider and store in history"
             >
-              {syncLoading ? "Syncing..." : "Sync from provider"}
+              {(syncLoading || syncAllBusy) ? "Syncing..." : (syncAll ? "Sync ALL from provider" : "Sync from provider")}
             </button>
+            <label className="inline-flex items-center gap-2"><input type="checkbox" className="accent-emerald-500" checked={syncAll} onChange={(e)=>setSyncAll(e.target.checked)} /> Sync all provider campaigns</label>
             <button
               onClick={async ()=>{
                 setVerifyBusy(true);
@@ -2425,8 +2455,15 @@ function OptimizerTab(props: {
                   } else if (json?.ok === false && json?.error === "missing_token") {
                     showVerifyToast("Cannot verify: provider token is missing.", "error");
                   } else {
-                    const count = typeof json?.verified === "number" ? json.verified : 0;
-                    showVerifyToast(`Verify complete: ${count} campaign(s) checked.`, "success");
+                    const stats = json?.entries || {};
+                    const cams = json?.campaigns || {};
+                    const parts: string[] = [];
+                    parts.push(`Campaigns processed: ${cams.processed ?? 0}${typeof cams.total === 'number' ? ` / ${cams.total}` : ''}`);
+                    if (typeof cams.skipped === 'number' && cams.skipped > 0) parts.push(`Campaigns skipped: ${cams.skipped}`);
+                    parts.push(`Entries checked: ${stats.checked ?? 0}`);
+                    parts.push(`Verified present: ${stats.verifiedTrue ?? 0}`);
+                    parts.push(`Not found: ${stats.verifiedFalse ?? 0}`);
+                    showVerifyToast(`Verify complete.\n${parts.join("\n")}`, "success");
                   }
                   refreshBlacklist();
                 } catch {
@@ -2525,7 +2562,18 @@ function OptimizerTab(props: {
       </div>
       {verifyToast && (
         <div className={`fixed bottom-4 right-4 z-50 px-3 py-2 rounded-md text-[11px] shadow-lg border ${verifyToast.kind === 'success' ? 'bg-emerald-900/80 text-emerald-100 border-emerald-700' : verifyToast.kind === 'error' ? 'bg-rose-900/80 text-rose-100 border-rose-700' : 'bg-slate-900/80 text-slate-100 border-slate-700'}`}>
-          {verifyToast.msg}
+          <div className="flex items-start gap-3">
+            <pre className="whitespace-pre-wrap break-words m-0">{verifyToast.msg}</pre>
+            <button onClick={()=>setVerifyToast(null)} className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-800 hover:bg-slate-700">Close</button>
+          </div>
+        </div>
+      )}
+      {syncToast && (
+        <div className={`fixed bottom-20 right-4 z-50 px-3 py-2 rounded-md text-[11px] shadow-lg border ${syncToast.kind === 'success' ? 'bg-emerald-900/80 text-emerald-100 border-emerald-700' : syncToast.kind === 'error' ? 'bg-rose-900/80 text-rose-100 border-rose-700' : 'bg-slate-900/80 text-slate-100 border-slate-700'}`}>
+          <div className="flex items-start gap-3">
+            <pre className="whitespace-pre-wrap break-words m-0">{syncToast.msg}</pre>
+            <button onClick={()=>setSyncToast(null)} className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-800 hover:bg-slate-700">Close</button>
+          </div>
         </div>
       )}
     </section>

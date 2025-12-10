@@ -56,14 +56,23 @@ export async function POST(req: NextRequest): Promise<Response> {
       byCampaign.get(cid)!.push(entry);
     }
 
+    let campaignsProcessed = 0;
+    let campaignsSkipped = 0;
+    let entriesChecked = 0;
+    let verifiedTrue = 0;
+    let verifiedFalse = 0;
+
     // Verify each campaign's blacklist
     for (const [cid, entries] of byCampaign.entries()) {
       const set = await fetchBlacklistedFromPropeller(cid);
-      if (!set) continue;
+      if (!set) { campaignsSkipped++; continue; }
+      campaignsProcessed++;
       for (const e of entries) {
         const present = set.has(String(e.zoneId));
+        entriesChecked++;
         e.verified = present;
         e.verifiedAt = new Date().toISOString();
+        if (present) verifiedTrue++; else verifiedFalse++;
       }
     }
 
@@ -73,7 +82,10 @@ export async function POST(req: NextRequest): Promise<Response> {
       await kv.lpush(LIST_KEY, list[i]);
     }
 
-    return new Response(JSON.stringify({ ok: true, verified: byCampaign.size }), { status: 200, headers: { "Content-Type": "application/json" } });
+    return new Response(
+      JSON.stringify({ ok: true, campaigns: { processed: campaignsProcessed, skipped: campaignsSkipped, total: byCampaign.size }, entries: { checked: entriesChecked, verifiedTrue, verifiedFalse } }),
+      { status: 200, headers: { "Content-Type": "application/json" } }
+    );
   } catch (err: any) {
     return new Response(JSON.stringify({ error: "verify_error", message: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
   }

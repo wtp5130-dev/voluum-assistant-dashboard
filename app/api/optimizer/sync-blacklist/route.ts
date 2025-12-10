@@ -112,30 +112,107 @@ async function getCampaignIdsFromDashboard(req: NextRequest, dateRange: string):
   }
 }
 
-async function runSync(req: NextRequest, campaignIds: string[] | undefined, dateRange: string, dryRun = false) {
+async function runSync(req: NextRequest, campaignIds: string[] | undefined, dateRange: string, dryRun = false, all = false) {
 
     const seenList = ((await kv.lrange(LIST_KEY, 0, -1)) as any[]) || [];
     const seenSet = new Set<string>(
       seenList.map((e: any) => `${String(e.campaignId)}:${String(e.zoneId)}`)
     );
 
-    // dashboardIds are strings; they may be numeric propeller IDs or dashboard UUIDs.
-    const rawIds = campaignIds && campaignIds.length > 0 ? campaignIds : await getCampaignIdsFromDashboard(req, dateRange);
-    // rawIds may be in form 'id::name' when coming from dashboard; parse to objects
-    const dashboardList: { id: string; name?: string }[] = rawIds.map((r) => {
-      const parts = String(r).split("::");
-      return { id: parts[0], name: parts[1] || undefined };
-    });
-
-    // Fetch propeller campaigns to map names -> numeric ids
-    const propellerCampaigns = await fetchPropellerCampaigns();
-    const nameToId = new Map<string, string>();
-    for (const pc of propellerCampaigns) {
-      if (pc.name) nameToId.set(pc.name, String(pc.id));
-    }
-
-    const ids: string[] = [];
+    let ids: string[] = [];
     const unresolved: string[] = [];
+
+    if (all) {
+      // Sync ALL provider campaigns directly
+      const propellerCampaigns = await fetchPropellerCampaigns();
+      ids = propellerCampaigns.map((pc) => String(pc.id));
+    } else {
+      // dashboardIds are strings; they may be numeric propeller IDs or dashboard UUIDs.
+      const rawIds = campaignIds && campaignIds.length > 0 ? campaignIds : await getCampaignIdsFromDashboard(req, dateRange);
+      // rawIds may be in form 'id::name' when coming from dashboard; parse to objects
+      const dashboardList: { id: string; name?: string }[] = rawIds.map((r) => {
+        const parts = String(r).split("::");
+        return { id: parts[0], name: parts[1] || undefined };
+      });
+
+      // Fetch propeller campaigns to map names -> numeric ids
+      const propellerCampaigns = await fetchPropellerCampaigns();
+      const nameToId = new Map<string, string>();
+      for (const pc of propellerCampaigns) {
+        if (pc.name) nameToId.set(pc.name, String(pc.id));
+      }
+
+      const tmpIds: string[] = [];
+
+      // Load manual mappings from KV. Structure: { [dashboardIdOrName]: providerId }
+      const mappingKey = "mapping:dashboardToProvider";
+      const rawMapping = (await kv.get(mappingKey)) as Record<string, string> | null;
+      const manualMap = rawMapping || {};
+
+      function extractNumericFromName(n?: string) {
+        if (!n) return null;
+        // Match a run of 6+ digits even if adjacent to underscores or non-word chars
+        const m = n.match(/(?:^|[^0-9])(\d{6,})(?=$|[^0-9])/);
+        return m ? m[1] : null;
+      }
+
+      for (const d of dashboardList) {
+        // If the dashboard id is already numeric, use it
+        if (/^\d+$/.test(d.id)) {
+          tmpIds.push(d.id);
+          continue;
+        }
+
+        // 0) Manual mapping: check by dashboard id first, then by dashboard name
+        // Manual mapping may contain a special value '__IGNORED__' meaning skip this dashboard entry
+        if (manualMap[d.id] === "__IGNORED__" || (d.name && manualMap[d.name] === "__IGNORED__")) {
+          // skip — intentionally ignored
+          continue;
+        }
+        if (manualMap[d.id]) {
+          tmpIds.push(String(manualMap[d.id]));
+          continue;
+        }
+        if (d.name && manualMap[d.name]) {
+          tmpIds.push(String(manualMap[d.name]));
+          continue;
+        }
+
+        // 1) If dashboard name contains a large numeric token, use that as Propeller ID
+        const numericFromName = extractNumericFromName(d.name);
+        if (numericFromName) {
+          tmpIds.push(numericFromName);
+          continue;
+        }
+
+        // 2) Exact name match
+        if (d.name && nameToId.has(d.name)) {
+          tmpIds.push(nameToId.get(d.name)!);
+          continue;
+        }
+
+        // 3) Substring matches: propellerName includes dashboard name or vice versa
+        let matched = false;
+        if (d.name) {
+          const dn = d.name.toLowerCase();
+          for (const [pname, pid] of nameToId.entries()) {
+            if (!pname) continue;
+            const pn = pname.toLowerCase();
+            if (pn.includes(dn) || dn.includes(pn)) {
+              tmpIds.push(pid);
+              matched = true;
+              break;
+            }
+          }
+        }
+        if (matched) continue;
+
+        unresolved.push(d.id + (d.name ? ` (${d.name})` : ""));
+      }
+
+      // dedupe and filter
+      ids = Array.from(new Set(tmpIds)).filter((id) => id !== "__IGNORED__");
+    }
 
     // Load manual mappings from KV. Structure: { [dashboardIdOrName]: providerId }
     const mappingKey = "mapping:dashboardToProvider";
@@ -204,9 +281,8 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
     }
 
     // dedupe
-    const uniqueIds = Array.from(new Set(ids));
-    // filter out any special sentinel values (e.g. '__IGNORED__') to avoid accidental provider calls
-    const fetchIds = uniqueIds.filter((id) => id !== "__IGNORED__");
+    // final ids set
+    const fetchIds = Array.from(new Set(ids));
 
     const newEntries: any[] = [];
     const diagnostics: Array<{ campaignId: string; fetched: number | null; status: number | null; error?: string }> = [];
@@ -243,7 +319,7 @@ async function runSync(req: NextRequest, campaignIds: string[] | undefined, date
       }
     }
 
-    return { ok: true, campaigns: ids.length, added: newEntries.length, diagnostics };
+    return { ok: true, campaigns: fetchIds.length, added: newEntries.length, diagnostics };
 }
 
 export async function POST(req: NextRequest): Promise<Response> {
@@ -254,7 +330,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       : undefined;
     const dateRange: string = (body?.dateRange as string) || "last7days";
     const dryRun = Boolean(body?.dryRun);
-    const result = await runSync(req, campaignIds, dateRange, dryRun);
+    const all = Boolean(body?.all);
+    const result = await runSync(req, campaignIds, dateRange, dryRun, all);
     return new Response(JSON.stringify(result), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: "sync_error", message: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
@@ -267,7 +344,8 @@ export async function GET(req: NextRequest): Promise<Response> {
     const dateRange = searchParams.get("dateRange") || "last7days";
     const ids = searchParams.getAll("campaignId");
     const dryRun = Boolean(searchParams.get("dryRun"));
-    const result = await runSync(req, ids.length ? ids : undefined, dateRange, dryRun);
+    const all = Boolean(searchParams.get("all"));
+    const result = await runSync(req, ids.length ? ids : undefined, dateRange, dryRun, all);
     return new Response(JSON.stringify(result), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (err: any) {
     return new Response(JSON.stringify({ error: "sync_error", message: err?.message || String(err) }), { status: 500, headers: { "Content-Type": "application/json" } });
