@@ -3461,7 +3461,7 @@ function CreativesTab(props: {
                   <option value="BLACK_WHITE">BLACK_WHITE</option>
                   <option value="DUOTONE">DUOTONE</option>
                   <option value="LONG_EXPOSURE">LONG_EXPOSURE</option>
-                  <option value="BOKEH">BOKEH</option>
+                  <option value="BLURRY_MOTION">BLURRY_MOTION</option>
                   <option value="TYPOGRAPHY_BOLD">TYPOGRAPHY_BOLD</option>
                 </select>
               </div>

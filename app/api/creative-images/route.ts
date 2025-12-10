@@ -78,6 +78,41 @@ export async function POST(req: Request): Promise<Response> {
         const img = form.get("image");
         if (img && typeof img !== "string") upstream.append("image", img as any);
         res = await fetch(endpoint, { method: "POST", headers: { "Api-Key": key }, body: upstream as any });
+        if (!res.ok) {
+          const errTxt = await res.text();
+          const looksLikePresetError = res.status === 400 && (String(errTxt || "").includes("style_preset") || String(errTxt || "").includes("one of"));
+          if (looksLikePresetError && stylePreset) {
+            const upstreamFallback = new FormData();
+            upstreamFallback.append("prompt", String(prompt));
+            upstreamFallback.append("width", String(width));
+            upstreamFallback.append("height", String(height));
+            upstreamFallback.append("model", String(model));
+            upstreamFallback.append("rendering_speed", String(renderingSpeed));
+            try {
+              const hasCharRefs = form.getAll("character_reference_images").length > 0;
+              const hasImage = Boolean(form.get("image"));
+              if (hasCharRefs || hasImage) upstreamFallback.append("style_type", "AUTO");
+            } catch {}
+            if (negative) upstreamFallback.append("negative_prompt", String(negative));
+            if (seedVal) upstreamFallback.append("seed", String(seedVal));
+            const refInf2 = form.get("reference_influence");
+            if (refInf2 != null) upstreamFallback.append("reference_influence", String(refInf2));
+            const imgInf2 = (form as any).get?.("image_reference_influence");
+            if (imgInf2 != null) upstreamFallback.append("image_reference_influence", String(imgInf2));
+            for (const f of form.getAll("character_reference_images")) {
+              if (typeof f !== "string") upstreamFallback.append("character_reference_images", f as any);
+            }
+            const img2 = form.get("image");
+            if (img2 && typeof img2 !== "string") upstreamFallback.append("image", img2 as any);
+            res = await fetch(endpoint, { method: "POST", headers: { "Api-Key": key }, body: upstreamFallback as any });
+            if (!res.ok) {
+              // Restore errTxt for return path below
+              (res as any).__original_error_text = errTxt;
+            }
+          } else {
+            (res as any).__original_error_text = errTxt;
+          }
+        }
       } else {
         const bodyJson: any = { prompt, width, height, model, rendering_speed: renderingSpeed };
         if (stylePreset) bodyJson.style_preset = stylePreset;
@@ -90,11 +125,29 @@ export async function POST(req: Request): Promise<Response> {
           headers: { "Api-Key": key, "Content-Type": "application/json", "Accept": "application/json" },
           body: JSON.stringify(bodyJson),
         });
+        if (!res.ok) {
+          const errTxt = await res.text();
+          const looksLikePresetError = res.status === 400 && (String(errTxt || "").includes("style_preset") || String(errTxt || "").includes("one of"));
+          if (looksLikePresetError && stylePreset) {
+            const bodyJsonFallback: any = { ...bodyJson };
+            delete bodyJsonFallback.style_preset;
+            res = await fetch(endpoint, {
+              method: "POST",
+              headers: { "Api-Key": key, "Content-Type": "application/json", "Accept": "application/json" },
+              body: JSON.stringify(bodyJsonFallback),
+            });
+            if (!res.ok) {
+              (res as any).__original_error_text = errTxt;
+            }
+          } else {
+            (res as any).__original_error_text = errTxt;
+          }
+        }
       }
       const txt = await res.text();
       if (!res.ok) {
         return new Response(
-          JSON.stringify({ error: `Ideogram error (${res.status})`, message: txt?.slice(0, 400) }),
+          JSON.stringify({ error: `Ideogram error (${res.status})`, message: (txt || (res as any).__original_error_text || "")?.slice(0, 400) }),
           { status: res.status, headers: { "Content-Type": "application/json" } }
         );
       }
