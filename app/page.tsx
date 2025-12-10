@@ -1793,13 +1793,23 @@ function DashboardTab(props: {
   const [tourBox, setTourBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
   useEffect(() => {
     if (!doctorTourOpen) return;
-    const el = activeStep?.ref?.current as HTMLElement | null;
-    if (el) {
-      const r = el.getBoundingClientRect();
-      setTourBox({ top: r.top + window.scrollY, left: r.left + window.scrollX, width: r.width, height: r.height });
-    } else {
-      setTourBox(null);
-    }
+    const update = () => {
+      const el = activeStep?.ref?.current as HTMLElement | null;
+      if (el) {
+        const r = el.getBoundingClientRect();
+        // Use viewport coordinates because overlay is fixed
+        setTourBox({ top: r.top, left: r.left, width: r.width, height: r.height });
+      } else {
+        setTourBox(null);
+      }
+    };
+    update();
+    window.addEventListener('scroll', update, true);
+    window.addEventListener('resize', update);
+    return () => {
+      window.removeEventListener('scroll', update, true);
+      window.removeEventListener('resize', update);
+    };
   }, [doctorTourOpen, doctorTourStep, activeStep?.ref]);
 
   return (
@@ -3760,33 +3770,38 @@ function CreativesTab(props: {
       {doctorTourOpen && (
         <div className="fixed inset-0 z-[70]">
           <div className="absolute inset-0 bg-black/60" onClick={()=>setDoctorTourOpen(false)} />
-          {tourBox && (
-            <>
-              <div
-                className="absolute border-2 border-emerald-400 rounded-lg shadow-lg"
-                style={{ top: tourBox.top, left: tourBox.left, width: tourBox.width, height: tourBox.height, boxShadow: '0 0 0 4px rgba(16,185,129,0.25)' }}
-              />
-              <div
-                className="absolute max-w-[320px] bg-slate-900 text-slate-100 border border-slate-700 rounded-lg p-3 shadow-xl"
-                style={{ top: (tourBox.top + tourBox.height + 12), left: tourBox.left }}
-              >
-                <div className="text-xs font-semibold mb-1">{activeStep?.title || 'Step'}</div>
-                <div className="text-[11px] text-slate-300 mb-2">{activeStep?.body}</div>
-                <div className="flex items-center justify-between text-[11px]">
-                  <div className="text-slate-400">{doctorTourStep+1} / {tourSteps.length}</div>
-                  <div className="flex items-center gap-2">
-                    <button className="px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50" disabled={doctorTourStep===0} onClick={()=>setDoctorTourStep((s)=>Math.max(0, s-1))}>Back</button>
-                    {doctorTourStep < tourSteps.length-1 ? (
-                      <button className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500" onClick={()=>setDoctorTourStep((s)=>Math.min(tourSteps.length-1, s+1))}>Next</button>
-                    ) : (
-                      <button className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500" onClick={()=>setDoctorTourOpen(false)}>Done</button>
-                    )}
-                    <button className="px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={()=>setDoctorTourOpen(false)}>Skip</button>
+          {tourBox && (() => {
+            const overflowBottom = (tourBox.top + tourBox.height + 220) > window.innerHeight;
+            const tipTop = overflowBottom ? Math.max(12, tourBox.top - 212) : (tourBox.top + tourBox.height + 12);
+            const tipLeft = Math.min(tourBox.left, window.innerWidth - 340);
+            return (
+              <>
+                <div
+                  className="absolute border-2 border-emerald-400 rounded-lg shadow-lg"
+                  style={{ top: tourBox.top, left: tourBox.left, width: tourBox.width, height: tourBox.height, boxShadow: '0 0 0 4px rgba(16,185,129,0.25)' }}
+                />
+                <div
+                  className="absolute max-w-[320px] bg-slate-900 text-slate-100 border border-slate-700 rounded-lg p-3 shadow-xl"
+                  style={{ top: tipTop, left: tipLeft }}
+                >
+                  <div className="text-xs font-semibold mb-1">{activeStep?.title || 'Step'}</div>
+                  <div className="text-[11px] text-slate-300 mb-2">{activeStep?.body}</div>
+                  <div className="flex items-center justify-between text-[11px]">
+                    <div className="text-slate-400">{doctorTourStep+1} / {tourSteps.length}</div>
+                    <div className="flex items-center gap-2">
+                      <button className="px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50" disabled={doctorTourStep===0} onClick={()=>setDoctorTourStep((s)=>Math.max(0, s-1))}>Back</button>
+                      {doctorTourStep < tourSteps.length-1 ? (
+                        <button className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500" onClick={()=>setDoctorTourStep((s)=>Math.min(tourSteps.length-1, s+1))}>Next</button>
+                      ) : (
+                        <button className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500" onClick={()=>setDoctorTourOpen(false)}>Done</button>
+                      )}
+                      <button className="px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={()=>setDoctorTourOpen(false)}>Skip</button>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </>
-          )}
+              </>
+            );
+          })()}
         </div>
       )}
 
