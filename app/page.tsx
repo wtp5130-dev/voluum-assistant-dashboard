@@ -3647,7 +3647,9 @@ function CreativesTab(props: {
               {pickerItems.filter((it)=>{
                 const okB = !pickerBrand || String(it.brandName||"").toLowerCase().includes(pickerBrand.toLowerCase());
                 const okT = !pickerTag || (Array.isArray(it.tags) && it.tags.some((t:string)=>t.toLowerCase().includes(pickerTag.toLowerCase())));
-                const okK = showPicker.mode === 'chars' ? it.kind === 'character' : it.kind === 'layout';
+                // For character mode, show items explicitly marked as character.
+                // For image (remix) mode, show all images (do not restrict by kind).
+                const okK = showPicker.mode === 'chars' ? it.kind === 'character' : true;
                 return okB && okT && okK;
               }).slice(0,30).map((it)=>(
                 <button key={it.id} className="rounded-lg overflow-hidden border border-slate-800 bg-slate-950 text-left" onClick={async ()=>{
