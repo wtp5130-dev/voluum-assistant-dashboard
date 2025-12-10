@@ -2204,6 +2204,14 @@ function OptimizerTab(props: {
     try { await fetch("/api/optimizer/unblacklist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items })}); setSelectedIds({}); refreshBlacklist(); } catch {}
   };
 
+  // Verify toast/state
+  const [verifyBusy, setVerifyBusy] = useState<boolean>(false);
+  const [verifyToast, setVerifyToast] = useState<null | { kind: "info" | "success" | "error"; msg: string }>(null);
+  const showVerifyToast = (msg: string, kind: "info" | "success" | "error" = "info") => {
+    setVerifyToast({ kind, msg });
+    try { setTimeout(() => setVerifyToast(null), 4000); } catch {}
+  };
+
   return (
     <section className="space-y-4">
       <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -2407,10 +2415,30 @@ function OptimizerTab(props: {
               {syncLoading ? "Syncing..." : "Sync from provider"}
             </button>
             <button
-              onClick={async ()=>{ try{ await fetch("/api/optimizer/verify", { method: "POST" }); refreshBlacklist(); }catch{} }}
-              className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              onClick={async ()=>{
+                setVerifyBusy(true);
+                try{
+                  const res = await fetch("/api/optimizer/verify", { method: "POST", headers: { "Content-Type": "application/json" } });
+                  const json = await res.json().catch(()=>({}));
+                  if (!res.ok) {
+                    showVerifyToast(`Verify failed (${res.status})`, "error");
+                  } else if (json?.ok === false && json?.error === "missing_token") {
+                    showVerifyToast("Cannot verify: provider token is missing.", "error");
+                  } else {
+                    const count = typeof json?.verified === "number" ? json.verified : 0;
+                    showVerifyToast(`Verify complete: ${count} campaign(s) checked.`, "success");
+                  }
+                  refreshBlacklist();
+                } catch {
+                  showVerifyToast("Verify failed.", "error");
+                } finally {
+                  setVerifyBusy(false);
+                }
+              }}
+              disabled={verifyBusy}
+              className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50"
             >
-              Verify now
+              {verifyBusy ? "Verifying…" : "Verify now"}
             </button>
             <button
               onClick={revertSelected}
@@ -2495,6 +2523,11 @@ function OptimizerTab(props: {
           </div>
         )}
       </div>
+      {verifyToast && (
+        <div className={`fixed bottom-4 right-4 z-50 px-3 py-2 rounded-md text-[11px] shadow-lg border ${verifyToast.kind === 'success' ? 'bg-emerald-900/80 text-emerald-100 border-emerald-700' : verifyToast.kind === 'error' ? 'bg-rose-900/80 text-rose-100 border-rose-700' : 'bg-slate-900/80 text-slate-100 border-slate-700'}`}>
+          {verifyToast.msg}
+        </div>
+      )}
     </section>
   );
 }

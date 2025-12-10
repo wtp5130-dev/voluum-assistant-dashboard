@@ -35,6 +35,12 @@ async function fetchBlacklistedFromPropeller(campaignId: string): Promise<Set<st
 
 export async function POST(req: NextRequest): Promise<Response> {
   try {
+    if (!process.env.PROPELLER_API_TOKEN) {
+      return new Response(
+        JSON.stringify({ ok: false, error: "missing_token", message: "PROPELLER_API_TOKEN is not set on the server; cannot verify against provider." }),
+        { status: 200, headers: { "Content-Type": "application/json" } }
+      );
+    }
     const body = await req.json().catch(() => ({}));
     const items = (body?.items as Array<{ id?: string; campaignId: string; zoneId: string }> | undefined) || undefined;
 
