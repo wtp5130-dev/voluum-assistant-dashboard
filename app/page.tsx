@@ -1236,6 +1236,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           setSeed={setSeed}
           charRefFiles={charRefFiles}
           setCharRefFiles={setCharRefFiles}
+          imageRefFile={imageRefFile}
           setImageRefFile={setImageRefFile}
           saveToGallery={saveToGallery}
           setSaveToGallery={setSaveToGallery}
@@ -2621,6 +2622,7 @@ function CreativesTab(props: {
   setSeed: (v: string) => void;
   charRefFiles: File[];
   setCharRefFiles: (v: File[]) => void;
+  imageRefFile: File | null;
   setImageRefFile: (v: File | null) => void;
   saveToGallery: boolean;
   setSaveToGallery: (v: boolean) => void;
@@ -2667,6 +2669,7 @@ function CreativesTab(props: {
     setSeed,
     charRefFiles,
     setCharRefFiles,
+    imageRefFile,
     setImageRefFile,
     saveToGallery,
     setSaveToGallery,
@@ -2735,6 +2738,35 @@ function CreativesTab(props: {
   const [pbCompliance, setPbCompliance] = useState<boolean>(true);
   // Reference influence (0-100) for character/image references
   const [refInfluence, setRefInfluence] = useState<number>(70);
+  // Remix image preview (blob URL)
+  const [imageRefPreview, setImageRefPreview] = useState<string | null>(null);
+  // Character refs thumbnails (up to 3)
+  const [charRefPreviews, setCharRefPreviews] = useState<string[]>([]);
+  useEffect(() => {
+    try {
+      if (imageRefFile) {
+        const url = URL.createObjectURL(imageRefFile);
+        setImageRefPreview(url);
+        return () => { try { URL.revokeObjectURL(url); } catch {} };
+      } else {
+        setImageRefPreview(null);
+      }
+    } catch {}
+  }, [imageRefFile]);
+
+  useEffect(() => {
+    try {
+      const urls: string[] = [];
+      const files = Array.isArray(charRefFiles) ? charRefFiles.slice(0, 3) : [];
+      for (const f of files) {
+        try { urls.push(URL.createObjectURL(f)); } catch {}
+      }
+      setCharRefPreviews(urls);
+      return () => {
+        try { urls.forEach((u) => URL.revokeObjectURL(u)); } catch {}
+      };
+    } catch {}
+  }, [charRefFiles]);
   
 
   // One-click two-step chain
@@ -3452,6 +3484,16 @@ function CreativesTab(props: {
                     {charRefFiles.length} file(s) selected: {charRefFiles.slice(0,3).map((f:any)=>f?.name||"image").join(", ")}{charRefFiles.length>3?"…":""}
                   </div>
                 )}
+                {charRefPreviews.length > 0 && (
+                  <div className="mt-2 flex items-center gap-2">
+                    {charRefPreviews.map((src, idx) => (
+                      <div key={idx} className="w-16 h-12 overflow-hidden rounded border border-slate-700 bg-slate-950">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={src} alt={`char-ref-${idx}`} className="w-full h-full object-cover" />
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
               <div className="md:col-span-6">
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Image reference (remix)</label>
@@ -3459,6 +3501,17 @@ function CreativesTab(props: {
                   <input type="file" accept="image/*" onChange={(e)=>{ const f = (e.target.files && e.target.files[0]) || null; setImageRefFile(f as any); }} className="block w-full text-[11px]" />
                   <button type="button" onClick={()=>setShowPicker({ open: true, mode: 'image' })} className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Pick…</button>
                 </div>
+                {imageRefFile && (
+                  <div className="mt-1 text-[10px] text-slate-400">
+                    Selected: { (imageRefFile as any)?.name || "image" }
+                  </div>
+                )}
+                {imageRefPreview && (
+                  <div className="mt-2 w-28 h-20 overflow-hidden rounded border border-slate-700 bg-slate-950">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img src={imageRefPreview} alt="remix preview" className="w-full h-full object-cover" />
+                  </div>
+                )}
               </div>
               <div className="md:col-span-6">
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Character refs influence: <span className="text-slate-300">{charRefInfluence}%</span></label>
