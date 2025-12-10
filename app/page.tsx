@@ -1766,6 +1766,42 @@ function DashboardTab(props: {
     sendChat,
   } = props;
 
+  // Guided tour for Creative Doctor
+  const [doctorTourOpen, setDoctorTourOpen] = useState<boolean>(false);
+  const [doctorTourStep, setDoctorTourStep] = useState<number>(0);
+  const titleRef = useRef<HTMLDivElement | null>(null);
+  const descRef = useRef<HTMLDivElement | null>(null);
+  const embedRef = useRef<HTMLDivElement | null>(null);
+  const makePromptAnchorRef = useRef<HTMLDivElement | null>(null);
+  const stylePresetRef = useRef<HTMLDivElement | null>(null);
+  const refsCharRef = useRef<HTMLDivElement | null>(null);
+  const influenceRef = useRef<HTMLDivElement | null>(null);
+  const genButtonRef = useRef<HTMLDivElement | null>(null);
+  const generatorPromptRef = useRef<HTMLDivElement | null>(null);
+  const tourSteps = [
+    { key: 'title', ref: titleRef, title: 'Title', body: 'Short, punchy headline. Think offer hook or main claim.' },
+    { key: 'desc', ref: descRef, title: 'Description', body: 'Add context or angle. Helps style and visuals.' },
+    { key: 'embed', ref: embedRef, title: 'Embed caption', body: 'Renders your Title/Description as on-image text.' },
+    { key: 'make', ref: makePromptAnchorRef, title: 'Make Prompt', body: 'Builds a clean Ideogram prompt from your copy.' },
+    { key: 'style', ref: stylePresetRef, title: 'Style preset', body: 'Optional mood/look. Leave empty or pick a preset.' },
+    { key: 'refs', ref: refsCharRef, title: 'References', body: 'Character refs keep identity. Remix image copies layout/style.' },
+    { key: 'influence', ref: influenceRef, title: 'Influence', body: '0–100: lower = subtle style; higher = strong match.' },
+    { key: 'promptPreview', ref: generatorPromptRef, title: 'Prompt destination', body: 'Your built prompt appears here before generating.' },
+    { key: 'generate', ref: genButtonRef, title: 'Generate assets', body: 'Runs copy + image with current prompt and settings.' },
+  ] as const;
+  const activeStep = tourSteps[Math.max(0, Math.min(doctorTourStep, tourSteps.length - 1))];
+  const [tourBox, setTourBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  useEffect(() => {
+    if (!doctorTourOpen) return;
+    const el = activeStep?.ref?.current as HTMLElement | null;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      setTourBox({ top: r.top + window.scrollY, left: r.left + window.scrollX, width: r.width, height: r.height });
+    } else {
+      setTourBox(null);
+    }
+  }, [doctorTourOpen, doctorTourStep, activeStep?.ref]);
+
   return (
     <section className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,4fr)]">
       {/* Left: Campaign list */}
@@ -2679,6 +2715,42 @@ function CreativesTab(props: {
     setRemixInfluence,
   } = props;
 
+  // Guided tour for Creative Doctor
+  const [doctorTourOpen, setDoctorTourOpen] = useState<boolean>(false);
+  const [doctorTourStep, setDoctorTourStep] = useState<number>(0);
+  const titleRef = useRef<HTMLDivElement | null>(null);
+  const descRef = useRef<HTMLDivElement | null>(null);
+  const embedRef = useRef<HTMLDivElement | null>(null);
+  const makePromptAnchorRef = useRef<HTMLDivElement | null>(null);
+  const stylePresetRef = useRef<HTMLDivElement | null>(null);
+  const refsCharRef = useRef<HTMLDivElement | null>(null);
+  const influenceRef = useRef<HTMLDivElement | null>(null);
+  const genButtonRef = useRef<HTMLDivElement | null>(null);
+  const generatorPromptRef = useRef<HTMLDivElement | null>(null);
+  const tourSteps = [
+    { key: 'title', ref: titleRef, title: 'Title', body: 'Short, punchy headline. Think offer hook or main claim.' },
+    { key: 'desc', ref: descRef, title: 'Description', body: 'Add context or angle. Helps style and visuals.' },
+    { key: 'embed', ref: embedRef, title: 'Embed caption', body: 'Renders your Title/Description as on-image text.' },
+    { key: 'make', ref: makePromptAnchorRef, title: 'Make Prompt', body: 'Builds a clean Ideogram prompt from your copy.' },
+    { key: 'style', ref: stylePresetRef, title: 'Style preset', body: 'Optional mood/look. Leave empty or pick a preset.' },
+    { key: 'refs', ref: refsCharRef, title: 'References', body: 'Character refs keep identity. Remix image copies layout/style.' },
+    { key: 'influence', ref: influenceRef, title: 'Influence', body: '0–100: lower = subtle style; higher = strong match.' },
+    { key: 'promptPreview', ref: generatorPromptRef, title: 'Prompt destination', body: 'Your built prompt appears here before generating.' },
+    { key: 'generate', ref: genButtonRef, title: 'Generate assets', body: 'Runs copy + image with current prompt and settings.' },
+  ] as const;
+  const activeStep = tourSteps[Math.max(0, Math.min(doctorTourStep, tourSteps.length - 1))];
+  const [tourBox, setTourBox] = useState<{ top: number; left: number; width: number; height: number } | null>(null);
+  useEffect(() => {
+    if (!doctorTourOpen) return;
+    const el = activeStep?.ref?.current as HTMLElement | null;
+    if (el) {
+      const r = el.getBoundingClientRect();
+      setTourBox({ top: r.top + window.scrollY, left: r.left + window.scrollX, width: r.width, height: r.height });
+    } else {
+      setTourBox(null);
+    }
+  }, [doctorTourOpen, doctorTourStep, activeStep?.ref]);
+
   // Quick actions for Creative Doctor
   const BRAND_STYLE_ENABLED = false;
   const [doctorTitle, setDoctorTitle] = useState<string>("");
@@ -3078,27 +3150,33 @@ function CreativesTab(props: {
               Generate on-brand, high-converting Ideogram prompts. Enter a Title and Description, tune your Brand Style, and optionally embed the caption as in‑image text.
             </p>
           </div>
-          <div className="flex items-center gap-2"></div>
+          <div className="flex items-center gap-2">
+            <button
+              className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              onClick={() => { setDoctorTourOpen(true); setDoctorTourStep(0); }}
+              title="Show a quick guided tour"
+            >Guide</button>
+          </div>
         </div>
 
         <div className="flex-1 min-h-0 flex flex-col">
           {/* Title + Description -> Ideogram Prompt helper */}
           <div className="px-4 py-2 border-b border-slate-800 grid gap-2 md:grid-cols-12 items-end">
-            <div className="md:col-span-3">
+            <div className="md:col-span-3" ref={titleRef}>
               <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Title</label>
               <input value={doctorTitle} onChange={(e)=>setDoctorTitle(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs" placeholder="Eg. Win big today" />
             </div>
-            <div className="md:col-span-7">
+            <div className="md:col-span-7" ref={descRef}>
               <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Description</label>
               <input value={doctorDescription} onChange={(e)=>setDoctorDescription(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs" placeholder="Eg. Deposit bonus, instant withdrawals, mobile-first" />
             </div>
-            <div className="md:col-span-2 flex items-center justify-start md:justify-end">
+            <div className="md:col-span-2 flex items-center justify-start md:justify-end" ref={embedRef}>
               <label className="flex items-center gap-2 text-[11px] text-slate-300 whitespace-nowrap">
                 <input type="checkbox" checked={embedCaption} onChange={(e)=>setEmbedCaption(e.target.checked)} className="accent-emerald-500" />
                 Embed caption
               </label>
             </div>
-            <div className="md:col-span-12 flex justify-end pt-1">
+            <div className="md:col-span-12 flex justify-end pt-1" ref={makePromptAnchorRef}>
               <button onClick={generateIdeogramPromptFromCopy} disabled={doctorBusy || (!doctorTitle.trim() && !doctorDescription.trim())} className="text-[11px] px-3 py-1.5 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50" title="Make an image prompt from your copy">
                 {doctorBusy?"Making…":"Make Ideogram Prompt"}
               </button>
@@ -3425,7 +3503,7 @@ function CreativesTab(props: {
                   </div>
                 </div>
               </div>
-              <div className="md:col-span-3">
+              <div className="md:col-span-3" ref={stylePresetRef}>
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Style preset</label>
                 <select value={stylePreset} onChange={(e)=>setStylePreset(e.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs">
                   <option value="">(None)</option>
@@ -3473,7 +3551,7 @@ function CreativesTab(props: {
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Negative prompt</label>
                 <input value={negativePrompt} onChange={(e)=>setNegativePrompt(e.target.value)} placeholder="Eg. no text overlays, no watermarks" className="w-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs" />
               </div>
-              <div className="md:col-span-6">
+              <div className="md:col-span-6" ref={refsCharRef}>
                 <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Character references (images)</label>
                 <div className="flex items-center gap-2">
                   <input type="file" multiple accept="image/*" onChange={(e)=>{ const files = Array.from(e.target.files || []); setCharRefFiles(files as File[]); }} className="block w-full text-[11px]" />
@@ -3627,7 +3705,7 @@ function CreativesTab(props: {
                 {assetDescription || "-"}
               </div>
             </div>
-            <div className="grid gap-1">
+            <div className="grid gap-1" ref={generatorPromptRef}>
               <div className="text-slate-400 uppercase tracking-wide text-[10px]">
                 Main image prompt ({mainImageSize || "1024x1024"})
               </div>
@@ -3638,7 +3716,7 @@ function CreativesTab(props: {
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2" ref={genButtonRef}>
           <button
             onClick={generateCreativeBundle}
             disabled={
@@ -3677,6 +3755,40 @@ function CreativesTab(props: {
           </div>
         )}
       </div>
+
+      {/* Guided tour overlay */}
+      {doctorTourOpen && (
+        <div className="fixed inset-0 z-[70]">
+          <div className="absolute inset-0 bg-black/60" onClick={()=>setDoctorTourOpen(false)} />
+          {tourBox && (
+            <>
+              <div
+                className="absolute border-2 border-emerald-400 rounded-lg shadow-lg"
+                style={{ top: tourBox.top, left: tourBox.left, width: tourBox.width, height: tourBox.height, boxShadow: '0 0 0 4px rgba(16,185,129,0.25)' }}
+              />
+              <div
+                className="absolute max-w-[320px] bg-slate-900 text-slate-100 border border-slate-700 rounded-lg p-3 shadow-xl"
+                style={{ top: (tourBox.top + tourBox.height + 12), left: tourBox.left }}
+              >
+                <div className="text-xs font-semibold mb-1">{activeStep?.title || 'Step'}</div>
+                <div className="text-[11px] text-slate-300 mb-2">{activeStep?.body}</div>
+                <div className="flex items-center justify-between text-[11px]">
+                  <div className="text-slate-400">{doctorTourStep+1} / {tourSteps.length}</div>
+                  <div className="flex items-center gap-2">
+                    <button className="px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800 disabled:opacity-50" disabled={doctorTourStep===0} onClick={()=>setDoctorTourStep((s)=>Math.max(0, s-1))}>Back</button>
+                    {doctorTourStep < tourSteps.length-1 ? (
+                      <button className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500" onClick={()=>setDoctorTourStep((s)=>Math.min(tourSteps.length-1, s+1))}>Next</button>
+                    ) : (
+                      <button className="px-2 py-1 rounded bg-emerald-600 hover:bg-emerald-500" onClick={()=>setDoctorTourOpen(false)}>Done</button>
+                    )}
+                    <button className="px-2 py-1 rounded border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={()=>setDoctorTourOpen(false)}>Skip</button>
+                  </div>
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
       {showPicker.open && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
