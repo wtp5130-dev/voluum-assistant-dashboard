@@ -3015,8 +3015,6 @@ function CreativesTab(props: {
   }, [stopBrandStream]);
   const showBrandToast = (msg: string, kind: "info" | "success" | "error" = "info") => {
     setBrandToast({ kind, msg });
-    // auto-hide after 4s
-    try { setTimeout(() => setBrandToast(null), 4000); } catch {}
   };
   const loadBrands = useCallback(async () => {
     try {

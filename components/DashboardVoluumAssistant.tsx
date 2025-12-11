@@ -169,8 +169,16 @@ export default function DashboardVoluumAssistant() {
             profit: Number(c.profit ?? 0),
             roi: Number(c.roi ?? 0),
             cost: Number(c.cost ?? 0),
-            cpa: Number(c.cpa ?? c.CostPerSignup ?? 0),
-            cpr: Number(c.cpr ?? c.CPR ?? 0),
+            cpa: (() => {
+              const cost = Number(c.cost ?? 0);
+              const deposits = Number(c.deposits ?? c.customConversions2 ?? 0);
+              return deposits > 0 ? cost / deposits : 0;
+            })(),
+            cpr: (() => {
+              const cost = Number(c.cost ?? 0);
+              const signups = Number(c.signups ?? c.customConversions1 ?? 0);
+              return signups > 0 ? cost / signups : 0;
+            })(),
             zones: (c.zones || []).map((z: any) => ({
               id: String(z.id ?? ""),
               visits: Number(z.visits ?? 0),
