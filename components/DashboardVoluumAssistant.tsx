@@ -519,8 +519,26 @@ export default function DashboardVoluumAssistant() {
                     <th className="text-right px-2 py-2">Visits</th>
                     <th className="text-right px-2 py-2">Signups</th>
                     <th className="text-right px-2 py-2">Deposits</th>
-                    <th className="text-right px-2 py-2">CPA</th>
-                    <th className="text-right px-2 py-2">CPR</th>
+                    <th className="text-right px-2 py-2">
+                      <span className="inline-flex items-center gap-1">
+                        CPA
+                        <span
+                          className="inline-block w-4 h-4 rounded-full border border-slate-600 text-[9px] leading-4 text-slate-300 text-center cursor-help"
+                          title="CPA = cost / deposits"
+                        >?
+                        </span>
+                      </span>
+                    </th>
+                    <th className="text-right px-2 py-2">
+                      <span className="inline-flex items-center gap-1">
+                        CPR
+                        <span
+                          className="inline-block w-4 h-4 rounded-full border border-slate-600 text-[9px] leading-4 text-slate-300 text-center cursor-help"
+                          title="CPR = cost / signups"
+                        >?
+                        </span>
+                      </span>
+                    </th>
                     <th className="text-right px-2 py-2">Revenue</th>
                     <th className="text-right px-2 py-2">Profit</th>
                     <th className="text-right px-2 py-2">ROI%</th>

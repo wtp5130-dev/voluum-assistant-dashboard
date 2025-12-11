@@ -1401,15 +1401,25 @@ function DetailStat({
   label,
   value,
   valueClass,
+  hint,
 }: {
   label: string;
   value: React.ReactNode;
   valueClass?: string;
+  hint?: string;
 }) {
   return (
     <div className="flex flex-col gap-0.5">
-      <div className="text-[10px] uppercase tracking-wide text-slate-500">
-        {label}
+      <div className="text-[10px] uppercase tracking-wide text-slate-500 flex items-center gap-1">
+        <span>{label}</span>
+        {hint && (
+          <span
+            className="inline-block w-4 h-4 rounded-full border border-slate-600 text-[9px] leading-4 text-slate-300 text-center cursor-help"
+            title={hint}
+          >
+            ?
+          </span>
+        )}
       </div>
       <div className={`text-sm font-medium ${valueClass ?? ""}`}>{value}</div>
     </div>
@@ -1962,6 +1972,7 @@ function DashboardTab(props: {
                   />
                   <DetailStat
                     label="CPA / deposit"
+                    hint="CPA = cost / deposits"
                     value={
                       selectedCampaign.deposits > 0
                         ? formatMoney(selectedCampaign.cpa)
@@ -1970,6 +1981,7 @@ function DashboardTab(props: {
                   />
                   <DetailStat
                     label="CPR / signup"
+                    hint="CPR = cost / signups"
                     value={
                       selectedCampaign.signups > 0
                         ? formatMoney(selectedCampaign.cpr)
