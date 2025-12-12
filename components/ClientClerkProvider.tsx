@@ -1,8 +1,13 @@
 "use client";
 
-import { ClerkProvider, ClerkProviderProps } from "@clerk/nextjs";
+import React from "react";
+import { ClerkProvider } from "@clerk/nextjs";
 
-export default function ClientClerkProvider({ children, ...rest }: ClerkProviderProps) {
+type Props = {
+  children: React.ReactNode;
+};
+
+export default function ClientClerkProvider({ children }: Props) {
   // Render the client-side Clerk provider to avoid calling next/headers on the server
-  return <ClerkProvider {...rest}>{children}</ClerkProvider>;
+  return <ClerkProvider>{children}</ClerkProvider>;
 }
