@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import NavBar from "@/components/NavBar";
-import { ClerkProvider } from "@clerk/nextjs";
+import ClientClerkProvider from "@/components/ClientClerkProvider";
 
 // If you’re using a font like Inter from next/font, keep your import here.
 // import { Inter } from "next/font/google";
@@ -14,7 +14,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ClerkProvider>
+    <ClientClerkProvider>
       <html lang="en">
         {/* If you’re using a font, add className={inter.className} */}
         <body>
@@ -22,6 +22,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="pt-3">{children}</div>
         </body>
       </html>
-    </ClerkProvider>
+    </ClientClerkProvider>
   );
 }
