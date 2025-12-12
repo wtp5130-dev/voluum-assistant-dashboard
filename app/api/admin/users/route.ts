@@ -86,11 +86,11 @@ export async function POST(req: NextRequest) {
     if (p) {
       nextHash = await sha256(`${secret}:${p}`);
     }
-    arr[existing] = { username: u, role, hash: nextHash, perms: targetPerms, createdAt: arr[existing].createdAt || new Date().toISOString(), lastLogin: arr[existing].lastLogin || null };
+    arr[existing] = { username: u, role, hash: nextHash, perms: targetPerms, createdAt: arr[existing].createdAt || new Date().toISOString(), lastLogin: arr[existing].lastLogin ?? undefined };
   } else {
     if (!p) return NextResponse.json({ error: "password required for new user" }, { status: 400 });
     const hash = await sha256(`${secret}:${p}`);
-    arr.unshift({ username: u, role, hash, perms: targetPerms, createdAt: new Date().toISOString(), lastLogin: null });
+    arr.unshift({ username: u, role, hash, perms: targetPerms, createdAt: new Date().toISOString(), lastLogin: undefined });
   }
   await kv.set(KEY, arr);
   return NextResponse.json({ ok: true });
