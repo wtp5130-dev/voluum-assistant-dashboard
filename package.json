@@ -9,23 +9,23 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "next": "16.0.7",
-    "react": "18.3.1",
-    "react-dom": "18.3.1",
-    "openai": "^4.71.1",
-    "@vercel/kv": "^1.0.1",
+    "@clerk/nextjs": "^5.7.5",
     "@vercel/blob": "^0.18.0",
-    "@clerk/nextjs": "^5.0.0"
+    "@vercel/kv": "^1.0.1",
+    "next": "16.0.7",
+    "openai": "^4.71.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
   },
   "devDependencies": {
     "@types/node": "^20.11.19",
     "@types/react": "^18.2.49",
     "@types/react-dom": "^18.2.18",
-    "tailwindcss": "3.4.15",
     "autoprefixer": "^10.4.17",
-    "postcss": "^8.4.35",
-    "typescript": "^5.4.2",
     "eslint": "^9",
-    "eslint-config-next": "16.0.6"
+    "eslint-config-next": "16.0.6",
+    "postcss": "^8.4.35",
+    "tailwindcss": "3.4.15",
+    "typescript": "^5.4.2"
   }
 }
