@@ -2347,6 +2347,18 @@ function OptimizerTab(props: {
     } catch {}
   };
 
+  // Provider campaigns list
+  const [provLoading, setProvLoading] = useState<boolean>(false);
+  const [provItems, setProvItems] = useState<Array<{ id: string; name: string; status?: string }>>([]);
+  const loadProvider = async () => {
+    try {
+      setProvLoading(true);
+      const res = await fetch("/api/optimizer/propeller/campaigns", { cache: "no-store" });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && Array.isArray(json?.items)) setProvItems(json.items);
+    } finally { setProvLoading(false); }
+  };
+
   return (
     <section className="space-y-4">
       <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -2705,6 +2717,7 @@ function OptimizerTab(props: {
           <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Campaign ID Mapping</h3>
           <div className="flex items-center gap-2">
             <button onClick={loadMapping} className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[11px]">{mapLoading?"Loading…":"Refresh"}</button>
+            <button onClick={loadProvider} className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[11px]">{provLoading?"Loading Propeller…":"Load from Propeller"}</button>
             <button onClick={()=>{
               const drafts: Record<string,string> = { ...mapDrafts };
               for (const c of optimCampaigns) {
@@ -2740,7 +2753,16 @@ function OptimizerTab(props: {
                       <td className="p-2 text-[11px] text-slate-200">{c.name}</td>
                       <td className="p-2 text-[10px] text-slate-500">{c.id}</td>
                       <td className="p-2">
-                        <input value={draft} onChange={(e)=> setMapDrafts(prev=>({ ...prev, [c.id]: e.target.value.replace(/[^0-9]/g, '') }))} placeholder={guessIdFromName(c.name) || "1234567"} className="w-28 bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[11px]" />
+                        {provItems.length > 0 ? (
+                          <select value={draft} onChange={(e)=> setMapDrafts(prev=>({ ...prev, [c.id]: e.target.value }))} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[11px] max-w-[260px]">
+                            <option value="">(Select from Propeller)</option>
+                            {provItems.map((p)=> (
+                              <option key={p.id} value={p.id}>{p.name} — {p.id}</option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input value={draft} onChange={(e)=> setMapDrafts(prev=>({ ...prev, [c.id]: e.target.value.replace(/[^0-9]/g, '') }))} placeholder={guessIdFromName(c.name) || "1234567"} className="w-28 bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[11px]" />
+                        )}
                       </td>
                       <td className="p-2 text-right">
                         <button className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={()=> saveOneMapping(c.id, (mapDrafts[c.id] || '').trim())} disabled={!mapDrafts[c.id] && !current}>Save</button>
