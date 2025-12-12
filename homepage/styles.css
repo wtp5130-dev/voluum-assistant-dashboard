@@ -1,0 +1,47 @@
+:root {
+  --bg: #0b1220;
+  --panel: #0e1726;
+  --panel-2: #0d1422;
+  --text: #e6f0ff;
+  --muted: #94a3b8;
+  --brand: #22d3ee; /* cyan-400 */
+  --brand-2: #10b981; /* emerald-500 */
+  --border: #1f2a44;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; background: var(--bg); color: var(--text); font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif; }
+
+.container { max-width: 1120px; margin: 0 auto; padding: 0 20px; }
+
+.nav { display: flex; align-items: center; justify-content: space-between; height: 64px; }
+.brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; }
+.logo { width: 22px; height: 22px; filter: drop-shadow(0 0 18px rgba(34,211,238,.35)); }
+.nav a { color: var(--muted); text-decoration: none; font-size: 14px; margin-left: 16px; }
+.nav a:hover { color: var(--text); }
+
+.hero { display: grid; gap: 28px; padding: 56px 20px 36px; }
+.hero-content { display: grid; gap: 16px; }
+.hero h1 { font-size: clamp(28px, 5vw, 44px); line-height: 1.1; margin: 0; }
+.subtitle { color: var(--muted); max-width: 720px; }
+.cta { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 4px; }
+
+.button { display: inline-flex; align-items: center; justify-content: center; height: 40px; padding: 0 14px; border-radius: 10px; border: 1px solid var(--border); color: var(--text); text-decoration: none; background: var(--panel); }
+.button:hover { border-color: #334155; background: #111b2c; }
+.button.primary { background: linear-gradient(135deg, var(--brand), var(--brand-2)); border: none; color: #052736; font-weight: 600; box-shadow: 0 8px 26px rgba(16, 185, 129, .25); }
+.button.primary:hover { filter: brightness(1.05); }
+
+.hero-card-list { display: grid; grid-template-columns: repeat(12, 1fr); gap: 14px; }
+.card { grid-column: span 12; background: linear-gradient(180deg, var(--panel), var(--panel-2)); padding: 18px; border: 1px solid var(--border); border-radius: 14px; text-decoration: none; color: var(--text); }
+.card:hover { border-color: #2b3b63; box-shadow: 0 10px 34px rgba(15, 23, 42, .5); }
+.card-kicker { color: var(--brand); font-size: 12px; letter-spacing: .4px; text-transform: uppercase; margin-bottom: 6px; }
+.card-title { font-size: 18px; font-weight: 600; margin-bottom: 4px; }
+.card-desc { color: var(--muted); font-size: 14px; }
+
+@media (min-width: 720px) {
+  .hero-card-list .card { grid-column: span 4; }
+}
+
+.footer { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 24px 20px 44px; color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); margin-top: 24px; }
+.footer a { color: var(--muted); text-decoration: none; }
+.footer a:hover { color: var(--text); }
