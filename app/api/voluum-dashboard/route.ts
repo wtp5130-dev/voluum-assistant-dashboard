@@ -53,7 +53,7 @@ type DashboardKpiCard = {
   positive: boolean;
 };
 
-type DateRangeKey = "today" | "yesterday" | "last7days" | "last30days";
+type DateRangeKey = "today" | "yesterday" | "last7days" | "last30days" | "custom";
 
 /**
  * Simple sleep helper (if you ever want to add spacing between calls)
@@ -340,29 +340,48 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const dateRange =
-    (searchParams.get("dateRange") as DateRangeKey | null) || "last7days";
+  const dateRangeParam = (searchParams.get("dateRange") as DateRangeKey | null) || "last7days";
+  const fromParam = searchParams.get("from");
+  const toParam = searchParams.get("to");
 
-  // Build from/to
-  const to = new Date();
-  // FIX: setUTCMinutes only takes (minutes, seconds, ms)
-  to.setUTCMinutes(0, 0, 0);
+  function parseDateParam(val: string | null, endOfDay: boolean): Date | null {
+    if (!val) return null;
+    // Accept ISO or YYYY-MM-DD
+    if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
+      const t = endOfDay ? "T23:59:59.999Z" : "T00:00:00.000Z";
+      const d = new Date(val + t);
+      return isNaN(d.getTime()) ? null : d;
+    }
+    const d = new Date(val);
+    return isNaN(d.getTime()) ? null : d;
+  }
 
-  const from = new Date(to);
+  let to = parseDateParam(toParam, true) || new Date();
+  // Normalize minutes/seconds if no explicit to provided
+  if (!toParam) to.setUTCMinutes(0, 0, 0);
 
-  if (dateRange === "today") {
-    from.setUTCHours(0, 0, 0, 0);
-  } else if (dateRange === "yesterday") {
-    from.setUTCDate(from.getUTCDate() - 1);
-    from.setUTCHours(0, 0, 0, 0);
-    to.setUTCDate(from.getUTCDate());
-    to.setUTCHours(23, 0, 0, 0);
-  } else if (dateRange === "last30days") {
-    from.setUTCDate(from.getUTCDate() - 30);
-    from.setUTCHours(0, 0, 0, 0);
-  } else {
-    from.setUTCDate(from.getUTCDate() - 7);
-    from.setUTCHours(0, 0, 0, 0);
+  let from = parseDateParam(fromParam, false) || new Date(to);
+
+  if (!fromParam || dateRangeParam !== "custom") {
+    // Use preset ranges when custom not explicitly requested
+    if (dateRangeParam === "today") {
+      from = new Date(to);
+      from.setUTCHours(0, 0, 0, 0);
+    } else if (dateRangeParam === "yesterday") {
+      from = new Date(to);
+      from.setUTCDate(from.getUTCDate() - 1);
+      from.setUTCHours(0, 0, 0, 0);
+      to = new Date(from);
+      to.setUTCHours(23, 59, 59, 999);
+    } else if (dateRangeParam === "last30days") {
+      from = new Date(to);
+      from.setUTCDate(from.getUTCDate() - 30);
+      from.setUTCHours(0, 0, 0, 0);
+    } else if (dateRangeParam === "last7days") {
+      from = new Date(to);
+      from.setUTCDate(from.getUTCDate() - 7);
+      from.setUTCHours(0, 0, 0, 0);
+    }
   }
 
   const fromIso = from.toISOString();
