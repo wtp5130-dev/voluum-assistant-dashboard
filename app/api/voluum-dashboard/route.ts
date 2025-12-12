@@ -53,7 +53,7 @@ type DashboardKpiCard = {
   positive: boolean;
 };
 
-type DateRangeKey = "today" | "yesterday" | "last7days" | "last30days" | "custom";
+type DateRangeKey = "today" | "yesterday" | "last3days" | "last7days" | "last30days" | "custom";
 
 /**
  * Simple sleep helper (if you ever want to add spacing between calls)
@@ -380,6 +380,10 @@ export async function GET(request: Request) {
     } else if (dateRangeParam === "last7days") {
       from = new Date(to);
       from.setUTCDate(from.getUTCDate() - 7);
+      from.setUTCHours(0, 0, 0, 0);
+    } else if (dateRangeParam === "last3days") {
+      from = new Date(to);
+      from.setUTCDate(from.getUTCDate() - 3);
       from.setUTCHours(0, 0, 0, 0);
     }
   }
