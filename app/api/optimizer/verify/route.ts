@@ -25,8 +25,18 @@ async function fetchBlacklistedFromPropeller(campaignId: string): Promise<Set<st
     });
     if (!res.ok) return null;
     const json = await res.json().catch(() => null);
-    const arr: string[] = (json?.zone_ids || json?.zones || json?.data || []) as any[];
-    const set = new Set<string>((arr || []).map((z) => String(z)));
+    const raw: any[] = (json?.zone_ids || json?.zones || json?.data || []) as any[];
+    const arr = Array.isArray(raw) ? raw : [];
+    const mapId = (z: any): string | null => {
+      if (z == null) return null;
+      if (typeof z === "string" || typeof z === "number") return String(z).trim();
+      if (typeof z === "object") {
+        const v = z.zone_id ?? z.zoneId ?? z.id ?? z.zone ?? z.value ?? z.key;
+        return v != null ? String(v).trim() : null;
+      }
+      try { return String(z).trim(); } catch { return null; }
+    };
+    const set = new Set<string>((arr || []).map(mapId).filter((v: any) => typeof v === "string" && v.length > 0) as string[]);
     return set;
   } catch {
     return null;
