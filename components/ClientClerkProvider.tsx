@@ -8,6 +8,10 @@ type Props = {
 };
 
 export default function ClientClerkProvider({ children }: Props) {
-  // Render the client-side Clerk provider to avoid calling next/headers on the server
+  // If Clerk isn't configured, no-op so app falls back to legacy auth
+  const hasClerk = !!process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
+  if (!hasClerk) return <>{children}</>;
+
+  // Render Clerk provider when configured
   return <ClerkProvider>{children}</ClerkProvider>;
 }

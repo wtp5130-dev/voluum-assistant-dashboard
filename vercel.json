@@ -17,6 +17,12 @@
       "has": [{ "type": "host", "value": "projectx.to" }],
       "destination": "https://sidekick.projectx.to/:path*",
       "permanent": true
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "auth.projectx.to" }],
+      "destination": "https://sidekick.projectx.to/login",
+      "permanent": false
     }
   ]
 }
