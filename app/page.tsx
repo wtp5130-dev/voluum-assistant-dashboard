@@ -503,6 +503,7 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
           if (new Date(from) > new Date(to)) {
             [from, to] = [to, from];
           }
+          params.set("dateRange", "custom");
           params.set("from", from);
           params.set("to", to);
         } else {
