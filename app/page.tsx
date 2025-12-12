@@ -2315,6 +2315,38 @@ function OptimizerTab(props: {
   const [syncToast, setSyncToast] = useState<null | { kind: "info" | "success" | "error"; msg: string }>(null);
   const showSyncToast = (msg: string, kind: "info" | "success" | "error" = "info") => setSyncToast({ kind, msg });
 
+  // Campaign → Provider ID mapping (KV-backed)
+  const [mapLoading, setMapLoading] = useState<boolean>(false);
+  const [mapping, setMapping] = useState<Record<string, string>>({});
+  const [mapDrafts, setMapDrafts] = useState<Record<string, string>>({});
+  const optimCampaigns = useMemo(() => (data?.campaigns || []).map(c => ({ id: c.id, name: c.name })).slice(0, 50), [data]);
+  const guessIdFromName = (name?: string) => {
+    if (!name) return "";
+    const m = name.match(/\d{6,}/);
+    return m ? m[0] : "";
+  };
+  const loadMapping = useCallback(async () => {
+    try {
+      setMapLoading(true);
+      const res = await fetch("/api/optimizer/mappings", { cache: "no-store" });
+      const json = await res.json().catch(() => ({}));
+      if (res.ok && json?.mapping) setMapping(json.mapping);
+    } finally {
+      setMapLoading(false);
+    }
+  }, []);
+  useEffect(() => { loadMapping(); }, [loadMapping]);
+  const saveOneMapping = async (dashboardId: string, providerId: string) => {
+    if (!dashboardId || !providerId) return;
+    try {
+      const res = await fetch("/api/optimizer/mappings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dashboardId, providerId }) });
+      if (res.ok) {
+        const j = await res.json().catch(() => ({}));
+        if (j?.mapping) setMapping(j.mapping);
+      }
+    } catch {}
+  };
+
   return (
     <section className="space-y-4">
       <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
@@ -2666,6 +2698,61 @@ function OptimizerTab(props: {
           </div>
         </div>
       )}
+
+      {/* Campaign → Provider ID mapping */}
+      <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4 text-xs">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Campaign ID Mapping</h3>
+          <div className="flex items-center gap-2">
+            <button onClick={loadMapping} className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[11px]">{mapLoading?"Loading…":"Refresh"}</button>
+            <button onClick={()=>{
+              const drafts: Record<string,string> = { ...mapDrafts };
+              for (const c of optimCampaigns) {
+                if (!drafts[c.id] && !mapping[c.id]) {
+                  const g = guessIdFromName(c.name);
+                  if (g) drafts[c.id] = g;
+                }
+              }
+              setMapDrafts(drafts);
+            }} className="px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 text-[11px]">Auto-fill guesses</button>
+          </div>
+        </div>
+        <p className="text-[11px] text-slate-500 mb-2">Paste the numeric Propeller campaign ID next to each dashboard campaign. Click Save to store the link so verification uses the right campaign.</p>
+        {optimCampaigns.length === 0 ? (
+          <p className="text-[11px] text-slate-500">No campaigns in view.</p>
+        ) : (
+          <div className="max-h-56 overflow-auto">
+            <table className="w-full border-collapse">
+              <thead className="bg-slate-900/80 sticky top-0 z-10">
+                <tr className="text-slate-400">
+                  <th className="text-left p-2">Campaign</th>
+                  <th className="text-left p-2">Dashboard ID</th>
+                  <th className="text-left p-2">Propeller ID</th>
+                  <th className="text-right p-2">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {optimCampaigns.map((c) => {
+                  const current = mapping[c.id] || "";
+                  const draft = mapDrafts[c.id] ?? current ?? "";
+                  return (
+                    <tr key={c.id}>
+                      <td className="p-2 text-[11px] text-slate-200">{c.name}</td>
+                      <td className="p-2 text-[10px] text-slate-500">{c.id}</td>
+                      <td className="p-2">
+                        <input value={draft} onChange={(e)=> setMapDrafts(prev=>({ ...prev, [c.id]: e.target.value.replace(/[^0-9]/g, '') }))} placeholder={guessIdFromName(c.name) || "1234567"} className="w-28 bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[11px]" />
+                      </td>
+                      <td className="p-2 text-right">
+                        <button className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={()=> saveOneMapping(c.id, (mapDrafts[c.id] || '').trim())} disabled={!mapDrafts[c.id] && !current}>Save</button>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
       {syncToast && (
         <div className={`fixed bottom-20 right-4 z-50 px-3 py-2 rounded-md text-[11px] shadow-lg border ${syncToast.kind === 'success' ? 'bg-emerald-900/80 text-emerald-100 border-emerald-700' : syncToast.kind === 'error' ? 'bg-rose-900/80 text-rose-100 border-rose-700' : 'bg-slate-900/80 text-slate-100 border-slate-700'}`}>
           <div className="flex items-start gap-3">
