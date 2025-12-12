@@ -676,7 +676,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json(
       {
-        dateRange,
+        dateRange: dateRangeParam,
         from: fromIso,
         to: toIso,
         kpis,
