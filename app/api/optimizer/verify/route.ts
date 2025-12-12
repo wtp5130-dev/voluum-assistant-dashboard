@@ -43,6 +43,22 @@ async function fetchBlacklistedFromPropeller(campaignId: string): Promise<Set<st
   }
 }
 
+/** Resolve dashboard campaignId to provider campaign id using KV mapping when needed */
+async function resolveProviderCampaignId(dashboardId: string): Promise<string> {
+  if (/^\d+$/.test(dashboardId)) return dashboardId;
+  try {
+    // Use same key as apply route
+    const mapping = (await kv.get("mapping:dashboardToProvider")) as
+      | Record<string, string>
+      | null;
+    if (mapping && mapping[dashboardId]) return String(mapping[dashboardId]);
+  } catch {}
+  // Try extracting a long numeric token from dashboard id (or name-like id)
+  const m = dashboardId.match(/(?:^|[^0-9])(\d{6,})(?=$|[^0-9])/);
+  if (m && m[1]) return m[1];
+  return dashboardId;
+}
+
 export async function POST(req: NextRequest): Promise<Response> {
   try {
     if (!process.env.PROPELLER_API_TOKEN) {
@@ -58,12 +74,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     const targets = items && items.length > 0 ? list.filter((e) => items.some((it) => (!it.id || e.id === it.id) && e.campaignId === it.campaignId)) : list;
 
     // Group targets by campaign
-    const byCampaign = new Map<string, any[]>();
+    const byCampaign = new Map<string, { providerCid: string; entries: any[] }>();
     for (const entry of targets) {
       if (entry.reverted) continue; // skip reverted
       const cid = String(entry.campaignId);
-      if (!byCampaign.has(cid)) byCampaign.set(cid, []);
-      byCampaign.get(cid)!.push(entry);
+      const providerCid = await resolveProviderCampaignId(cid);
+      if (!byCampaign.has(providerCid)) byCampaign.set(providerCid, { providerCid, entries: [] });
+      byCampaign.get(providerCid)!.entries.push(entry);
     }
 
     let campaignsProcessed = 0;
@@ -73,11 +90,11 @@ export async function POST(req: NextRequest): Promise<Response> {
     let verifiedFalse = 0;
 
     // Verify each campaign's blacklist
-    for (const [cid, entries] of byCampaign.entries()) {
-      const set = await fetchBlacklistedFromPropeller(cid);
+    for (const [providerCid, bucket] of byCampaign.entries()) {
+      const set = await fetchBlacklistedFromPropeller(providerCid);
       if (!set) { campaignsSkipped++; continue; }
       campaignsProcessed++;
-      for (const e of entries) {
+      for (const e of bucket.entries) {
         const present = set.has(String(e.zoneId));
         entriesChecked++;
         e.verified = present;
