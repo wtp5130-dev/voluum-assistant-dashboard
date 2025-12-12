@@ -14,7 +14,14 @@ export default clerkMiddleware((auth, req) => {
     return NextResponse.next();
   }
   if (isProtectedRoute(req)) {
-    auth().protect();
+    try {
+      auth().protect();
+    } catch (e) {
+      // Fallback: manually redirect to sign-in; satellites will forward to proxy
+      const url = new URL("/sign-in", req.url);
+      url.searchParams.set("redirect_url", req.url);
+      return NextResponse.redirect(url);
+    }
   }
 });
 
