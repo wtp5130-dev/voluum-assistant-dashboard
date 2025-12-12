@@ -2339,7 +2339,8 @@ function OptimizerTab(props: {
   const saveOneMapping = async (dashboardId: string, providerId: string) => {
     if (!dashboardId || !providerId) return;
     try {
-      const res = await fetch("/api/optimizer/mappings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dashboardId, providerId }) });
+      const dashboardName = optimCampaigns.find(c=>c.id===dashboardId)?.name;
+      const res = await fetch("/api/optimizer/mappings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ dashboardId, providerId, dashboardName }) });
       if (res.ok) {
         const j = await res.json().catch(() => ({}));
         if (j?.mapping) setMapping(j.mapping);
