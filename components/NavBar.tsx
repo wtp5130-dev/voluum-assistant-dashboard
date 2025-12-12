@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { SignedIn, SignedOut, SignInButton, SignOutButton, UserButton } from "@clerk/nextjs";
+import { SignedIn, SignedOut, SignInButton, SignUpButton, SignOutButton, UserButton } from "@clerk/nextjs";
 import { usePathname } from "next/navigation";
 
 type Me = { username: string; role: "admin" | "user"; perms: Record<string, boolean> } | null;
@@ -220,6 +220,9 @@ export default function NavBar() {
             <SignInButton mode="modal">
               <button className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Sign in</button>
             </SignInButton>
+            <SignUpButton mode="modal">
+              <button className="text-[11px] px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500">Sign up</button>
+            </SignUpButton>
           </SignedOut>
         </div>
       </div>
