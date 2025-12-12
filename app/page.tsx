@@ -68,8 +68,10 @@ type DashboardData = {
 type DateRangeKey =
   | "today"
   | "yesterday"
+  | "last3days"
   | "last7days"
   | "last30days"
+  | "thismonth"
   | "custom";
 
 type ChatMessage = {
@@ -131,8 +133,10 @@ const AD_TYPES: Record<
 const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
   { key: "today", label: "Today" },
   { key: "yesterday", label: "Yesterday" },
+  { key: "last3days", label: "Last 3 days" },
   { key: "last7days", label: "Last 7 days" },
   { key: "last30days", label: "Last 30 days" },
+  { key: "thismonth", label: "This month" },
   { key: "custom", label: "Custom…" },
 ];
 
