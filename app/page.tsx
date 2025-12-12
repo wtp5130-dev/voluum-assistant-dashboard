@@ -1067,6 +1067,28 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
               </select>
             </div>
 
+            {/* Quick preset pills */}
+            <div className="hidden md:flex flex-wrap items-center gap-1">
+              {(["today", "yesterday", "last3days", "last7days", "last30days", "thismonth"] as DateRangeKey[]).map((key) => {
+                const isActive = dateRange === key;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setDateRange(key)}
+                    className={`text-[10px] px-3 py-1.5 rounded-full border transition ${
+                      isActive
+                        ? "bg-emerald-500 text-slate-900 border-emerald-400"
+                        : "bg-slate-900 border-slate-700 text-slate-200 hover:border-slate-500"
+                    }`}
+                    title={DATE_RANGE_OPTIONS.find((o) => o.key === key)?.label || key}
+                  >
+                    {DATE_RANGE_OPTIONS.find((o) => o.key === key)?.label || key}
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Traffic source selector */}
             <div className="flex flex-col gap-1">
               <label className="text-[10px] uppercase tracking-wide text-slate-500">
