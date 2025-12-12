@@ -43,7 +43,7 @@ type Campaign = {
   }[];
 };
 
-type DateRangeKey = "today" | "yesterday" | "last3days" | "last7days" | "last30days";
+type DateRangeKey = "today" | "yesterday" | "last3days" | "last7days" | "last30days" | "thismonth";
 
 type ChatMessage = {
   role: "user" | "assistant";
@@ -311,6 +311,7 @@ export default function DashboardVoluumAssistant() {
     last3days: "Last 3 days",
     last7days: "Last 7 days",
     last30days: "Last 30 days",
+    thismonth: "This month",
   };
 
   // ------- CHAT: send question to /api/assistant -------
@@ -410,7 +411,7 @@ export default function DashboardVoluumAssistant() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-[11px] text-slate-400">Date range:</span>
               <div className="flex gap-1">
-                {(["today", "yesterday", "last3days", "last7days", "last30days"] as DateRangeKey[]).map(
+                {(["today", "yesterday", "last3days", "last7days", "last30days", "thismonth"] as DateRangeKey[]).map(
                   (key) => {
                     const isActive = selectedDateRange === key;
                     return (
