@@ -2765,8 +2765,24 @@ function OptimizerTab(props: {
                           <input value={draft} onChange={(e)=> setMapDrafts(prev=>({ ...prev, [c.id]: e.target.value.replace(/[^0-9]/g, '') }))} placeholder={guessIdFromName(c.name) || "1234567"} className="w-28 bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[11px]" />
                         )}
                       </td>
-                      <td className="p-2 text-right">
+                      <td className="p-2 text-right space-x-2">
                         <button className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={()=> saveOneMapping(c.id, (mapDrafts[c.id] || '').trim())} disabled={!mapDrafts[c.id] && !current}>Save</button>
+                        <button className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800" onClick={async()=>{
+                          try {
+                            const res = await fetch(`/api/optimizer/propeller/blacklist?dashboardId=${encodeURIComponent(c.id)}`);
+                            const j = await res.json().catch(()=>({}));
+                            if (!res.ok || j?.ok===false) {
+                              showVerifyToast(`Inspect failed${j?.error?`: ${j.error}`:''}`, 'error');
+                            } else {
+                              const items: string[] = Array.isArray(j.items)? j.items : [];
+                              const head = items.slice(0, 20).join(', ');
+                              const msg = `Provider campaign ${j.providerCampaignId}\nFound ${j.total} id(s). Showing up to 20:\n${head || '(none)'}`;
+                              showVerifyToast(msg, 'info');
+                            }
+                          } catch {
+                            showVerifyToast('Inspect failed', 'error');
+                          }
+                        }}>Inspect</button>
                       </td>
                     </tr>
                   );
