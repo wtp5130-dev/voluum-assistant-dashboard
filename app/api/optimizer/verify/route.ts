@@ -3,6 +3,14 @@ import { kv } from "@vercel/kv";
 
 const LIST_KEY = "blacklist:zones";
 
+function normalizeId(v: any): string | null {
+  try {
+    const s = String(v);
+    const digits = s.replace(/\D+/g, "");
+    return digits.length ? digits : s.trim() || null;
+  } catch { return null; }
+}
+
 async function fetchBlacklistedFromPropeller(campaignId: string): Promise<Set<string> | null> {
   const token = process.env.PROPELLER_API_TOKEN;
   if (!token) return null;
@@ -25,18 +33,39 @@ async function fetchBlacklistedFromPropeller(campaignId: string): Promise<Set<st
     });
     if (!res.ok) return null;
     const json = await res.json().catch(() => null);
-    const raw: any[] = (json?.zone_ids || json?.zones || json?.data || []) as any[];
-    const arr = Array.isArray(raw) ? raw : [];
-    const mapId = (z: any): string | null => {
-      if (z == null) return null;
-      if (typeof z === "string" || typeof z === "number") return String(z).trim();
-      if (typeof z === "object") {
-        const v = z.zone_id ?? z.zoneId ?? z.id ?? z.zone ?? z.value ?? z.key;
-        return v != null ? String(v).trim() : null;
+    const ids = new Set<string>();
+    const push = (v: any) => { const n = normalizeId(v); if (n) ids.add(n); };
+    const fromSimpleArrays = (arr: any[]) => {
+      for (const z of arr) {
+        if (z == null) continue;
+        if (typeof z === "string" || typeof z === "number") { push(z); continue; }
+        if (typeof z === "object") {
+          const v = (z as any).zone_id ?? (z as any).zoneId ?? (z as any).publisher_zone_id ?? (z as any).publisherZoneId ?? (z as any).placement_id ?? (z as any).placementId ?? (z as any).id ?? (z as any).zone ?? (z as any).value ?? (z as any).key;
+          if (v != null) push(v);
+        }
       }
-      try { return String(z).trim(); } catch { return null; }
     };
-    const set = new Set<string>((arr || []).map(mapId).filter((v: any) => typeof v === "string" && v.length > 0) as string[]);
+    const raw: any[] = (json?.zone_ids || json?.zones || json?.data || []) as any[];
+    if (Array.isArray(raw)) fromSimpleArrays(raw);
+    // Deep scan as fallback
+    const visit = (node: any, key?: string) => {
+      if (node == null) return;
+      const k = String(key || "");
+      if (typeof node === "string" || typeof node === "number") {
+        // only collect leaf primitives if key suggests id
+        if (/id$/i.test(k) || /(zone|placement)/i.test(k)) push(node);
+        return;
+      }
+      if (Array.isArray(node)) { for (const it of node) visit(it); return; }
+      if (typeof node === "object") {
+        // object with obvious fields
+        const v = (node as any).zone_id ?? (node as any).zoneId ?? (node as any).publisher_zone_id ?? (node as any).publisherZoneId ?? (node as any).placement_id ?? (node as any).placementId ?? (node as any).id ?? (node as any).zone;
+        if (v != null) push(v);
+        for (const [kk, vv] of Object.entries(node)) visit(vv, kk);
+      }
+    };
+    visit(json);
+    const set = ids;
     return set;
   } catch {
     return null;
@@ -95,7 +124,7 @@ export async function POST(req: NextRequest): Promise<Response> {
       if (!set) { campaignsSkipped++; continue; }
       campaignsProcessed++;
       for (const e of bucket.entries) {
-        const present = set.has(String(e.zoneId));
+        const present = set.has(normalizeId(e.zoneId) || "");
         entriesChecked++;
         e.verified = present;
         e.verifiedAt = new Date().toISOString();
