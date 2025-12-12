@@ -7,13 +7,6 @@ const isProtectedRoute = createRouteMatcher([
 ]);
 
 export default clerkMiddleware(
-  {
-    // Explicit absolute sign-in URL for satellite apps
-    signInUrl:
-      process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL || "https://auth.projectx.to/sign-in",
-    // Respect satellite env flag if present
-    isSatellite: process.env.NEXT_PUBLIC_CLERK_IS_SATELLITE === "true",
-  },
   (auth, req) => {
   // Soft-guard: if Clerk env keys are missing, do not crash middleware
   const pk = process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY;
@@ -31,6 +24,13 @@ export default clerkMiddleware(
       return NextResponse.redirect(url);
     }
   }
+  },
+  {
+    // Explicit absolute sign-in URL for satellite apps
+    signInUrl:
+      process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL || "https://auth.projectx.to/sign-in",
+    // Respect satellite env flag if present
+    isSatellite: process.env.NEXT_PUBLIC_CLERK_IS_SATELLITE === "true",
   }
 );
 
