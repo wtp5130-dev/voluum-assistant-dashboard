@@ -30,11 +30,8 @@ export async function middleware(req: NextRequest) {
   const PUBLIC = [/^\/_next\//, /\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)$/i, /^\/favicon\.ico$/, /^\/login$/, /^\/api\/auth\//, /^\/marketing(\/.*)?$/];
   if (PUBLIC.some((re) => re.test(pathname))) return NextResponse.next();
 
-  // Serve marketing homepage for apex host at root
-  const isApex = !/roadmap|whatsapp/i.test(host) && /projectx\.to$/i.test(host);
-  if (isApex && pathname === "/") {
-    return NextResponse.rewrite(new URL("/marketing", req.url));
-  }
+  // This project is the Sidekick app, deployed on sidekick.projectx.to (or any subdomain you assign).
+  // No host-based rewrites here; apex/homepage lives in a separate project.
 
   // Require session cookie
   const session = req.cookies.get("session")?.value;

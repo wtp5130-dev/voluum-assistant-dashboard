@@ -4,19 +4,5 @@
       "path": "/api/optimizer/sync-blacklist",
       "schedule": "0 18 * * *"
     }
-  ],
-  "redirects": [
-    {
-      "source": "/:path*",
-      "has": [{ "type": "host", "value": "www.projectx.to" }],
-      "destination": "https://projectx.to/:path*",
-      "permanent": true
-    },
-    {
-      "source": "/:path*",
-      "has": [{ "type": "host", "value": "auth.projectx.to" }],
-      "destination": "https://projectx.to/login",
-      "permanent": false
-    }
   ]
 }
