@@ -72,7 +72,7 @@ function LoginInner() {
 
 export default function LoginPage() {
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center p-4">
+    <main className="min-h-screen text-slate-100 flex items-center justify-center p-4">
       <div className="w-full max-w-sm">
         <div className="text-center mb-4">
           <h1 className="text-2xl font-semibold">PropellarAds Sidekick</h1>

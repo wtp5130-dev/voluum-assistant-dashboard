@@ -55,7 +55,7 @@ export default function CreativeGalleryPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6">
+    <main className="min-h-screen text-slate-100 p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-4">
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold">Creative Gallery</h1>

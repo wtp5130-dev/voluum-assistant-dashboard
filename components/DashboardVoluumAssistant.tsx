@@ -387,7 +387,7 @@ export default function DashboardVoluumAssistant() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
+    <div className="min-h-screen text-slate-50 flex flex-col">
       {/* Top bar */}
       <header className="border-b border-slate-800 px-6 py-4 flex items-center justify-between">
         <div>

@@ -1001,7 +1001,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
 
   if (loading && !data) {
     return (
-      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+      <main className="min-h-screen text-slate-100 flex items-center justify-center">
         <div className="text-lg font-medium">Loading, BE PATIENT!!</div>
       </main>
     );
@@ -1009,7 +1009,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
 
   if (error) {
     return (
-      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+      <main className="min-h-screen text-slate-100 flex items-center justify-center">
         <div className="max-w-md text-center">
           <h1 className="text-xl font-semibold mb-2">Error</h1>
           <p className="text-sm opacity-80 mb-4">{error}</p>
@@ -1025,14 +1025,14 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
 
   if (!data) {
     return (
-      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+      <main className="min-h-screen text-slate-100 flex items-center justify-center">
         <div>No data</div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 pt-0 px-4 md:px-6 pb-6">
+    <main className="min-h-screen text-slate-100 pt-0 px-4 md:px-6 pb-6">
       <div className="max-w-7xl mx-auto space-y-6">
       {/* Header */}
       <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
