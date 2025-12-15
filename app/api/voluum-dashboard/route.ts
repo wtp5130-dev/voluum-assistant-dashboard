@@ -64,7 +64,16 @@ type DashboardSeriesPoint = {
   cpr: number | null; // cost per signup
 };
 
-type DateRangeKey = "today" | "yesterday" | "last3days" | "last7days" | "last30days" | "thismonth" | "custom";
+type DateRangeKey =
+  | "today"
+  | "yesterday"
+  | "last3days"
+  | "last7days"
+  | "last30days"
+  | "thismonth"
+  | "custom"
+  // treat Voluum-style name as alias of custom
+  | "custom-date-time";
 
 /**
  * Simple sleep helper (if you ever want to add spacing between calls)
@@ -351,7 +360,11 @@ export async function GET(request: Request) {
   }
 
   const { searchParams } = new URL(request.url);
-  const dateRangeParam = (searchParams.get("dateRange") as DateRangeKey | null) || "last7days";
+  const rawDateRange = (searchParams.get("dateRange") as DateRangeKey | null) || null;
+  // Normalize dateRange: support both "custom" and "custom-date-time" as custom
+  const dateRangeParam: DateRangeKey = (rawDateRange === "custom-date-time"
+    ? "custom"
+    : (rawDateRange as DateRangeKey)) || "last7days";
   const fromParam = searchParams.get("from");
   const toParam = searchParams.get("to");
 
@@ -367,40 +380,58 @@ export async function GET(request: Request) {
     return isNaN(d.getTime()) ? null : d;
   }
 
-  let to = parseDateParam(toParam, true) || new Date();
-  // Normalize minutes/seconds if no explicit to provided
-  if (!toParam) to.setUTCMinutes(0, 0, 0);
+  // Determine from/to with clear precedence:
+  // 1) If both from & to are provided, honor them regardless of dateRange value
+  // 2) Else, compute from dateRange presets
+  // 3) Fallback to last7days if nothing provided
+  let to: Date;
+  let from: Date;
 
-  let from = parseDateParam(fromParam, false) || new Date(to);
+  const parsedTo = parseDateParam(toParam, true);
+  const parsedFrom = parseDateParam(fromParam, false);
 
-  if (!fromParam || dateRangeParam !== "custom") {
-    // Use preset ranges when custom not explicitly requested
-    if (dateRangeParam === "today") {
-      from = new Date(to);
-      from.setUTCHours(0, 0, 0, 0);
-    } else if (dateRangeParam === "yesterday") {
-      from = new Date(to);
-      from.setUTCDate(from.getUTCDate() - 1);
-      from.setUTCHours(0, 0, 0, 0);
-      to = new Date(from);
-      to.setUTCHours(23, 59, 59, 999);
-    } else if (dateRangeParam === "last30days") {
-      from = new Date(to);
-      from.setUTCDate(from.getUTCDate() - 30);
-      from.setUTCHours(0, 0, 0, 0);
-    } else if (dateRangeParam === "last7days") {
-      from = new Date(to);
-      from.setUTCDate(from.getUTCDate() - 7);
-      from.setUTCHours(0, 0, 0, 0);
-    } else if (dateRangeParam === "last3days") {
-      from = new Date(to);
-      from.setUTCDate(from.getUTCDate() - 3);
-      from.setUTCHours(0, 0, 0, 0);
-    } else if (dateRangeParam === "thismonth") {
-      from = new Date(to);
-      // set to first day of this month UTC
-      from.setUTCDate(1);
-      from.setUTCHours(0, 0, 0, 0);
+  if (parsedFrom && parsedTo) {
+    from = parsedFrom;
+    to = parsedTo;
+  } else {
+    // Start with 'to' as now or parsed value if only one provided
+    to = parsedTo || new Date();
+    if (!toParam && !parsedTo) {
+      // Normalize minutes/seconds when using "now" default
+      to.setUTCMinutes(0, 0, 0);
+    }
+
+    from = parsedFrom || new Date(to);
+
+    // If from/to not fully provided, use preset ranges unless explicit custom
+    if (!parsedFrom || !parsedTo || dateRangeParam !== "custom") {
+      if (dateRangeParam === "today") {
+        from = new Date(to);
+        from.setUTCHours(0, 0, 0, 0);
+      } else if (dateRangeParam === "yesterday") {
+        from = new Date(to);
+        from.setUTCDate(from.getUTCDate() - 1);
+        from.setUTCHours(0, 0, 0, 0);
+        to = new Date(from);
+        to.setUTCHours(23, 59, 59, 999);
+      } else if (dateRangeParam === "last30days") {
+        from = new Date(to);
+        from.setUTCDate(from.getUTCDate() - 30);
+        from.setUTCHours(0, 0, 0, 0);
+      } else if (dateRangeParam === "last7days") {
+        from = new Date(to);
+        from.setUTCDate(from.getUTCDate() - 7);
+        from.setUTCHours(0, 0, 0, 0);
+      } else if (dateRangeParam === "last3days") {
+        from = new Date(to);
+        from.setUTCDate(from.getUTCDate() - 3);
+        from.setUTCHours(0, 0, 0, 0);
+      } else if (dateRangeParam === "thismonth") {
+        from = new Date(to);
+        // set to first day of this month UTC
+        from.setUTCDate(1);
+        from.setUTCHours(0, 0, 0, 0);
+      }
     }
   }
 
