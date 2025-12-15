@@ -1,7 +1,6 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import { SignedIn, SignedOut, SignInButton, SignOutButton, UserButton } from "@clerk/nextjs";
 import { usePathname } from "next/navigation";
 
 type Me = { username: string; role: "admin" | "user"; perms: Record<string, boolean> } | null;
@@ -209,18 +208,22 @@ export default function NavBar() {
               Admin
             </a>
           )}
-          {/* Clerk auth controls */}
-          <SignedIn>
-            <UserButton afterSignOutUrl="/" />
-            <SignOutButton>
-              <button className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Sign out</button>
-            </SignOutButton>
-          </SignedIn>
-          <SignedOut>
-            <SignInButton mode="modal">
-              <button className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Sign in</button>
-            </SignInButton>
-          </SignedOut>
+          {/* Legacy auth controls only */}
+          {!loading && me ? (
+            <button
+              onClick={signOut}
+              className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+            >
+              Sign out
+            </button>
+          ) : (
+            <a
+              href="/login"
+              className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+            >
+              Sign in
+            </a>
+          )}
         </div>
       </div>
     </div>

@@ -13,11 +13,19 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // Allow configuring the background image via env var or default to /bg.jpg
+  const bgUrl = process.env.NEXT_PUBLIC_BACKGROUND_IMAGE_URL || "/bg.jpg";
   return (
     <ClientClerkProvider>
       <html lang="en">
         {/* If you’re using a font, add className={inter.className} */}
-        <body>
+        <body
+          style={{
+            // Expose as CSS variable so globals.css can pick it up
+            // @ts-ignore - custom CSS var
+            "--app-bg-image": `url('${bgUrl}')`,
+          }}
+        >
           <NavBar />
           <div className="pt-3">{children}</div>
         </body>

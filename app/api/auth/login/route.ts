@@ -18,13 +18,14 @@ export async function POST(req: Request) {
     // 1) Try KV users
     const list = (await kv.get("auth:users")) as any[] | null;
     let ok = false;
+    let isKvUser = false;
     if (Array.isArray(list)) {
       const urec = list.find((u) => u.username === username);
       if (urec && urec.hash) {
         const enc = new TextEncoder();
         const hashBuf = await crypto.subtle.digest("SHA-256", enc.encode(`${secret}:${password}`));
         const hashB64 = Buffer.from(new Uint8Array(hashBuf)).toString("base64");
-        if (hashB64 === urec.hash) ok = true;
+        if (hashB64 === urec.hash) { ok = true; isKvUser = true; }
       }
     }
 
@@ -50,6 +51,22 @@ export async function POST(req: Request) {
     const sigB64 = Buffer.from(sigBuf).toString("base64");
     const token = `${payloadB64}.${sigB64}`;
 
+    // Update lastLogin and audit trail
+    try {
+      if (isKvUser) {
+        const list2 = (await kv.get("auth:users")) as any[] | null;
+        const arr = Array.isArray(list2) ? list2 : [];
+        const idx = arr.findIndex((u) => u.username === username);
+        if (idx >= 0) {
+          arr[idx] = { ...arr[idx], lastLogin: new Date().toISOString() };
+          await kv.set("auth:users", arr);
+        }
+      }
+      const audit = { id: crypto.randomUUID(), ts: new Date().toISOString(), category: "auth", action: "login", username, ok: true };
+      await kv.lpush("audit:events", audit);
+      await kv.ltrim("audit:events", 0, 999);
+    } catch {}
+
     const res = NextResponse.json({ ok: true });
     res.cookies.set("session", token, {
       httpOnly: true,
@@ -60,6 +77,11 @@ export async function POST(req: Request) {
     });
     return res;
   } catch (err: any) {
+    try {
+      const audit = { id: crypto.randomUUID(), ts: new Date().toISOString(), category: "auth", action: "login", ok: false, error: err?.message || String(err) };
+      await kv.lpush("audit:events", audit);
+      await kv.ltrim("audit:events", 0, 999);
+    } catch {}
     return NextResponse.json({ error: err?.message || String(err) }, { status: 500 });
   }
 }

@@ -22,7 +22,16 @@
 }
 
 body {
-  background: var(--background);
+  /* Background image across all pages */
+  /* The image URL is provided via CSS var --app-bg-image (set in layout.tsx). */
+  /* Fallback to a dark gradient if the image is missing. */
+  background-color: #000;
+  background-image: var(--app-bg-image), radial-gradient(1200px 800px at 10% 80%, rgba(244, 63, 94, 0.2), rgba(0,0,0,0) 60%), radial-gradient(1200px 800px at 90% 20%, rgba(56, 189, 248, 0.2), rgba(0,0,0,0) 60%);
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-position: center center, left bottom, right top;
+  background-size: cover, 1200px 800px, 1200px 800px;
+  background-attachment: fixed, fixed, fixed;
+
   color: var(--foreground);
   font-family: var(--font-geist-sans);
   font-size: 14px;

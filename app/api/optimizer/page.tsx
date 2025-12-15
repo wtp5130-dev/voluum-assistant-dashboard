@@ -417,7 +417,7 @@ export default function OptimizerPage() {
 
   if (loading && !data) {
     return (
-      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+      <main className="min-h-screen text-slate-100 flex items-center justify-center">
         <div className="text-lg font-medium">
           Loading dashboard data for optimizer…
         </div>
@@ -427,7 +427,7 @@ export default function OptimizerPage() {
 
   if (error && !data) {
     return (
-      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+      <main className="min-h-screen text-slate-100 flex items-center justify-center">
         <div className="max-w-md text-center">
           <h1 className="text-xl font-semibold mb-2">Error</h1>
           <p className="text-sm opacity-80 mb-4">{error}</p>
@@ -443,7 +443,7 @@ export default function OptimizerPage() {
 
   if (!data) {
     return (
-      <main className="min-h-screen bg-slate-950 text-slate-100 flex items-center justify-center">
+      <main className="min-h-screen text-slate-100 flex items-center justify-center">
         <div>No data</div>
       </main>
     );
@@ -561,7 +561,7 @@ export default function OptimizerPage() {
   }, [previewResult]);
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6">
+    <main className="min-h-screen text-slate-100 p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
       {/* Header + Controls */}
       <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">

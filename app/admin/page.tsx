@@ -94,7 +94,7 @@ export default function AdminPage() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6">
+    <main className="min-h-screen text-slate-100 p-4 md:p-6">
       <div className="max-w-6xl mx-auto space-y-6">
       <header className="flex items-center justify-between">
         <div>

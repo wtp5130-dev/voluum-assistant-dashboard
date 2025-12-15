@@ -1,9 +1,9 @@
 import { cookies } from "next/headers";
 import { kv } from "@vercel/kv";
 
-export type PermKey = "dashboard" | "optimizer" | "creatives" | "builder";
+export type PermKey = "dashboard" | "optimizer" | "creatives" | "builder" | "sidekick" | "roadmap" | "whatsapp";
 
-type Perms = { dashboard: boolean; optimizer: boolean; creatives: boolean; builder: boolean };
+type Perms = { dashboard: boolean; optimizer: boolean; creatives: boolean; builder: boolean; sidekick?: boolean; roadmap?: boolean; whatsapp?: boolean };
 type UserRec = { username: string; role: "admin" | "user"; hash: string; perms: Perms };
 
 function parseToken(token: string | undefined) {
@@ -30,10 +30,10 @@ export async function getCurrentUser(): Promise<{ username: string; role: "admin
   }
 
   if (username === (process.env.AUTH_USERNAME || "admin")) {
-    return { username, role: "admin", perms: { dashboard: true, optimizer: true, creatives: true, builder: true } };
+    return { username, role: "admin", perms: { dashboard: true, optimizer: true, creatives: true, builder: true, sidekick: true, roadmap: true, whatsapp: true } };
   }
 
-  return { username, role: "user", perms: { dashboard: true, optimizer: false, creatives: false, builder: false } };
+  return { username, role: "user", perms: { dashboard: true, optimizer: false, creatives: false, builder: false, sidekick: true, roadmap: false, whatsapp: false } };
 }
 
 export async function requirePermission(key: PermKey): Promise<boolean> {
