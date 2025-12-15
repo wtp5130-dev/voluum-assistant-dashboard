@@ -63,6 +63,7 @@ type DashboardData = {
   to: string;
   kpis: KPI[];
   campaigns: Campaign[];
+  series?: SeriesPoint[];
 };
 
 type DateRangeKey =
@@ -77,6 +78,17 @@ type DateRangeKey =
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+};
+
+type SeriesPoint = {
+  date: string;
+  cost: number;
+  revenue: number;
+  profit: number;
+  signups: number;
+  deposits: number;
+  cpa: number | null;
+  cpr: number | null;
 };
 
 type TabKey = "dashboard" | "optimizer" | "creatives" | "builder" | "audit" | "updates";
@@ -1949,6 +1961,39 @@ function DashboardTab(props: {
 
       {/* Right: Details + Chat */}
       <div className="flex flex-col gap-4">
+        {/* Trends */}
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+              Trends
+            </h3>
+            <span className="text-[10px] text-slate-500">{(data.series?.length ?? 0)} points</span>
+          </div>
+          {(!data.series || data.series.length === 0) ? (
+            <p className="text-[11px] text-slate-500">No time series available for this range.</p>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-3">
+              <TrendCard
+                title="Profit"
+                values={data.series.map((p)=> p.profit)}
+                color="#10b981"
+                formatter={formatMoney}
+              />
+              <TrendCard
+                title="CPA (per deposit)"
+                values={data.series.map((p)=> (p.cpa ?? 0))}
+                color="#06b6d4"
+                formatter={formatMoney}
+              />
+              <TrendCard
+                title="CPR (per signup)"
+                values={data.series.map((p)=> (p.cpr ?? 0))}
+                color="#8b5cf6"
+                formatter={formatMoney}
+              />
+            </div>
+          )}
+        </div>
         {/* Campaign details */}
         <div className="space-y-4">
           <div className="rounded-xl border border-slate-800 bg-slate-900/60">
@@ -2218,6 +2263,53 @@ function DashboardTab(props: {
         </div>
       </div>
     </section>
+  );
+}
+
+/** Lightweight line chart (SVG) used in Trends */
+function MiniLineChart({ values, color = "#10b981", width = 280, height = 80 }: { values: number[]; color?: string; width?: number; height?: number }) {
+  const padding = 8;
+  const w = width;
+  const h = height;
+  const n = Math.max(0, values.length);
+  const domainMin = Math.min(...values, 0);
+  const domainMax = Math.max(...values, 1);
+  const span = domainMax - domainMin || 1;
+  const x = (i: number) => padding + (n <= 1 ? 0 : (i * (w - padding * 2)) / (n - 1));
+  const y = (v: number) => h - padding - ((v - domainMin) / span) * (h - padding * 2);
+  const d = values.map((v, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(v)}`).join(" ");
+  return (
+    <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.35" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      {/* Area */}
+      {n > 1 && (
+        <path
+          d={`${d} L ${x(n - 1)},${y(domainMin)} L ${x(0)},${y(domainMin)} Z`}
+          fill="url(#grad)"
+          stroke="none"
+        />
+      )}
+      {/* Line */}
+      <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+function TrendCard({ title, values, color, formatter }: { title: string; values: number[]; color: string; formatter: (n: number) => string }) {
+  const last = values.length ? values[values.length - 1] : 0;
+  return (
+    <div className="border border-slate-800 rounded-lg p-3 bg-slate-950/40">
+      <div className="flex items-baseline justify-between mb-1">
+        <div className="text-[11px] text-slate-400">{title}</div>
+        <div className="text-[11px] font-medium text-slate-200">{formatter(last)}</div>
+      </div>
+      <MiniLineChart values={values} color={color} />
+    </div>
   );
 }
 

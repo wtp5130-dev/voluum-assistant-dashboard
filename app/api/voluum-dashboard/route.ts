@@ -53,6 +53,17 @@ type DashboardKpiCard = {
   positive: boolean;
 };
 
+type DashboardSeriesPoint = {
+  date: string; // ISO or YYYY-MM-DD
+  cost: number;
+  revenue: number;
+  profit: number;
+  signups: number;
+  deposits: number;
+  cpa: number | null; // cost per deposit
+  cpr: number | null; // cost per signup
+};
+
 type DateRangeKey = "today" | "yesterday" | "last3days" | "last7days" | "last30days" | "thismonth" | "custom";
 
 /**
@@ -679,6 +690,62 @@ export async function GET(request: Request) {
       },
     ];
 
+    // 4) Daily time series (group by day)
+    let series: DashboardSeriesPoint[] = [];
+    try {
+      const tsParams = new URLSearchParams({
+        reportType: "table",
+        limit: "500",
+        dateRange: "custom-date-time",
+        from: fromIso,
+        to: toIso,
+        searchMode: "TEXT",
+        offset: "0",
+        currency: "MYR",
+        sort: "visits",
+        direction: "ASC",
+        groupBy: "day",
+        conversionTimeMode: "CONVERSION",
+        tz: "Asia/Singapore",
+      });
+      const tsColumns = [
+        "visits",
+        "conversions",
+        "customConversions1",
+        "customConversions2",
+        "revenue",
+        "cost",
+        "profit",
+        "roi",
+      ];
+      tsColumns.forEach((c) => tsParams.append("column", c));
+      const tsUrl = `${base.replace(/\/$/, "")}/report?${tsParams.toString()}`;
+      const tsRes = await fetch(tsUrl, {
+        method: "GET",
+        headers: { "cwauth-token": token, Accept: "application/json" },
+      });
+      const tsText = await tsRes.text();
+      let tsJson: any = null;
+      try { tsJson = tsText ? JSON.parse(tsText) : null; } catch {}
+      const tsRows: any[] = (tsJson?.rows || tsJson?.data || []) as any[];
+      if (Array.isArray(tsRows) && tsRows.length > 0) {
+        series = tsRows.map((r, idx) => {
+          const revenue = Number(r.revenue ?? 0);
+          const cost = Number(r.cost ?? 0);
+          const profit = Number(typeof r.profit === "number" ? r.profit : revenue - cost);
+          const signups = Number(r.customConversions1 ?? 0);
+          const deposits = Number(r.customConversions2 ?? 0);
+          const cpa = deposits > 0 ? cost / deposits : null;
+          const cpr = signups > 0 ? cost / signups : null;
+          const d = String(r.day || r.date || r.startTime || r.ts || r.dayAsDate || "");
+          return { date: d || String(idx), cost, revenue, profit, signups, deposits, cpa, cpr };
+        });
+      }
+    } catch (e) {
+      // ignore series failures to keep dashboard resilient
+      console.warn("[Voluum] daily series failed:", e);
+    }
+
     return NextResponse.json(
       {
         dateRange: dateRangeParam,
@@ -686,6 +753,7 @@ export async function GET(request: Request) {
         to: toIso,
         kpis,
         campaigns,
+        series,
       },
       { status: 200 }
     );
