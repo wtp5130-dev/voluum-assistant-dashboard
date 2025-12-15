@@ -2259,7 +2259,24 @@ function OptimizerTab(props: {
     syncLoading,
   } = props;
 
-  const zonesToPause = previewResult?.zonesToPauseNow ?? [];
+  // Always show zones sorted by most visits (desc)
+  const zonesToPauseRaw = previewResult?.zonesToPauseNow ?? [];
+  const zonesToPause = useMemo(() => {
+    const list = Array.isArray(zonesToPauseRaw) ? [...zonesToPauseRaw] : [];
+    return list.sort((a: any, b: any) => {
+      const av = (a?.metrics?.visits ?? a?.visits ?? 0) as number;
+      const bv = (b?.metrics?.visits ?? b?.visits ?? 0) as number;
+      const v = bv - av;
+      if (v !== 0) return v;
+      const ac = (a?.metrics?.conversions ?? a?.conversions ?? 0) as number;
+      const bc = (b?.metrics?.conversions ?? b?.conversions ?? 0) as number;
+      const c = bc - ac;
+      if (c !== 0) return c;
+      const ar = (a?.metrics?.revenue ?? a?.revenue ?? 0) as number;
+      const br = (b?.metrics?.revenue ?? b?.revenue ?? 0) as number;
+      return br - ar;
+    });
+  }, [zonesToPauseRaw]);
   // Selection state for previewed zones
   const [selectedZoneIds, setSelectedZoneIds] = useState<Set<string>>(new Set());
   const zoneKey = (z: any) => `${String(z?.campaignId ?? z?.campaign ?? "")}__${String(z?.zoneId ?? z?.zone ?? "")}`;
@@ -2492,7 +2509,7 @@ function OptimizerTab(props: {
                     </th>
                     <th className="text-left p-2">Campaign</th>
                     <th className="text-left p-2">Zone</th>
-                    <th className="text-right p-2">Visits</th>
+                    <th className="text-right p-2">Visits ▼</th>
                     <th className="text-right p-2">Signups</th>
                     <th className="text-right p-2">Deps</th>
                     <th className="text-right p-2">Cost</th>
