@@ -690,15 +690,22 @@ export async function GET(request: Request) {
       },
     ];
 
-    // 4) Daily time series (group by day)
+    // 4) Daily time series (group by day) – always last 30 days ending at current 'to'
     let series: DashboardSeriesPoint[] = [];
     try {
+      // Compute fixed 30-day window regardless of requested dashboard range
+      const seriesToDate = new Date(toIso);
+      const seriesFromDate = new Date(seriesToDate);
+      seriesFromDate.setUTCDate(seriesFromDate.getUTCDate() - 30);
+      seriesFromDate.setUTCHours(0, 0, 0, 0);
+      const seriesFromIso = seriesFromDate.toISOString();
+      const seriesToIso = seriesToDate.toISOString();
       const tsParams = new URLSearchParams({
         reportType: "table",
         limit: "500",
         dateRange: "custom-date-time",
-        from: fromIso,
-        to: toIso,
+        from: seriesFromIso,
+        to: seriesToIso,
         searchMode: "TEXT",
         offset: "0",
         currency: "MYR",
