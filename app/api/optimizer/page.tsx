@@ -547,6 +547,19 @@ export default function OptimizerPage() {
     setSelectedZoneIds(next);
   };
 
+  // Always show zones sorted by most visits (desc)
+  const zonesSortedByVisits = useMemo(() => {
+    if (!previewResult?.zonesToPauseNow) return [] as ZonePauseSuggestion[];
+    return [...previewResult.zonesToPauseNow].sort((a, b) => {
+      const v = (b.metrics?.visits ?? 0) - (a.metrics?.visits ?? 0);
+      if (v !== 0) return v;
+      // tie-breakers for stable, meaningful order
+      const c = (b.metrics?.conversions ?? 0) - (a.metrics?.conversions ?? 0);
+      if (c !== 0) return c;
+      return (b.metrics?.revenue ?? 0) - (a.metrics?.revenue ?? 0);
+    });
+  }, [previewResult]);
+
   return (
     <main className="min-h-screen bg-slate-950 text-slate-100 p-4 md:p-6">
       <div className="max-w-7xl mx-auto space-y-6">
@@ -797,8 +810,8 @@ export default function OptimizerPage() {
           )}
 
           {previewResult &&
-            previewResult.zonesToPauseNow &&
-            previewResult.zonesToPauseNow.length > 0 && (
+            zonesSortedByVisits &&
+            zonesSortedByVisits.length > 0 && (
               <div className="max-h-80 overflow-auto text-[11px]">
                 <table className="w-full border-collapse">
                   <thead className="bg-slate-900/80 sticky top-0 z-10">
@@ -815,7 +828,7 @@ export default function OptimizerPage() {
                       <th className="text-left p-2">Campaign</th>
                       <th className="text-left p-2">Traffic source</th>
                       <th className="text-left p-2">Zone ID</th>
-                      <th className="text-right p-2">Visits</th>
+                      <th className="text-right p-2">Visits ▼</th>
                       <th className="text-right p-2">Conv</th>
                       <th className="text-right p-2">Signups</th>
                       <th className="text-right p-2">Deps</th>
@@ -826,7 +839,7 @@ export default function OptimizerPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {previewResult.zonesToPauseNow.map((z, idx) => {
+                    {zonesSortedByVisits.map((z, idx) => {
                       const key = zoneKey(z);
                       const isChecked = selectedZoneIds.has(key);
                       return (
