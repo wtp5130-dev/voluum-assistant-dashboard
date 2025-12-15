@@ -1812,6 +1812,42 @@ function DashboardTab(props: {
     sendChat,
   } = props;
 
+  // Aggregate daily series into weekly series (Mon–Sun ISO weeks)
+  const weeklySeries = useMemo(() => {
+    const src = data?.series ?? [];
+    if (!Array.isArray(src) || src.length === 0) return [] as SeriesPoint[];
+    const byKey = new Map<string, { date: string; cost: number; revenue: number; profit: number; signups: number; deposits: number }>();
+    for (const p of src) {
+      const d = new Date(p.date);
+      if (isNaN(d.getTime())) continue;
+      // ISO week start (Monday)
+      const day = d.getDay(); // 0..6, Sun=0
+      const diffToMon = (day + 6) % 7; // days since Monday
+      const sow = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+      sow.setUTCDate(sow.getUTCDate() - diffToMon);
+      sow.setUTCHours(0, 0, 0, 0);
+      const key = sow.toISOString().slice(0, 10); // YYYY-MM-DD (Mon)
+      const cur = byKey.get(key) || { date: key, cost: 0, revenue: 0, profit: 0, signups: 0, deposits: 0 };
+      cur.cost += p.cost || 0;
+      cur.revenue += p.revenue || 0;
+      cur.profit += p.profit || (p.revenue || 0) - (p.cost || 0);
+      cur.signups += p.signups || 0;
+      cur.deposits += p.deposits || 0;
+      byKey.set(key, cur);
+    }
+    const out = Array.from(byKey.values()).sort((a, b) => a.date.localeCompare(b.date));
+    return out.map((r) => ({
+      date: r.date,
+      cost: r.cost,
+      revenue: r.revenue,
+      profit: r.profit,
+      signups: r.signups,
+      deposits: r.deposits,
+      cpa: r.deposits > 0 ? r.cost / r.deposits : null,
+      cpr: r.signups > 0 ? r.cost / r.signups : null,
+    }));
+  }, [data?.series]);
+
   // Guided tour for Creative Doctor
   const [doctorTourOpen, setDoctorTourOpen] = useState<boolean>(false);
   const [doctorTourStep, setDoctorTourStep] = useState<number>(0);
@@ -1961,33 +1997,33 @@ function DashboardTab(props: {
 
       {/* Right: Details + Chat */}
       <div className="flex flex-col gap-4">
-        {/* Trends */}
+        {/* Trends (weekly) */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-              Trends
+              Trends (weekly)
             </h3>
-            <span className="text-[10px] text-slate-500">{(data.series?.length ?? 0)} points</span>
+            <span className="text-[10px] text-slate-500">{(weeklySeries.length)} points</span>
           </div>
-          {(!data.series || data.series.length === 0) ? (
+          {(weeklySeries.length === 0) ? (
             <p className="text-[11px] text-slate-500">No time series available for this range.</p>
           ) : (
             <div className="grid gap-4 md:grid-cols-3">
               <TrendCard
                 title="Profit"
-                values={data.series.map((p)=> p.profit)}
+                values={weeklySeries.map((p)=> p.profit)}
                 color="#10b981"
                 formatter={formatMoney}
               />
               <TrendCard
                 title="CPA (per deposit)"
-                values={data.series.map((p)=> (p.cpa ?? 0))}
+                values={weeklySeries.map((p)=> (p.cpa ?? 0))}
                 color="#06b6d4"
                 formatter={formatMoney}
               />
               <TrendCard
                 title="CPR (per signup)"
-                values={data.series.map((p)=> (p.cpr ?? 0))}
+                values={weeklySeries.map((p)=> (p.cpr ?? 0))}
                 color="#8b5cf6"
                 formatter={formatMoney}
               />
