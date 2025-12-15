@@ -526,7 +526,8 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
         const res = await fetch(url);
 
         if (!res.ok) {
-          throw new Error(`Failed to fetch (${res.status})`);
+          const txt = await res.text().catch(() => "");
+          throw new Error(`Failed to fetch (${res.status})${txt ? `: ${txt.slice(0, 300)}` : ""}`);
         }
 
         const json = (await res.json()) as DashboardData;
