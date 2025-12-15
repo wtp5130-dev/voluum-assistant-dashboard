@@ -404,6 +404,13 @@ export async function GET(request: Request) {
     }
   }
 
+  // Safety: if caller provided custom range with from > to, swap to avoid provider errors
+  if (from.getTime() > to.getTime()) {
+    const tmp = from;
+    from = to;
+    to = tmp;
+  }
+
   const fromIso = from.toISOString();
   const toIso = to.toISOString();
 
