@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 
-type Perms = { dashboard: boolean; optimizer: boolean; creatives: boolean; builder: boolean; sidekick?: boolean; roadmap?: boolean; whatsapp?: boolean };
+type Perms = { dashboard: boolean; optimizer: boolean; creatives: boolean; builder: boolean; sidekick?: boolean };
 type User = { username?: string; email?: string; role: "admin" | "user"; perms: Perms; createdAt?: string | null; lastLogin?: string | null };
 
 export default function AdminUsersPage() {
@@ -15,7 +15,7 @@ export default function AdminUsersPage() {
       email: "",
       password: "",
       role: "user",
-      perms: { dashboard: true, optimizer: false, creatives: false, builder: false, sidekick: true, roadmap: false, whatsapp: false },
+      perms: { dashboard: true, optimizer: false, creatives: false, builder: false, sidekick: true },
     }
   );
 
@@ -117,7 +117,7 @@ export default function AdminUsersPage() {
           </div>
         </div>
         <div className="mt-3 grid gap-2 md:grid-cols-3 text-xs">
-          {(["dashboard", "optimizer", "creatives", "builder", "sidekick", "roadmap", "whatsapp"] as (keyof Perms)[]).map((k) => (
+          {["dashboard", "optimizer", "creatives", "builder", "sidekick"] as (keyof Perms)[]).map((k) => (
             <label key={k} className="inline-flex items-center gap-2">
               <input
                 type="checkbox"
@@ -178,8 +178,6 @@ export default function AdminUsersPage() {
                               creatives: !!u.perms.creatives,
                               builder: !!u.perms.builder,
                               sidekick: !!u.perms.sidekick,
-                              roadmap: !!u.perms.roadmap,
-                              whatsapp: !!u.perms.whatsapp,
                             },
                           })
                         }

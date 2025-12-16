@@ -5,7 +5,7 @@ import { authOptions } from "@/lib/auth";
 
 const KEY = "auth:users";
 
-type Perms = { dashboard: boolean; optimizer: boolean; creatives: boolean; builder: boolean };
+type Perms = { dashboard: boolean; optimizer: boolean; creatives: boolean; builder: boolean; sidekick?: boolean };
 
 type UserRec = { username?: string; email?: string; role: "admin" | "user"; hash?: string; perms: Perms };
 
@@ -25,8 +25,8 @@ export async function GET() {
 
   // Fallback env admin
   if (username === (process.env.AUTH_USERNAME || "admin")) {
-    return NextResponse.json({ user: { username, role: "admin", perms: { dashboard: true, optimizer: true, creatives: true, builder: true } } });
+    return NextResponse.json({ user: { username, role: "admin", perms: { dashboard: true, optimizer: true, creatives: true, builder: true, sidekick: true } } });
   }
 
-  return NextResponse.json({ user: { username, role: "user", perms: { dashboard: true, optimizer: false, creatives: false, builder: false } } });
+  return NextResponse.json({ user: { username, role: "user", perms: { dashboard: true, optimizer: false, creatives: false, builder: false, sidekick: true } } });
 }

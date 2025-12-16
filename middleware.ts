@@ -16,12 +16,7 @@ function parseToken(token: string | undefined): string | null {
   }
 }
 
-function hostToAppKey(host: string): "sidekick" | "roadmap" | "whatsapp" | "sidekick" {
-  const h = host.toLowerCase();
-  if (h.includes("roadmap")) return "roadmap";
-  if (h.includes("whatsapp")) return "whatsapp";
-  return "sidekick";
-}
+// This project only serves sidekick.projectx.to. Keep a single app key: "sidekick".
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
@@ -31,8 +26,7 @@ export async function middleware(req: NextRequest) {
   const PUBLIC = [/^\/_next\//, /\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)$/i, /^\/favicon\.ico$/, /^\/login$/, /^\/api\/auth\//, /^\/marketing(\/.*)?$/];
   if (PUBLIC.some((re) => re.test(pathname))) return NextResponse.next();
 
-  // This project is the Sidekick app, deployed on sidekick.projectx.to (or any subdomain you assign).
-  // No host-based rewrites here; apex/homepage lives in a separate project.
+  // This project is the Sidekick app, deployed on sidekick.projectx.to only.
 
   // Try NextAuth JWT first, then fallback to legacy session cookie
   let username: string | null = null;
@@ -52,21 +46,20 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  // Enforce app-level permission per host
+  // Enforce app-level permission for Sidekick only
   let allowed = false;
   try {
     const list = (await kv.get(USERS_KEY)) as any[] | null;
-    const appKey = hostToAppKey(host);
     if (Array.isArray(list)) {
       const rec = list.find((u) => (u.username === username) || (u.email === username));
       const admin = rec?.role === "admin" || username === (process.env.AUTH_USERNAME || "admin");
       const perms = rec?.perms || {};
-      allowed = admin || Boolean(perms[appKey] ?? (appKey === "sidekick"));
+      // Allow admins or users with sidekick permission. Default to true if unspecified to avoid lockout.
+      allowed = admin || Boolean(perms.sidekick ?? true);
     } else {
-      // Fallback: allow admin, allow sidekick by default
+      // Fallback: allow admin; otherwise allow by default for Sidekick
       const admin = username === (process.env.AUTH_USERNAME || "admin");
-      const appKey = hostToAppKey(host);
-      allowed = admin || appKey === "sidekick";
+      allowed = admin || true;
     }
   } catch {
     // If KV fails, allow but still require login
@@ -80,7 +73,6 @@ export async function middleware(req: NextRequest) {
       await kv.ltrim("audit:events", 0, 999);
     } catch {}
     const url = new URL("/no-access", req.url);
-    url.searchParams.set("app", hostToAppKey(host));
     return NextResponse.redirect(url);
   }
 

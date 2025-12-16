@@ -11,8 +11,6 @@ type Perms = {
   creatives: boolean;
   builder: boolean;
   sidekick?: boolean;
-  roadmap?: boolean;
-  whatsapp?: boolean;
 };
 
 type UserRec = { username?: string; email?: string; role: "admin" | "user"; hash?: string; perms: Perms; createdAt?: string; lastLogin?: string };
@@ -66,7 +64,7 @@ export async function POST(req: NextRequest) {
   const list: UserRec[] = (await kv.get(KEY)) as any;
   const arr = Array.isArray(list) ? list : [];
   const existing = arr.findIndex((x) => x.username === email || x.email === email);
-  const defaultPerms: Perms = { dashboard: true, optimizer: false, creatives: false, builder: false, sidekick: true, roadmap: false, whatsapp: false };
+  const defaultPerms: Perms = { dashboard: true, optimizer: false, creatives: false, builder: false, sidekick: true };
   const targetPerms: Perms = {
     ...(existing >= 0 ? arr[existing].perms : defaultPerms),
     ...(permsBody || {}),
