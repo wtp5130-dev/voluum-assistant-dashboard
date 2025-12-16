@@ -31,7 +31,11 @@ async function isAdminUser(username: string | null): Promise<boolean> {
   if (!username) return false;
   if (username === (process.env.AUTH_USERNAME || "admin")) return true;
   const list: UserRec[] = (await kv.get(KEY)) as any;
-  if (!Array.isArray(list)) return false;
+  // Bootstrap mode: if no users exist yet or no admins found, allow the first
+  // authenticated user to perform admin actions to create the initial admin.
+  if (!Array.isArray(list) || list.length === 0 || !list.some((u) => u.role === "admin")) {
+    return true;
+  }
   return !!list.find((u) => (u.username === username || u.email === username) && u.role === "admin");
 }
 
