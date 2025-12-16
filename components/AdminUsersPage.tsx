@@ -49,7 +49,7 @@ export default function AdminUsersPage() {
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(json?.error || String(res.status));
-      setForm({ email: "", password: "", role: "user", perms: { dashboard: true, optimizer: false, creatives: false, builder: false, sidekick: true, roadmap: false, whatsapp: false } });
+      setForm({ email: "", password: "", role: "user", perms: { dashboard: true, optimizer: false, creatives: false, builder: false, sidekick: true } });
       await load();
     } catch (e: any) {
       setError(e?.message || String(e));
@@ -117,7 +117,7 @@ export default function AdminUsersPage() {
           </div>
         </div>
         <div className="mt-3 grid gap-2 md:grid-cols-3 text-xs">
-          {["dashboard", "optimizer", "creatives", "builder", "sidekick"] as (keyof Perms)[]).map((k) => (
+          {(["dashboard", "optimizer", "creatives", "builder", "sidekick"] as (keyof Perms)[]).map((k) => (
             <label key={k} className="inline-flex items-center gap-2">
               <input
                 type="checkbox"
