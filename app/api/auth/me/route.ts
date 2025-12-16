@@ -7,7 +7,7 @@ const KEY = "auth:users";
 
 type Perms = { dashboard: boolean; optimizer: boolean; creatives: boolean; builder: boolean };
 
-type UserRec = { username: string; role: "admin" | "user"; hash: string; perms: Perms };
+type UserRec = { username?: string; email?: string; role: "admin" | "user"; hash?: string; perms: Perms };
 
 export async function GET() {
   // Prefer NextAuth session (Google OAuth)
@@ -17,9 +17,9 @@ export async function GET() {
 
   const list = (await kv.get(KEY)) as UserRec[] | null;
   if (Array.isArray(list)) {
-    const rec = list.find((u) => u.username === username);
+    const rec = list.find((u) => u.username === username || u.email === username);
     if (rec) {
-      return NextResponse.json({ user: { username: rec.username, role: rec.role, perms: rec.perms } });
+      return NextResponse.json({ user: { username: rec.email || rec.username || username, role: rec.role, perms: rec.perms } });
     }
   }
 

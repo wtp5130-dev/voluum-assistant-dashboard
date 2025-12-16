@@ -3,14 +3,14 @@
 import React, { useEffect, useMemo, useState } from "react";
 
 type Perms = { dashboard: boolean; optimizer: boolean; creatives: boolean; builder: boolean };
-type User = { username: string; role: "admin" | "user"; perms: Perms };
+type User = { username?: string; email?: string; role: "admin" | "user"; perms: Perms };
 
 export default function AdminPage() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [username, setUsername] = useState("");
+  const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState<"admin" | "user">("user");
   const [saving, setSaving] = useState(false);
@@ -36,18 +36,18 @@ export default function AdminPage() {
   }, []);
 
   const addUser = async () => {
-    if (!username || !password) return;
+    if (!email) return;
     try {
       setSaving(true);
       setError(null);
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username, password, role, perms }),
+        body: JSON.stringify({ email, password, role, perms }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || json?.message || String(res.status));
-      setUsername("");
+      setEmail("");
       setPassword("");
       setRole("user");
       setPerms({ dashboard: true, optimizer: false, creatives: false, builder: false });
@@ -66,7 +66,7 @@ export default function AdminPage() {
       const res = await fetch("/api/admin/users", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ username: u.username, role: u.role, perms: { ...u.perms, [key]: value } }),
+        body: JSON.stringify({ email: u.email || u.username, role: u.role, perms: { ...u.perms, [key]: value } }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || json?.message || String(res.status));
@@ -82,7 +82,7 @@ export default function AdminPage() {
     try {
       setSaving(true);
       setError(null);
-      const res = await fetch(`/api/admin/users?username=${encodeURIComponent(u)}`, { method: "DELETE" });
+      const res = await fetch(`/api/admin/users?email=${encodeURIComponent(u)}`, { method: "DELETE" });
       const json = await res.json();
       if (!res.ok) throw new Error(json?.error || json?.message || String(res.status));
       fetchUsers();
@@ -107,7 +107,7 @@ export default function AdminPage() {
       <section className="rounded-xl border border-slate-800 bg-slate-900/70 p-4 shadow-sm">
         <h2 className="text-sm font-semibold mb-2">Add user</h2>
         <div className="grid gap-2 sm:grid-cols-3">
-          <input className="bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-sm" placeholder="Username" value={username} onChange={(e)=>setUsername(e.target.value)} />
+          <input type="email" className="bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-sm" placeholder="Email" value={email} onChange={(e)=>setEmail(e.target.value)} />
           <input type="password" className="bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-sm" placeholder="Password" value={password} onChange={(e)=>setPassword(e.target.value)} />
           <select className="bg-slate-950 border border-slate-700 rounded-md px-2 py-1 text-sm" value={role} onChange={(e)=>setRole(e.target.value as any)}>
             <option value="user">User</option>
@@ -123,7 +123,7 @@ export default function AdminPage() {
           ))}
         </div>
         <div className="mt-2">
-          <button onClick={addUser} disabled={saving || !username || !password} className="text-xs px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50">{saving ? "Saving…" : "Add user"}</button>
+          <button onClick={addUser} disabled={saving || !email} className="text-xs px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50">{saving ? "Saving…" : "Add user"}</button>
         </div>
         {error && <p className="text-[11px] text-rose-400 mt-2">{error}</p>}
       </section>
@@ -139,7 +139,7 @@ export default function AdminPage() {
             <table className="min-w-[600px] text-xs">
               <thead className="bg-slate-900 text-slate-400">
                 <tr>
-                  <th className="text-left p-2">Username</th>
+                  <th className="text-left p-2">Email</th>
                   <th className="text-left p-2">Role</th>
                   <th className="text-left p-2">Permissions</th>
                   <th className="text-right p-2">Actions</th>
@@ -148,7 +148,7 @@ export default function AdminPage() {
               <tbody className="divide-y divide-slate-800">
                 {users.map((u)=> (
                   <tr key={u.username} className="hover:bg-slate-900/50">
-                    <td className="p-2">{u.username}</td>
+                    <td className="p-2">{u.email || u.username}</td>
                     <td className="p-2">{u.role}</td>
                     <td className="p-2">
                       <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -161,7 +161,7 @@ export default function AdminPage() {
                       </div>
                     </td>
                     <td className="p-2 text-right">
-                      <button onClick={()=>deleteUser(u.username)} className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Delete</button>
+                      <button onClick={()=>deleteUser(u.email || u.username || "")} className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Delete</button>
                     </td>
                   </tr>
                 ))}

@@ -58,7 +58,7 @@ export async function middleware(req: NextRequest) {
     const list = (await kv.get(USERS_KEY)) as any[] | null;
     const appKey = hostToAppKey(host);
     if (Array.isArray(list)) {
-      const rec = list.find((u) => u.username === username);
+      const rec = list.find((u) => (u.username === username) || (u.email === username));
       const admin = rec?.role === "admin" || username === (process.env.AUTH_USERNAME || "admin");
       const perms = rec?.perms || {};
       allowed = admin || Boolean(perms[appKey] ?? (appKey === "sidekick"));
