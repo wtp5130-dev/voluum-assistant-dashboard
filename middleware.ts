@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { kv } from "@vercel/kv";
+import { getToken } from "next-auth/jwt";
 
 const USERS_KEY = "auth:users";
 
@@ -33,12 +34,21 @@ export async function middleware(req: NextRequest) {
   // This project is the Sidekick app, deployed on sidekick.projectx.to (or any subdomain you assign).
   // No host-based rewrites here; apex/homepage lives in a separate project.
 
-  // Require session cookie
-  const session = req.cookies.get("session")?.value;
-  const username = parseToken(session);
+  // Try NextAuth JWT first, then fallback to legacy session cookie
+  let username: string | null = null;
+  try {
+    const token = await getToken({ req, secret: process.env.NEXTAUTH_SECRET });
+    if (token && (token as any).email) {
+      username = String((token as any).email);
+    }
+  } catch {}
+  if (!username) {
+    const session = req.cookies.get("session")?.value;
+    username = parseToken(session);
+  }
   if (!username) {
     const url = new URL("/login", req.url);
-    url.searchParams.set("redirect", req.nextUrl.pathname + req.nextUrl.search);
+    url.searchParams.set("callbackUrl", req.nextUrl.pathname + req.nextUrl.search);
     return NextResponse.redirect(url);
   }
 

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import { signOut as nextAuthSignOut } from "next-auth/react";
 import { usePathname } from "next/navigation";
 
 type Me = { username: string; role: "admin" | "user"; perms: Record<string, boolean> } | null;
@@ -109,8 +110,11 @@ export default function NavBar() {
 
   const signOut = async () => {
     try {
-      await fetch("/api/auth/logout", { method: "POST" });
-    } finally {
+      // Attempt NextAuth sign out first
+      await nextAuthSignOut({ callbackUrl: "/login" });
+    } catch {
+      // Fallback to legacy logout
+      try { await fetch("/api/auth/logout", { method: "POST" }); } catch {}
       window.location.href = "/login";
     }
   };

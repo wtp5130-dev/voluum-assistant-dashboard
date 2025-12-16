@@ -2,6 +2,7 @@
 
 import React, { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 
 function LoginInner() {
   const router = useRouter();
@@ -37,6 +38,21 @@ function LoginInner() {
   return (
     <form onSubmit={onSubmit} className="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-xl p-4 space-y-3">
       <h1 className="text-lg font-semibold">Sign in</h1>
+      <button
+        type="button"
+        onClick={() => signIn("google", { callbackUrl: params.get("callbackUrl") || "/" })}
+        className="w-full text-sm px-3 py-2 rounded-md bg-white text-slate-900 hover:bg-slate-200"
+      >
+        Continue with Google
+      </button>
+      <div className="relative py-1">
+        <div className="absolute inset-0 flex items-center">
+          <div className="w-full border-t border-slate-700" />
+        </div>
+        <div className="relative flex justify-center text-[11px]">
+          <span className="bg-slate-900 px-2 text-slate-400">or</span>
+        </div>
+      </div>
       <div className="grid gap-1">
         <label className="text-[11px] uppercase tracking-wide text-slate-400">Username</label>
         <input

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { kv } from "@vercel/kv";
-import { cookies } from "next/headers";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 
 const KEY = "auth:users";
 
@@ -8,21 +9,10 @@ type Perms = { dashboard: boolean; optimizer: boolean; creatives: boolean; build
 
 type UserRec = { username: string; role: "admin" | "user"; hash: string; perms: Perms };
 
-function parseToken(token: string | undefined) {
-  if (!token) return null;
-  try {
-    const [payloadB64] = token.split(".");
-    const json = JSON.parse(Buffer.from(payloadB64.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8"));
-    return json?.u || null;
-  } catch {
-    return null;
-  }
-}
-
 export async function GET() {
-  const cookieStore = await cookies();
-  const session = cookieStore.get("session")?.value;
-  const username = parseToken(session);
+  // Prefer NextAuth session (Google OAuth)
+  const nas = await getServerSession(authOptions).catch(() => null);
+  const username = nas?.user?.email || null;
   if (!username) return NextResponse.json({ user: null }, { status: 200 });
 
   const list = (await kv.get(KEY)) as UserRec[] | null;

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { kv } from "@vercel/kv";
-import { cookies } from "next/headers";
+import { getServerSession } from "next-auth/next";
+import { authOptions } from "@/lib/auth";
 
 const KEY = "auth:users";
 
@@ -26,18 +27,6 @@ async function sha256(input: string) {
   return b64(buf);
 }
 
-function parseToken(token: string | undefined) {
-  if (!token) return null;
-  try {
-    const [payloadB64, sigB64] = token.split(".");
-    if (!payloadB64 || !sigB64) return null;
-    const json = JSON.parse(Buffer.from(payloadB64.replace(/-/g, "+").replace(/_/g, "/"), "base64").toString("utf-8"));
-    return json?.u || null;
-  } catch {
-    return null;
-  }
-}
-
 async function isAdminUser(username: string | null): Promise<boolean> {
   if (!username) return false;
   if (username === (process.env.AUTH_USERNAME || "admin")) return true;
@@ -47,9 +36,8 @@ async function isAdminUser(username: string | null): Promise<boolean> {
 }
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const session = cookieStore.get("session")?.value;
-  const username = parseToken(session);
+  const nas = await getServerSession(authOptions).catch(() => null);
+  const username = nas?.user?.email || null;
   if (!(await isAdminUser(username))) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -59,9 +47,8 @@ export async function GET() {
 }
 
 export async function POST(req: NextRequest) {
-  const cookieStore = await cookies();
-  const session = cookieStore.get("session")?.value;
-  const username = parseToken(session);
+  const nas = await getServerSession(authOptions).catch(() => null);
+  const username = nas?.user?.email || null;
   if (!(await isAdminUser(username))) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
@@ -97,9 +84,8 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const cookieStore = await cookies();
-  const session = cookieStore.get("session")?.value;
-  const username = parseToken(session);
+  const nas = await getServerSession(authOptions).catch(() => null);
+  const username = nas?.user?.email || null;
   if (!(await isAdminUser(username))) {
     return NextResponse.json({ error: "forbidden" }, { status: 403 });
   }
