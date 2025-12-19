@@ -730,6 +730,10 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
 
       if (!res.ok) {
         const text = await res.text();
+        if (res.status === 403) {
+          setOptimizerStatus("No access to Optimizer. Ask an admin to enable the Optimizer permission for your account.");
+          return;
+        }
         throw new Error(`Preview failed (${res.status}): ${text}`);
       }
 
