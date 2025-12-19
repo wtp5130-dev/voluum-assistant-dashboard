@@ -1019,7 +1019,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
   if (loading && !data) {
     return (
       <main className="min-h-screen text-slate-100 flex items-center justify-center">
-        <div className="text-lg font-medium">Loading, BE PATIENT!!</div>
+        <div className="text-lg font-medium">Loading...</div>
       </main>
     );
   }
