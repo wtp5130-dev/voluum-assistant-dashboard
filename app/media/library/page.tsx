@@ -69,7 +69,7 @@ export default function MediaLibraryPage() {
           </div>
         </div>
         {error && <div className="text-rose-400 text-sm">{error}</div>}
-        {loading && <div className="text-sm text-slate-400">Loading…</div>}
+        {loading && <div className="text-sm text-slate-400">Please be patient…</div>}
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-[11px] grid gap-3 md:grid-cols-12 items-end">
           <div className="md:col-span-3">
             <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Filter brand</label>

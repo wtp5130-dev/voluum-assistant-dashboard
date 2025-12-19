@@ -62,7 +62,7 @@ export default function CreativeGalleryPage() {
           <button onClick={load} className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Refresh</button>
         </div>
         {error && <div className="text-rose-400 text-sm">{error}</div>}
-        {loading && <div className="text-sm text-slate-400">Loading…</div>}
+        {loading && <div className="text-sm text-slate-400">Please be patient…</div>}
         <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-[11px] flex flex-wrap items-end gap-3">
           <div>
             <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Brand</label>

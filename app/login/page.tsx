@@ -94,7 +94,7 @@ export default function LoginPage() {
           <h1 className="text-2xl font-semibold">PropellarAds Sidekick</h1>
           <p className="text-[12px] text-slate-400">For Marketers. By Marketers</p>
         </div>
-        <Suspense fallback={<div className="text-sm text-slate-400">Loading…</div>}>
+        <Suspense fallback={<div className="text-sm text-slate-400">Please be patient…</div>}>
           <LoginInner />
         </Suspense>
       </div>
