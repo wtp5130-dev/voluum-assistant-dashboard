@@ -6,7 +6,7 @@ import { authOptions } from "@/lib/auth";
 export type PermKey = "dashboard" | "optimizer" | "creatives" | "builder" | "sidekick" | "roadmap" | "whatsapp";
 
 type Perms = { dashboard: boolean; optimizer: boolean; creatives: boolean; builder: boolean; sidekick?: boolean; roadmap?: boolean; whatsapp?: boolean };
-type UserRec = { username: string; role: "admin" | "user"; hash: string; perms: Perms };
+type UserRec = { username?: string; email?: string; role: "admin" | "user"; hash?: string; perms: Perms };
 
 function parseToken(token: string | undefined) {
   if (!token) return null;
