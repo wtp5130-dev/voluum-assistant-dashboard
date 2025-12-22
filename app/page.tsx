@@ -1889,6 +1889,26 @@ function DashboardTab(props: {
   // Daily series (already in range)
   const dailySeries = seriesInRange;
 
+  // Range aggregates to keep cards in sync with top-level stats
+  const rangeTotals = useMemo(() => {
+    const src = seriesInRange;
+    if (!Array.isArray(src) || src.length === 0) {
+      return { cost: 0, revenue: 0, profit: 0, signups: 0, deposits: 0, cpa: 0, cpr: 0 };
+    }
+    let cost = 0, revenue = 0, profit = 0, signups = 0, deposits = 0;
+    for (const p of src) {
+      cost += p.cost || 0;
+      revenue += p.revenue || 0;
+      // Prefer explicit profit from series; else derive
+      profit += (typeof p.profit === "number" ? p.profit : ((p.revenue || 0) - (p.cost || 0)));
+      signups += p.signups || 0;
+      deposits += p.deposits || 0;
+    }
+    const cpa = deposits > 0 ? cost / deposits : 0;
+    const cpr = signups > 0 ? cost / signups : 0;
+    return { cost, revenue, profit, signups, deposits, cpa, cpr };
+  }, [seriesInRange]);
+
   // When in Charts view, render a dedicated charts-only layout
   if (viewMode === "charts") {
     const src = trendResolution === "weekly" ? weeklySeries : dailySeries;
@@ -1924,25 +1944,7 @@ function DashboardTab(props: {
     );
   }
 
-  // Range aggregates to keep cards in sync with top-level stats
-  const rangeTotals = useMemo(() => {
-    const src = seriesInRange;
-    if (!Array.isArray(src) || src.length === 0) {
-      return { cost: 0, revenue: 0, profit: 0, signups: 0, deposits: 0, cpa: 0, cpr: 0 };
-    }
-    let cost = 0, revenue = 0, profit = 0, signups = 0, deposits = 0;
-    for (const p of src) {
-      cost += p.cost || 0;
-      revenue += p.revenue || 0;
-      // Prefer explicit profit from series; else derive
-      profit += (typeof p.profit === "number" ? p.profit : ((p.revenue || 0) - (p.cost || 0)));
-      signups += p.signups || 0;
-      deposits += p.deposits || 0;
-    }
-    const cpa = deposits > 0 ? cost / deposits : 0;
-    const cpr = signups > 0 ? cost / signups : 0;
-    return { cost, revenue, profit, signups, deposits, cpa, cpr };
-  }, [seriesInRange]);
+  
 
   // Guided tour for Creative Doctor
   const [doctorTourOpen, setDoctorTourOpen] = useState<boolean>(false);
