@@ -1817,9 +1817,21 @@ function DashboardTab(props: {
     sendChat,
   } = props;
 
+  // Filter series to the currently selected dashboard range
+  const seriesInRange = useMemo(() => {
+    const src = data?.series ?? [];
+    if (!Array.isArray(src) || src.length === 0) return [] as SeriesPoint[];
+    const fromTs = new Date(data.from).getTime();
+    const toTs = new Date(data.to).getTime();
+    return src.filter((p) => {
+      const t = new Date(p.date).getTime();
+      return !isNaN(t) && t >= fromTs && t <= toTs;
+    });
+  }, [data?.series, data.from, data.to]);
+
   // Aggregate daily series into weekly series (Mon–Sun ISO weeks)
   const weeklySeries = useMemo(() => {
-    const src = data?.series ?? [];
+    const src = seriesInRange;
     if (!Array.isArray(src) || src.length === 0) return [] as SeriesPoint[];
     const byKey = new Map<string, { date: string; cost: number; revenue: number; profit: number; signups: number; deposits: number }>();
     for (const p of src) {
@@ -1851,7 +1863,27 @@ function DashboardTab(props: {
       cpa: r.deposits > 0 ? r.cost / r.deposits : null,
       cpr: r.signups > 0 ? r.cost / r.signups : null,
     }));
-  }, [data?.series]);
+  }, [seriesInRange]);
+
+  // Range aggregates to keep cards in sync with top-level stats
+  const rangeTotals = useMemo(() => {
+    const src = seriesInRange;
+    if (!Array.isArray(src) || src.length === 0) {
+      return { cost: 0, revenue: 0, profit: 0, signups: 0, deposits: 0, cpa: 0, cpr: 0 };
+    }
+    let cost = 0, revenue = 0, profit = 0, signups = 0, deposits = 0;
+    for (const p of src) {
+      cost += p.cost || 0;
+      revenue += p.revenue || 0;
+      // Prefer explicit profit from series; else derive
+      profit += (typeof p.profit === "number" ? p.profit : ((p.revenue || 0) - (p.cost || 0)));
+      signups += p.signups || 0;
+      deposits += p.deposits || 0;
+    }
+    const cpa = deposits > 0 ? cost / deposits : 0;
+    const cpr = signups > 0 ? cost / signups : 0;
+    return { cost, revenue, profit, signups, deposits, cpa, cpr };
+  }, [seriesInRange]);
 
   // Guided tour for Creative Doctor
   const [doctorTourOpen, setDoctorTourOpen] = useState<boolean>(false);
@@ -2019,18 +2051,21 @@ function DashboardTab(props: {
                 values={weeklySeries.map((p)=> p.profit)}
                 color="#10b981"
                 formatter={formatMoney}
+                displayValue={rangeTotals.profit}
               />
               <TrendCard
                 title="CPA (per deposit)"
                 values={weeklySeries.map((p)=> (p.cpa ?? 0))}
                 color="#06b6d4"
                 formatter={formatMoney}
+                displayValue={rangeTotals.cpa}
               />
               <TrendCard
                 title="CPR (per signup)"
                 values={weeklySeries.map((p)=> (p.cpr ?? 0))}
                 color="#8b5cf6"
                 formatter={formatMoney}
+                displayValue={rangeTotals.cpr}
               />
             </div>
           )}
@@ -2341,13 +2376,14 @@ function MiniLineChart({ values, color = "#10b981", width = 280, height = 80 }: 
   );
 }
 
-function TrendCard({ title, values, color, formatter }: { title: string; values: number[]; color: string; formatter: (n: number) => string }) {
+function TrendCard({ title, values, color, formatter, displayValue }: { title: string; values: number[]; color: string; formatter: (n: number) => string; displayValue?: number }) {
   const last = values.length ? values[values.length - 1] : 0;
+  const valueToShow = typeof displayValue === "number" ? displayValue : last;
   return (
     <div className="border border-slate-800 rounded-lg p-3 bg-slate-950/40">
       <div className="flex items-baseline justify-between mb-1">
         <div className="text-[11px] text-slate-400">{title}</div>
-        <div className="text-[11px] font-medium text-slate-200">{formatter(last)}</div>
+        <div className="text-[11px] font-medium text-slate-200">{formatter(valueToShow)}</div>
       </div>
       <MiniLineChart values={values} color={color} />
     </div>
