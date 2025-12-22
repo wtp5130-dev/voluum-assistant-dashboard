@@ -92,6 +92,7 @@ type SeriesPoint = {
 };
 
 type TabKey = "dashboard" | "optimizer" | "creatives" | "builder" | "audit" | "updates";
+type ViewMode = "standard" | "charts";
 
 /**
  * ===========
@@ -244,6 +245,7 @@ export default function DashboardPage() {
   );
 
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
+  const [viewMode, setViewMode] = useState<ViewMode>("standard");
   const [currentUser, setCurrentUser] = useState<null | { username: string; role: "admin" | "user"; perms: { dashboard: boolean; optimizer: boolean; creatives: boolean; builder: boolean } }>(null);
 
   // Dashboard chat state
@@ -1127,6 +1129,19 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
                 ))}
               </select>
             </div>
+
+            {/* View mode selector */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wide text-slate-500">View</label>
+              <select
+                value={viewMode}
+                onChange={(e)=> setViewMode(e.target.value as ViewMode)}
+                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs min-w-[140px]"
+              >
+                <option value="standard">Standard</option>
+                <option value="charts">Charts</option>
+              </select>
+            </div>
           </div>
 
           {refreshing && (
@@ -1206,6 +1221,7 @@ const generateImage = async (promptText: string, sizeOverride?: string) => {
           chatLoading={chatLoading}
           setChatInput={setChatInput}
           sendChat={sendChat}
+          viewMode={viewMode}
         />
       )}
 
@@ -1801,6 +1817,7 @@ function DashboardTab(props: {
   chatLoading: boolean;
   setChatInput: (v: string) => void;
   sendChat: () => void;
+  viewMode: ViewMode;
 }) {
   const {
     data,
@@ -1815,7 +1832,11 @@ function DashboardTab(props: {
     chatLoading,
     setChatInput,
     sendChat,
+    viewMode,
   } = props;
+
+  // Trends resolution toggle
+  const [trendResolution, setTrendResolution] = useState<"weekly" | "daily">("weekly");
 
   // Filter series to the currently selected dashboard range
   const seriesInRange = useMemo(() => {
@@ -1864,6 +1885,44 @@ function DashboardTab(props: {
       cpr: r.signups > 0 ? r.cost / r.signups : null,
     }));
   }, [seriesInRange]);
+
+  // Daily series (already in range)
+  const dailySeries = seriesInRange;
+
+  // When in Charts view, render a dedicated charts-only layout
+  if (viewMode === "charts") {
+    const src = trendResolution === "weekly" ? weeklySeries : dailySeries;
+    return (
+      <section className="grid gap-6">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Charts view</h3>
+            <div className="flex items-center gap-2">
+              <div className="text-[10px] text-slate-500 hidden md:block">Resolution</div>
+              <div className="inline-flex rounded-md border border-slate-700 overflow-hidden">
+                <button onClick={()=>setTrendResolution("weekly")} className={`text-[10px] px-2 py-1 ${trendResolution==='weekly'?'bg-slate-800 text-slate-200':'bg-slate-900 text-slate-400 hover:text-slate-200'}`}>Weekly</button>
+                <button onClick={()=>setTrendResolution("daily")} className={`text-[10px] px-2 py-1 ${trendResolution==='daily'?'bg-slate-800 text-slate-200':'bg-slate-900 text-slate-400 hover:text-slate-200'}`}>Daily</button>
+              </div>
+            </div>
+          </div>
+
+          {src.length === 0 ? (
+            <p className="text-[11px] text-slate-500">No time series available for this range.</p>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <TrendCard title="Profit" values={src.map(p=>p.profit)} color="#10b981" formatter={formatMoney} displayValue={rangeTotals.profit} />
+              <TrendCard title="Revenue" values={src.map(p=>p.revenue)} color="#22c55e" formatter={formatMoney} displayValue={rangeTotals.revenue} />
+              <TrendCard title="Cost" values={src.map(p=>p.cost)} color="#f59e0b" formatter={formatMoney} displayValue={rangeTotals.cost} />
+              <TrendCard title="Signups" values={src.map(p=>p.signups)} color="#64748b" formatter={(n)=>formatInteger(n)} displayValue={rangeTotals.signups} />
+              <TrendCard title="Deposits" values={src.map(p=>p.deposits)} color="#60a5fa" formatter={(n)=>formatInteger(n)} displayValue={rangeTotals.deposits} />
+              <TrendCard title="CPA (per deposit)" values={src.map(p=>p.cpa ?? 0)} color="#06b6d4" formatter={formatMoney} displayValue={rangeTotals.cpa} />
+              <TrendCard title="CPR (per signup)" values={src.map(p=>p.cpr ?? 0)} color="#8b5cf6" formatter={formatMoney} displayValue={rangeTotals.cpr} />
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   // Range aggregates to keep cards in sync with top-level stats
   const rangeTotals = useMemo(() => {
@@ -2034,35 +2093,47 @@ function DashboardTab(props: {
 
       {/* Right: Details + Chat */}
       <div className="flex flex-col gap-4">
-        {/* Trends (weekly) */}
+        {/* Trends block */}
         <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
-              Trends (weekly)
+              Trends ({trendResolution})
             </h3>
-            <span className="text-[10px] text-slate-500">{(weeklySeries.length)} points</span>
+            <div className="flex items-center gap-2">
+              <div className="text-[10px] text-slate-500 hidden md:block">Resolution</div>
+              <div className="inline-flex rounded-md border border-slate-700 overflow-hidden">
+                <button
+                  onClick={()=>setTrendResolution("weekly")}
+                  className={`text-[10px] px-2 py-1 ${trendResolution==='weekly'?'bg-slate-800 text-slate-200':'bg-slate-900 text-slate-400 hover:text-slate-200'}`}
+                >Weekly</button>
+                <button
+                  onClick={()=>setTrendResolution("daily")}
+                  className={`text-[10px] px-2 py-1 ${trendResolution==='daily'?'bg-slate-800 text-slate-200':'bg-slate-900 text-slate-400 hover:text-slate-200'}`}
+                >Daily</button>
+              </div>
+            </div>
           </div>
-          {(weeklySeries.length === 0) ? (
+          {((trendResolution==='weekly'?weeklySeries:dailySeries).length === 0) ? (
             <p className="text-[11px] text-slate-500">No time series available for this range.</p>
           ) : (
             <div className="grid gap-4 md:grid-cols-3">
               <TrendCard
                 title="Profit"
-                values={weeklySeries.map((p)=> p.profit)}
+                values={(trendResolution==='weekly'?weeklySeries:dailySeries).map((p)=> p.profit)}
                 color="#10b981"
                 formatter={formatMoney}
                 displayValue={rangeTotals.profit}
               />
               <TrendCard
                 title="CPA (per deposit)"
-                values={weeklySeries.map((p)=> (p.cpa ?? 0))}
+                values={(trendResolution==='weekly'?weeklySeries:dailySeries).map((p)=> (p.cpa ?? 0))}
                 color="#06b6d4"
                 formatter={formatMoney}
                 displayValue={rangeTotals.cpa}
               />
               <TrendCard
                 title="CPR (per signup)"
-                values={weeklySeries.map((p)=> (p.cpr ?? 0))}
+                values={(trendResolution==='weekly'?weeklySeries:dailySeries).map((p)=> (p.cpr ?? 0))}
                 color="#8b5cf6"
                 formatter={formatMoney}
                 displayValue={rangeTotals.cpr}
