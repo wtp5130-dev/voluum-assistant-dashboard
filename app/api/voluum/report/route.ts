@@ -39,12 +39,13 @@ export async function GET(req: Request) {
   const dateRange: DateRangeKey = (rawRange === "custom-date-time" ? "custom" : rawRange) || "last7days";
   const fromParam = searchParams.get("from");
   const toParam = searchParams.get("to");
-  const groupBy = (searchParams.get("groupBy") || "campaign").toLowerCase(); // campaign|day|country|ts|traffic-source etc (Voluum values)
+  const groupBy = (searchParams.get("groupBy") || "campaign").toLowerCase(); // campaign|day|country|traffic-source
   const tz = searchParams.get("tz") || "Asia/Singapore";
   const currency = searchParams.get("currency") || "MYR";
   const limit = searchParams.get("limit") || (groupBy === "day" ? "500" : "200");
   const campaignIdsCsv = (searchParams.get("campaignIds") || "").trim();
   const campaignIds = campaignIdsCsv ? campaignIdsCsv.split(",").map(s => s.trim()).filter(Boolean) : [];
+  const debug = searchParams.get("debug") === "1";
 
   // Resolve from/to
   let to = normalizeDateParam(toParam, true) || new Date();
@@ -96,7 +97,8 @@ export async function GET(req: Request) {
     searchMode: "TEXT",
     offset: "0",
     currency,
-    sort: groupBy === "day" ? "day" : "visits",
+    include: "ACTIVE",
+    sort: "visits",
     direction: groupBy === "day" ? "ASC" : "DESC",
     groupBy,
     conversionTimeMode: "CONVERSION",
@@ -137,7 +139,7 @@ export async function GET(req: Request) {
   try { json = text ? JSON.parse(text) : null; } catch {}
   if (!res.ok || !json) {
     return NextResponse.json(
-      { error: "Voluum /report failed", status: res.status, body: json || text },
+      { error: "Voluum /report failed", status: res.status, body: json || text, reportCalledUrl: url, params: Object.fromEntries(params.entries()) },
       { status: 500 }
     );
   }
@@ -147,17 +149,16 @@ export async function GET(req: Request) {
     rows = rows.filter((r) => campaignIds.includes(String(r.campaignId || r.campaignName || "")));
   }
 
-  return NextResponse.json(
-    {
-      dateRange,
-      from: fromIso,
-      to: toIso,
-      groupBy,
-      tz,
-      currency,
-      count: rows.length,
-      rows,
-    },
-    { status: 200 }
-  );
+  const payload: any = {
+    dateRange,
+    from: fromIso,
+    to: toIso,
+    groupBy,
+    tz,
+    currency,
+    count: rows.length,
+    rows,
+  };
+  if (debug) payload.reportCalledUrl = url;
+  return NextResponse.json(payload, { status: 200 });
 }
