@@ -193,6 +193,12 @@ export default function NavBar() {
 
         <div className="flex items-center gap-2 ml-auto">
           <a
+            href="/reports"
+            className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 hidden sm:inline"
+          >
+            Reports
+          </a>
+          <a
             href="/media/library"
             className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
           >
