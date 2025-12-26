@@ -19,7 +19,31 @@ export async function OPTIONS() {
 export async function POST(request) {
   const headers = corsHeaders();
   try {
-    const body = await request.json();
+    const contentType = request.headers.get('content-type') || '';
+    let body = {};
+    let uploadFiles = [];
+    if (contentType.includes('multipart/form-data')) {
+      // Native Sidekick form submission
+      const fd = await request.formData();
+      const toStr = (v) => (typeof v === 'string' ? v : (v ? String(v) : ''));
+      body = {
+        bannerName: toStr(fd.get('title') || fd.get('bannerName') || fd.get('name')),
+        description: toStr(fd.get('description') || ''),
+        region: toStr(fd.get('country') || fd.get('region') || ''),
+        brand: toStr(fd.get('brand') || ''),
+        status: toStr(fd.get('status') || ''),
+        listId: toStr(fd.get('listId') || fd.get('list_id') || ''),
+        sizes: (fd.getAll('sizes') || fd.getAll('sizes[]') || []).map(toStr).filter(Boolean),
+        customSize: toStr(fd.get('customSize') || ''),
+        requesterInfo: toStr(fd.get('requesterInfo') || ''),
+      };
+      // Collect reference files (can be multiple)
+      const refs = fd.getAll('reference').concat(fd.getAll('references') || []);
+      uploadFiles = refs.filter((f) => typeof f === 'object' && f && 'arrayBuffer' in f);
+    } else {
+      // JSON body (programmatic usage)
+      body = await request.json();
+    }
 
     const apiKey = process.env.CLICKUP_API_KEY;
     // Allow overriding list via request body; fallback to env; then default
@@ -44,6 +68,9 @@ export async function POST(request) {
     const description = body.description || '';
     const region = body.region || '';
     const brand = body.brand || '';
+    const sizes = Array.isArray(body.sizes) ? body.sizes : [];
+    const customSize = body.customSize || '';
+    const requesterInfo = body.requesterInfo || '';
     const requestedStatus = (body.status || process.env.CLICKUP_DEFAULT_STATUS || 'design requested').toString().trim();
 
     if (!name || typeof name !== 'string') {
@@ -56,6 +83,9 @@ export async function POST(request) {
     const metaLines = [];
     if (region) metaLines.push(`Region: ${region}`);
     if (brand) metaLines.push(`Brand: ${brand}`);
+    if (sizes.length) metaLines.push(`Requested Outputs: ${sizes.join(', ')}`);
+    if (customSize) metaLines.push(`Custom Size: ${customSize}`);
+    if (requesterInfo) metaLines.push(`Requester: ${requesterInfo}`);
     const metaBlock = metaLines.length ? `\n\n${metaLines.join('\n')}` : '';
     const fullDescription = `${description}${metaBlock}`;
 
@@ -120,6 +150,27 @@ export async function POST(request) {
     const taskUrl = data?.url || null;
     const taskId = data?.id || null;
     console.log('[create-banner-task] Task created', { taskId, taskUrl, listIdUsed: listId, statusUsed: statusToUse || '(default)' });
+
+    // If files were uploaded, attach them to the new task
+    if (taskId && uploadFiles && uploadFiles.length) {
+      for (const file of uploadFiles) {
+        try {
+          const fdUp = new FormData();
+          fdUp.append('attachment', file, file.name || 'reference');
+          const upRes = await fetch(`${CLICKUP_API_BASE}/task/${encodeURIComponent(taskId)}/attachment`, {
+            method: 'POST',
+            headers: { 'Authorization': apiKey },
+            body: fdUp,
+          });
+          if (!upRes.ok) {
+            const errText = await upRes.text();
+            console.warn('[create-banner-task] Attachment upload failed', { status: upRes.status, errText });
+          }
+        } catch (e) {
+          console.warn('[create-banner-task] Attachment upload error', e);
+        }
+      }
+    }
 
     return new Response(
       JSON.stringify({ success: true, taskUrl, taskId }),

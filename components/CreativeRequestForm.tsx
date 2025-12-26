@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, DragEvent } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 
@@ -9,10 +9,15 @@ export default function CreativeRequestForm() {
   const search = useSearchParams();
   const listIdParam = search?.get("listId") || search?.get("list_id") || "";
 
-  const [bannerName, setBannerName] = useState("");
+  const [title, setTitle] = useState("Mid Autumn Festival");
   const [description, setDescription] = useState("");
-  const [region, setRegion] = useState("");
+  const [country, setCountry] = useState("");
   const [brand, setBrand] = useState("");
+  const [sizes, setSizes] = useState<string[]>([]);
+  const [customSize, setCustomSize] = useState("");
+  const [requesterInfo, setRequesterInfo] = useState("");
+  const [files, setFiles] = useState<File[]>([]);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<
     | { success: true; taskUrl?: string | null; taskId?: string | null }
@@ -25,11 +30,31 @@ export default function CreativeRequestForm() {
     setLoading(true);
     setResult(null);
     try {
-      const res = await fetch("/api/create-banner-task", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bannerName, description, region, brand, ...(listIdParam ? { listId: listIdParam } : {}) }),
-      });
+      // Validate required fields
+      if (!title || !country || !brand) {
+        setResult({ success: false, error: "Please fill in required fields (Title, Country, Brand)." });
+        setLoading(false);
+        return;
+      }
+      if (files.length === 0) {
+        setResult({ success: false, error: "Please upload at least one reference file." });
+        setLoading(false);
+        return;
+      }
+
+      const fd = new FormData();
+      fd.append("title", title);
+      fd.append("description", description);
+      fd.append("country", country);
+      fd.append("brand", brand);
+      fd.append("status", "design requested");
+      sizes.forEach((s) => fd.append("sizes", s));
+      if (customSize) fd.append("customSize", customSize);
+      if (requesterInfo) fd.append("requesterInfo", requesterInfo);
+      if (listIdParam) fd.append("listId", listIdParam);
+      files.forEach((f) => fd.append("reference", f));
+
+      const res = await fetch("/api/create-banner-task", { method: "POST", body: fd });
       const text = await res.text();
       let data: any;
       try {
@@ -51,91 +76,182 @@ export default function CreativeRequestForm() {
     }
   }
 
+  // file helpers
+  const onPickFiles = (fs: FileList | null) => {
+    if (!fs) return;
+    setFiles((prev) => [...prev, ...Array.from(fs)]);
+  };
+  const onDrop = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    onPickFiles(e.dataTransfer.files);
+  };
+  const toggleSize = (val: string) => {
+    setSizes((prev) => (prev.includes(val) ? prev.filter((x) => x !== val) : [...prev, val]));
+  };
+
   return (
-    <div className="max-w-2xl mx-auto px-4 py-8 text-slate-100">
-      <h1 className="text-3xl font-semibold mb-4 text-white">Create Creative Request</h1>
-      <p className="text-sm text-slate-300 mb-6">
-        Fill this form to create a task in ClickUp (Design Assets). The task will be set to
-        <span className="font-medium"> design requested</span> to trigger BannerBot.
-      </p>
+    <div className="min-h-screen bg-[#f8f9fb] text-slate-900">
+      <div className="max-w-5xl mx-auto px-4 pt-10 pb-6">
+        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mb-2">
+          🎯 Creative Banner Request Form
+        </h1>
+        <p className="text-slate-600">
+          Submit a new banner or marketing visual request below. BannerBot will automatically generate the first concept and mark it as “In Progress” for review.
+        </p>
+      </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium mb-1 text-slate-200">Banner name</label>
-          <input
-            type="text"
-            className="w-full rounded px-3 py-2 border border-slate-600 bg-slate-800 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder="3Star MY – Weekend Promo"
-            value={bannerName}
-            onChange={(e) => setBannerName(e.target.value)}
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium mb-1 text-slate-200">Description</label>
-          <textarea
-            className="w-full rounded px-3 py-2 border border-slate-600 bg-slate-800 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-            placeholder="Brief details and required sizes, formats, copy, etc."
-            rows={4}
-            value={description}
-            onChange={(e) => setDescription(e.target.value)}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="max-w-5xl mx-auto px-4 pb-16">
+        <form onSubmit={handleSubmit} className="space-y-6 bg-white rounded-xl shadow-xl border border-slate-200 p-6">
+          {/* Title */}
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-200">Region</label>
+            <label className="block text-sm font-medium mb-1">Banner Title</label>
             <input
               type="text"
-              className="w-full rounded px-3 py-2 border border-slate-600 bg-slate-800 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="MY, SG, PH"
-              value={region}
-              onChange={(e) => setRegion(e.target.value)}
+              className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Mid Autumn Festival"
+              required
             />
           </div>
+
+          {/* Description */}
           <div>
-            <label className="block text-sm font-medium mb-1 text-slate-200">Brand</label>
-            <input
-              type="text"
-              className="w-full rounded px-3 py-2 border border-slate-600 bg-slate-800 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
-              placeholder="3Star, LuckyDay"
-              value={brand}
-              onChange={(e) => setBrand(e.target.value)}
+            <label className="block text-sm font-medium mb-1">Description</label>
+            <textarea
+              className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              rows={4}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              placeholder="Any copy, ideas, or specs."
             />
           </div>
-        </div>
 
-        <button
-          type="submit"
-          className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded disabled:opacity-60"
-          disabled={loading}
-        >
-          {loading ? "Creating..." : "Create Task"}
-        </button>
-      </form>
+          {/* Country + Brand */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">Country<span className="text-rose-500">*</span></label>
+              <input
+                type="text"
+                className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={country}
+                onChange={(e) => setCountry(e.target.value)}
+                placeholder="MY, SG, PH"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Brand<span className="text-rose-500">*</span></label>
+              <input
+                type="text"
+                className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={brand}
+                onChange={(e) => setBrand(e.target.value)}
+                placeholder="3Star, LuckyDay"
+                required
+              />
+            </div>
+          </div>
 
-      {result && (
-        <div className="mt-6 p-4 border rounded">
-          {result.success ? (
-            <div className="bg-emerald-900/30 border border-emerald-600 rounded p-4">
-              <div className="text-emerald-200 font-medium">Task created successfully.</div>
-              {result.taskUrl ? (
-                <a className="text-emerald-300 underline" href={result.taskUrl} target="_blank" rel="noreferrer">
-                  Open in ClickUp
-                </a>
-              ) : (
-                <div className="text-sm text-slate-300">No task link returned.</div>
+          {/* Reference upload */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Reference<span className="text-rose-500">*</span></label>
+            <div
+              onDragOver={(e) => e.preventDefault()}
+              onDrop={onDrop}
+              className="border-2 border-dashed rounded-lg p-6 text-center text-slate-600 bg-slate-50"
+            >
+              <p className="mb-2">Drop your files here to upload</p>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => onPickFiles(e.target.files)}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                className="inline-flex items-center gap-2 bg-slate-800 text-white px-3 py-1.5 rounded"
+              >
+                Choose Files
+              </button>
+              {files.length > 0 && (
+                <div className="mt-3 text-left text-sm text-slate-700">
+                  {files.map((f, i) => (
+                    <div key={i} className="truncate">• {f.name}</div>
+                  ))}
+                </div>
               )}
             </div>
-          ) : (
-            <div className="bg-rose-900/30 border border-rose-600 rounded p-4">
-              <div className="text-rose-200 font-medium">Failed to create task.</div>
-              <div className="text-sm text-rose-100 break-words">{result.error}</div>
+          </div>
+
+          {/* Sizes */}
+          <div>
+            <label className="block text-sm font-medium mb-2">Outputs</label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {[
+                { key: "Push Notifications (720x480)", label: "Push Notifications (720x480)" },
+                { key: "Telegram (900x900)", label: "Telegram (900×900)" },
+                { key: "Website Banner (1920x1080)", label: "Website Banner (1920×1080)" },
+                { key: "Facebook / Instagram Post (1080x1080)", label: "Facebook / Instagram Post (1080×1080)" },
+                { key: "Story / Reel (1080x1920)", label: "Story / Reel (1080×1920)" },
+                { key: "Display Ad (300x250)", label: "Display Ad (300×250)" },
+              ].map((opt) => (
+                <label key={opt.key} className="inline-flex items-center gap-2 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    className="rounded border-slate-300"
+                    checked={sizes.includes(opt.key)}
+                    onChange={() => toggleSize(opt.key)}
+                  />
+                  {opt.label}
+                </label>
+              ))}
+            </div>
+            <div className="mt-3">
+              <label className="block text-sm font-medium mb-1">Custom Size</label>
+              <input
+                type="text"
+                className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                value={customSize}
+                onChange={(e) => setCustomSize(e.target.value)}
+                placeholder="e.g., 1200×628 or 600×600"
+              />
+            </div>
+          </div>
+
+          {/* Requester */}
+          <div>
+            <label className="block text-sm font-medium mb-1">Requester Info (Optional)</label>
+            <input
+              type="text"
+              className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              value={requesterInfo}
+              onChange={(e) => setRequesterInfo(e.target.value)}
+              placeholder="Your name or email"
+            />
+          </div>
+
+          <button
+            type="submit"
+            className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2 rounded disabled:opacity-60"
+            disabled={loading}
+          >
+            {loading ? "Submitting…" : "Submit Request"}
+          </button>
+
+          {result && (
+            <div className="mt-4">
+              {result.success ? (
+                <div className="text-emerald-700">Task created successfully.</div>
+              ) : (
+                <div className="text-rose-700">{result.error}</div>
+              )}
             </div>
           )}
-        </div>
-      )}
+        </form>
+      </div>
     </div>
   );
 }
