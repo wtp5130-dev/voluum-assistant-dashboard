@@ -48,6 +48,9 @@ export async function GET(req: NextRequest): Promise<Response> {
     const comJson = comTxt ? JSON.parse(comTxt) : {};
     const comments: any[] = Array.isArray(comJson?.comments) ? comJson.comments : (Array.isArray(comJson) ? comJson : []);
 
+    console.log(`[import] Task ${taskId}: found ${comments.length} comments`);
+    console.log(`[import] Full comments JSON:`, JSON.stringify(comments, null, 2).substring(0, 3000));
+
     // Extract image URLs and a bot comment if any
     const urls: string[] = [];
     let botComment: string | undefined;
@@ -65,6 +68,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       urls.push(...matches);
     }
 
+    console.log(`[import] Task ${taskId}: extracted ${urls.length} URLs`);
     const unique = Array.from(new Set(urls));
     const now = new Date().toISOString();
     let saved = 0;
