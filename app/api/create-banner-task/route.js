@@ -44,6 +44,7 @@ export async function POST(request) {
     const description = body.description || '';
     const region = body.region || '';
     const brand = body.brand || '';
+    const requestedStatus = (body.status || process.env.CLICKUP_DEFAULT_STATUS || 'design requested').toString().trim();
 
     if (!name || typeof name !== 'string') {
       return new Response(
@@ -58,10 +59,35 @@ export async function POST(request) {
     const metaBlock = metaLines.length ? `\n\n${metaLines.join('\n')}` : '';
     const fullDescription = `${description}${metaBlock}`;
 
+    // Resolve a valid status for this list; if the requested status doesn't exist,
+    // fall back to the list's first "open" status or omit the field (use default).
+    let statusToUse = null;
+    try {
+      const infoRes = await fetch(`${CLICKUP_API_BASE}/list/${encodeURIComponent(listId)}`, {
+        method: 'GET',
+        headers: { 'Authorization': apiKey },
+      });
+      const infoText = await infoRes.text();
+      let info;
+      try { info = infoText ? JSON.parse(infoText) : {}; } catch { info = { raw: infoText }; }
+      const statuses = Array.isArray(info?.statuses) ? info.statuses : [];
+      if (statuses.length) {
+        const desired = statuses.find(s => (s?.status || '').toLowerCase() === requestedStatus.toLowerCase());
+        if (desired?.status) {
+          statusToUse = desired.status;
+        } else {
+          const open = statuses.find(s => (s?.type || '').toLowerCase() === 'open');
+          if (open?.status) statusToUse = open.status;
+        }
+      }
+    } catch (e) {
+      console.warn('[create-banner-task] Could not read list statuses; proceeding without explicit status', e);
+    }
+
     const payload = {
       name,
       description: fullDescription,
-      status: 'design requested',
+      ...(statusToUse ? { status: statusToUse } : {}),
     };
 
     const url = `${CLICKUP_API_BASE}/list/${encodeURIComponent(listId)}/task`;
@@ -93,7 +119,7 @@ export async function POST(request) {
 
     const taskUrl = data?.url || null;
     const taskId = data?.id || null;
-    console.log('[create-banner-task] Task created', { taskId, taskUrl, listIdUsed: listId });
+    console.log('[create-banner-task] Task created', { taskId, taskUrl, listIdUsed: listId, statusUsed: statusToUse || '(default)' });
 
     return new Response(
       JSON.stringify({ success: true, taskUrl, taskId }),
