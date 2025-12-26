@@ -2870,7 +2870,8 @@ function OptimizerTab(props: {
                     if (json?.debug) {
                       parts.push(`\nProvider zones per campaign:`);
                       for (const [cid, info] of Object.entries(json.debug as any)) {
-                        parts.push(`  Campaign ${cid}: ${info.total} zones${info.total > 0 ? ` (e.g., ${info.sample.join(', ')})` : ''}`);
+                        const debugInfo = info as { total: number; sample: string[] };
+                        parts.push(`  Campaign ${cid}: ${debugInfo.total} zones${debugInfo.total > 0 ? ` (e.g., ${debugInfo.sample.join(', ')})` : ''}`);
                       }
                     }
                     
