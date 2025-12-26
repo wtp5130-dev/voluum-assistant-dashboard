@@ -81,8 +81,7 @@ export async function POST(request) {
     }
 
     const metaLines = [];
-    if (region) metaLines.push(`Region: ${region}`);
-    if (brand) metaLines.push(`Brand: ${brand}`);
+    // Brand and Region are now set as custom fields, so don't add to description
     if (sizes.length) metaLines.push(`Requested Outputs: ${sizes.join(', ')}`);
     if (customSize) metaLines.push(`Custom Size: ${customSize}`);
     if (requesterInfo) metaLines.push(`Requester: ${requesterInfo}`);
