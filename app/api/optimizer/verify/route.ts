@@ -46,8 +46,8 @@ async function fetchBlacklistedFromPropeller(campaignId: string): Promise<Set<st
       if (n && n.length >= 4 && n.length <= 12) ids.add(n); // Reasonable zone ID length
     };
     
-    // Extract from known array fields
-    const raw: any[] = (json?.zone_ids || json?.zones || json?.data || []) as any[];
+    // Extract from known array fields - check both singular and plural forms
+    const raw: any[] = (json?.zone_ids || json?.zones || json?.zone || json?.data || []) as any[];
     if (Array.isArray(raw) && raw.length > 0) {
       for (const z of raw) {
         if (z == null) continue;
