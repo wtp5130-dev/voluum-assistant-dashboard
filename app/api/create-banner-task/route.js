@@ -118,9 +118,22 @@ export async function POST(request) {
       name,
       description: fullDescription,
       ...(statusToUse ? { status: statusToUse } : {}),
+      // Set custom fields for Brand and Region/Country
+      custom_fields: [
+        {
+          id: process.env.CLICKUP_CUSTOM_FIELD_BRAND || "d8fd8d71-58a2-4c8f-b5a6-1d8e3f6a9e2c",
+          value: brand || null,
+        },
+        {
+          id: process.env.CLICKUP_CUSTOM_FIELD_REGION || "a3f5c9e8-7d2b-4a1c-9f3e-5b8c1a7d6e4f",
+          value: region || null,
+        },
+      ].filter(f => f.value), // Only include fields that have values
     };
 
     const url = `${CLICKUP_API_BASE}/list/${encodeURIComponent(listId)}/task`;
+    console.log('[create-banner-task] Creating task with payload:', JSON.stringify({ ...payload, description: payload.description.substring(0, 100) + '...' }, null, 2));
+    
     const res = await fetch(url, {
       method: 'POST',
       headers: {
@@ -140,6 +153,7 @@ export async function POST(request) {
         status: res.status,
         statusText: res.statusText,
         response: data,
+        requestPayload: payload,
       });
       return new Response(text || JSON.stringify({ error: 'ClickUp API error' }), {
         status: res.status,
