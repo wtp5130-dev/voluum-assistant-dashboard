@@ -97,6 +97,7 @@ export async function middleware(req: NextRequest) {
 
 export const config = {
   matcher: [
-    "/((?!_next|.*\\..*|favicon.ico).*)",
+    // Exclude static assets and public API endpoints from middleware
+    "/((?!_next|.*\\..*|favicon.ico|api/clickup-webhook|api/create-banner-task).*)",
   ],
 };
