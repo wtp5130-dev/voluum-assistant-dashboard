@@ -1,9 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 
 export default function CreativeRequestForm() {
+  const router = useRouter();
   const search = useSearchParams();
   const listIdParam = search?.get("listId") || search?.get("list_id") || "";
 
@@ -39,6 +41,8 @@ export default function CreativeRequestForm() {
         setResult({ success: false, error: data?.error || text || `Request failed (${res.status})` });
       } else {
         setResult({ success: true, taskUrl: data?.taskUrl ?? null, taskId: data?.taskId ?? null });
+        // Redirect to thank-you after a short delay
+        setTimeout(() => router.push("/thank-you"), 600);
       }
     } catch (err: any) {
       setResult({ success: false, error: err?.message || "Unexpected error" });
