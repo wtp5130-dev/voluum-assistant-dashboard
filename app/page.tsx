@@ -104,39 +104,6 @@ const DASHBOARD_API_URL = "/api/voluum-dashboard";
 const CHAT_API_URL = "/api/chat";
 const OPTIMIZER_PREVIEW_URL = "/api/optimizer/preview";
 const OPTIMIZER_APPLY_URL = "/api/optimizer/apply";
-  string,
-  {
-    label: string;
-    notes: string;
-    mainImageSize: string;
-    required: string[];
-  }
-> = {
-  "push-classic": {
-    label: "Propeller Push",
-    notes: "Title + description + main image (360x240 or square).",
-    mainImageSize: "1024x1024",
-    required: ["title", "description", "main image"],
-  },
-  "inpage-push": {
-    label: "In-Page Push",
-    notes: "Title + description + main image (square or 3:2).",
-    mainImageSize: "1024x768",
-    required: ["title", "description", "main image"],
-  },
-  interstitial: {
-    label: "Interstitial",
-    notes: "Full-screen image; optional title/description.",
-    mainImageSize: "1080x1920",
-    required: ["main image", "optional copy"],
-  },
-  onclick: {
-    label: "Onclick / Direct Click",
-    notes: "Hero image aimed at CTR (1200x628).",
-    mainImageSize: "1200x628",
-    required: ["main image"],
-  },
-};
 
 const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
   { key: "today", label: "Today" },
