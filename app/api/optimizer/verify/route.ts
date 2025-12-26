@@ -33,40 +33,30 @@ async function fetchBlacklistedFromPropeller(campaignId: string): Promise<Set<st
     });
     if (!res.ok) return null;
     const json = await res.json().catch(() => null);
+    if (!json) return null;
+    
     const ids = new Set<string>();
-    const push = (v: any) => { const n = normalizeId(v); if (n) ids.add(n); };
-    const fromSimpleArrays = (arr: any[]) => {
-      for (const z of arr) {
+    const push = (v: any) => { 
+      const n = normalizeId(v); 
+      if (n && n.length >= 4 && n.length <= 12) ids.add(n); // Reasonable zone ID length
+    };
+    
+    // Extract from known array fields
+    const raw: any[] = (json?.zone_ids || json?.zones || json?.data || []) as any[];
+    if (Array.isArray(raw) && raw.length > 0) {
+      for (const z of raw) {
         if (z == null) continue;
-        if (typeof z === "string" || typeof z === "number") { push(z); continue; }
-        if (typeof z === "object") {
-          const v = (z as any).zone_id ?? (z as any).zoneId ?? (z as any).publisher_zone_id ?? (z as any).publisherZoneId ?? (z as any).placement_id ?? (z as any).placementId ?? (z as any).id ?? (z as any).zone ?? (z as any).value ?? (z as any).key;
+        if (typeof z === "string" || typeof z === "number") { 
+          push(z); 
+        } else if (typeof z === "object") {
+          // Try common field names
+          const v = (z as any).zone_id ?? (z as any).zoneId ?? (z as any).publisher_zone_id ?? (z as any).publisherZoneId ?? (z as any).placement_id ?? (z as any).placementId ?? (z as any).id ?? (z as any).zone;
           if (v != null) push(v);
         }
       }
-    };
-    const raw: any[] = (json?.zone_ids || json?.zones || json?.data || []) as any[];
-    if (Array.isArray(raw)) fromSimpleArrays(raw);
-    // Deep scan as fallback
-    const visit = (node: any, key?: string) => {
-      if (node == null) return;
-      const k = String(key || "");
-      if (typeof node === "string" || typeof node === "number") {
-        // only collect leaf primitives if key suggests id
-        if (/id$/i.test(k) || /(zone|placement)/i.test(k)) push(node);
-        return;
-      }
-      if (Array.isArray(node)) { for (const it of node) visit(it); return; }
-      if (typeof node === "object") {
-        // object with obvious fields
-        const v = (node as any).zone_id ?? (node as any).zoneId ?? (node as any).publisher_zone_id ?? (node as any).publisherZoneId ?? (node as any).placement_id ?? (node as any).placementId ?? (node as any).id ?? (node as any).zone;
-        if (v != null) push(v);
-        for (const [kk, vv] of Object.entries(node)) visit(vv, kk);
-      }
-    };
-    visit(json);
-    const set = ids;
-    return set;
+    }
+    
+    return ids;
   } catch {
     return null;
   }
