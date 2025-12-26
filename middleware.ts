@@ -31,8 +31,8 @@ export async function middleware(req: NextRequest) {
       /^\/api\/auth\//,
       /^\/marketing(\/.*)?$/,
       // Public APIs for external services (ClickUp integration)
-      /^\/api\/clickup-webhook$/,
-      /^\/api\/create-banner-task$/,
+      /^\/api\/clickup-webhook(?:\/.*)?$/,
+      /^\/api\/create-banner-task(?:\/.*)?$/,
     ];
   if (PUBLIC.some((re) => re.test(pathname))) return NextResponse.next();
 
