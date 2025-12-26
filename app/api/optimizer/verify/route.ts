@@ -102,14 +102,21 @@ export async function POST(req: NextRequest): Promise<Response> {
     const list = ((await kv.lrange(LIST_KEY, 0, -1)) as any[]) || [];
     const targets = items && items.length > 0 ? list.filter((e) => items.some((it) => (!it.id || e.id === it.id) && e.campaignId === it.campaignId)) : list;
 
-    // Group targets by campaign
+    // Group targets by campaign - use Map with entry IDs to ensure we update the right objects in list
     const byCampaign = new Map<string, { providerCid: string; entries: any[] }>();
-    for (const entry of targets) {
+    const entryIndexMap = new Map<any, number>(); // Track which list index each entry is at
+    
+    for (let idx = 0; idx < list.length; idx++) {
+      const entry = list[idx];
       if (entry.reverted) continue; // skip reverted
+      // Only process if in targets
+      if (!targets.includes(entry)) continue;
+      
       const cid = String(entry.campaignId);
       const providerCid = await resolveProviderCampaignId(cid);
       if (!byCampaign.has(providerCid)) byCampaign.set(providerCid, { providerCid, entries: [] });
       byCampaign.get(providerCid)!.entries.push(entry);
+      entryIndexMap.set(entry, idx);
     }
 
     let campaignsProcessed = 0;
