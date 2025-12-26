@@ -27,7 +27,12 @@ export default function CreativeGallery() {
     }
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { 
+    load(); 
+    // Auto-refresh every 3 seconds to catch new images from ClickUp agent
+    const interval = setInterval(load, 3000);
+    return () => clearInterval(interval);
+  }, []);
   useEffect(() => {
     (async () => {
       try { const r = await fetch("/api/brand", { cache: "no-store" }); const j = await r.json(); setBrands(Array.isArray(j?.brands) ? j.brands : []);} catch {}
