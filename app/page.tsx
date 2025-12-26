@@ -995,7 +995,7 @@ export default function DashboardPage() {
 
       {activeTab === "creatives" && can("creatives") && (
         <CreativesTab />
-      )}}
+      )}
 
       {activeTab === "builder" && can("builder") && (
         <CampaignBuilderTab />
