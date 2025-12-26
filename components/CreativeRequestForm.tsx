@@ -11,6 +11,8 @@ export default function CreativeRequestForm() {
 
   const [title, setTitle] = useState("Mid Autumn Festival");
   const [description, setDescription] = useState("");
+  const COUNTRIES = ["Malaysia", "Indonesia", "Thailand", "Singapore", "Mexico"];
+  const BRANDS = ["3Star88", "Sol88"];
   const [country, setCountry] = useState("");
   const [brand, setBrand] = useState("");
   const [sizes, setSizes] = useState<string[]>([]);
@@ -131,25 +133,31 @@ export default function CreativeRequestForm() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium mb-1">Country<span className="text-rose-500">*</span></label>
-              <input
-                type="text"
+              <select
                 className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
-                placeholder="MY, SG, PH"
                 required
-              />
+              >
+                <option value="">Select a country…</option>
+                {COUNTRIES.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
             </div>
             <div>
               <label className="block text-sm font-medium mb-1">Brand<span className="text-rose-500">*</span></label>
-              <input
-                type="text"
+              <select
                 className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={brand}
                 onChange={(e) => setBrand(e.target.value)}
-                placeholder="3Star, LuckyDay"
                 required
-              />
+              >
+                <option value="">Select a brand…</option>
+                {BRANDS.map((b) => (
+                  <option key={b} value={b}>{b}</option>
+                ))}
+              </select>
             </div>
           </div>
 

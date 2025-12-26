@@ -1,6 +1,10 @@
 // Next.js 14 App Router API route (JavaScript)
 // POST /api/clickup-webhook
 // Receives ClickUp webhook events and logs BannerBot-related updates
+import { kv } from '@vercel/kv';
+
+const GALLERY_KEY = 'gallery:images';
+const MEDIA_KEY = 'media:items';
 
 function corsHeaders() {
   return {
@@ -69,6 +73,44 @@ export async function POST(request) {
           imageCount: imageUrls.length,
           imageUrls,
         });
+
+        // Persist images to Creative Gallery and Media Library
+        if (imageUrls.length) {
+          try {
+            const now = new Date().toISOString();
+            // Save to gallery
+            for (const url of imageUrls) {
+              const galleryItem = {
+                id: crypto.randomUUID(),
+                url,
+                provider: 'clickup',
+                prompt: text || '(ClickUp attachment)',
+                createdAt: now,
+              };
+              await kv.lpush(GALLERY_KEY, galleryItem);
+              await kv.ltrim(GALLERY_KEY, 0, 999);
+            }
+            // Save to media
+            for (const url of imageUrls) {
+              const filename = (() => {
+                try { const u = new URL(url); return decodeURIComponent(u.pathname.split('/').pop() || 'image'); } catch { return 'image'; }
+              })();
+              const mediaItem = {
+                id: crypto.randomUUID(),
+                url,
+                filename,
+                mime: undefined,
+                size: undefined,
+                createdAt: now,
+              };
+              await kv.lpush(MEDIA_KEY, mediaItem);
+              await kv.ltrim(MEDIA_KEY, 0, 999);
+            }
+            console.log('[clickup-webhook] saved images to gallery and media', { count: imageUrls.length });
+          } catch (err) {
+            console.error('[clickup-webhook] failed to save images', err);
+          }
+        }
         break;
       }
       case 'taskStatusUpdated': {
