@@ -8,7 +8,7 @@ export default function CreativeGallery() {
   const [error, setError] = useState<string | null>(null);
   const [brands, setBrands] = useState<Array<{ id: string; name: string }>>([]);
   const [filterBrand, setFilterBrand] = useState<string>("");
-  const [filterStyle, setFilterStyle] = useState<string>("");
+  // style filter removed
   const [from, setFrom] = useState<string>("");
   const [to, setTo] = useState<string>("");
   const [me, setMe] = useState<{ username?: string; email?: string } | null>(null);
@@ -45,7 +45,7 @@ export default function CreativeGallery() {
     return items.filter((it) => {
       const t = it.createdAt ? new Date(it.createdAt).getTime() : 0;
       if (t < fromTs || t > toTs) return false;
-      if (filterStyle && String(it.style_preset||"").toLowerCase() !== filterStyle.toLowerCase()) return false;
+      // no style filter
       if (filterBrand) {
         const bn = (it.brandName || "").toLowerCase();
         const target = (brands.find(b=>b.id===filterBrand)?.name || "").toLowerCase();
@@ -53,7 +53,7 @@ export default function CreativeGallery() {
       }
       return true;
     });
-  }, [items, from, to, filterStyle, filterBrand, brands]);
+  }, [items, from, to, filterBrand, brands]);
 
   const remove = async (id: string) => {
     try {
@@ -104,40 +104,7 @@ export default function CreativeGallery() {
             {brands.map((b)=> (<option key={b.id} value={b.id}>{b.name}</option>))}
           </select>
         </div>
-        <div>
-          <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Style preset</label>
-          <select value={filterStyle} onChange={(e)=>setFilterStyle(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1">
-            <option value="">All</option>
-            <option value="MIXED_MEDIA">MIXED_MEDIA</option>
-            <option value="90S_NOSTALGIA">90S_NOSTALGIA</option>
-            <option value="SPOTLIGHT_80S">SPOTLIGHT_80S</option>
-            <option value="C4D_CARTOON">C4D_CARTOON</option>
-            <option value="JAPANDI_FUSION">JAPANDI_FUSION</option>
-            <option value="CYBERPUNK">CYBERPUNK</option>
-            <option value="NEON_NOIR">NEON_NOIR</option>
-            <option value="RETRO_FUTURISM">RETRO_FUTURISM</option>
-            <option value="VAPORWAVE">VAPORWAVE</option>
-            <option value="POP_ART">POP_ART</option>
-            <option value="COMIC_BOOK">COMIC_BOOK</option>
-            <option value="ANIME">ANIME</option>
-            <option value="PIXEL_ART">PIXEL_ART</option>
-            <option value="LOWPOLY">LOWPOLY</option>
-            <option value="WATERCOLOR">WATERCOLOR</option>
-            <option value="OIL_PAINTING">OIL_PAINTING</option>
-            <option value="ART_BRUT">ART_BRUT</option>
-            <option value="LINE_ART">LINE_ART</option>
-            <option value="ISOMETRIC">ISOMETRIC</option>
-            <option value="3D_RENDER">3D_RENDER</option>
-            <option value="ULTRA_REALISTIC">ULTRA_REALISTIC</option>
-            <option value="CINEMATIC">CINEMATIC</option>
-            <option value="FILM_GRAIN">FILM_GRAIN</option>
-            <option value="BLACK_WHITE">BLACK_WHITE</option>
-            <option value="DUOTONE">DUOTONE</option>
-            <option value="LONG_EXPOSURE">LONG_EXPOSURE</option>
-            <option value="BOKEH">BOKEH</option>
-            <option value="TYPOGRAPHY_BOLD">TYPOGRAPHY_BOLD</option>
-          </select>
-        </div>
+        {/* style preset filter removed */}
         <div>
           <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">From</label>
           <input type="date" value={from} onChange={(e)=>setFrom(e.target.value)} className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1" />
@@ -173,8 +140,6 @@ export default function CreativeGallery() {
                   })()}
                   <div className="ml-auto inline-flex items-center gap-2">
                     <button onClick={() => setStatus(it.id, 'approved')} className="px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500">Approve</button>
-                    <button onClick={() => setStatus(it.id, 'changes_requested')} className="px-2 py-1 rounded-md bg-amber-600 hover:bg-amber-500">Request changes</button>
-                    <button onClick={() => setStatus(it.id, 'resolved')} className="px-2 py-1 rounded-md bg-slate-700 hover:bg-slate-600">Resolve</button>
                   </div>
                 </div>
                 {Array.isArray(it.outputs) && it.outputs.length > 0 && (
@@ -185,13 +150,7 @@ export default function CreativeGallery() {
                   </div>
                 )}
                 {it.brandName && <div className="text-slate-400">Brand: <span className="text-slate-200">{it.brandName}</span></div>}
-                <div className="text-slate-400">Size: <span className="text-slate-200">{it.size || "—"}</span></div>
-                <div className="text-slate-400">Style: <span className="text-slate-200">{it.style_preset || "—"}</span></div>
-                {it.negative_prompt && <div className="text-slate-400">Avoid: <span className="text-slate-200">{it.negative_prompt}</span></div>}
-                <div className="text-slate-300">
-                  <div className="uppercase text-[10px] text-slate-400">Prompt</div>
-                  <pre className="whitespace-pre-wrap break-words bg-slate-950/60 border border-slate-800 rounded-md p-2 max-h-40 overflow-auto">{it.prompt}</pre>
-                </div>
+                {/* size, style, prompt removed */}
                 {it.botComment && (
                   <div className="text-slate-300">
                     <div className="uppercase text-[10px] text-slate-400">BannerBot</div>
