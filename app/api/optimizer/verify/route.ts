@@ -35,6 +35,11 @@ async function fetchBlacklistedFromPropeller(campaignId: string): Promise<Set<st
     const json = await res.json().catch(() => null);
     if (!json) return null;
     
+    // Debug: log the raw response for first campaign
+    if (campaignId === "9857527") {
+      console.log("[VERIFY DEBUG] Campaign 9857527 raw response:", JSON.stringify(json).substring(0, 500));
+    }
+    
     const ids = new Set<string>();
     const push = (v: any) => { 
       const n = normalizeId(v); 
@@ -124,8 +129,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     // Verify each campaign's blacklist
     for (const [providerCid, bucket] of byCampaign.entries()) {
       const set = await fetchBlacklistedFromPropeller(providerCid);
-      if (!set) { campaignsSkipped++; continue; }
+      if (!set) { 
+        campaignsSkipped++; 
+        console.log(`[VERIFY] Campaign ${providerCid} - API returned null (likely error or no access)`);
+        continue; 
+      }
       campaignsProcessed++;
+      console.log(`[VERIFY] Campaign ${providerCid} - Found ${set.size} zones in provider`);
       
       // Collect zones we're checking for this campaign
       const checkingZones = bucket.entries.map(e => normalizeId(e.zoneId) || e.zoneId).slice(0, 10);
