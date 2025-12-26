@@ -106,24 +106,24 @@ export default function CreativeRequestForm() {
   }, []);
 
   return (
-    <div className="min-h-screen bg-[#f8f9fb] text-slate-900">
+    <div className="min-h-screen bg-slate-950 text-slate-100">
       <div className="max-w-5xl mx-auto px-4 pt-10 pb-6">
-        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mb-2">
+        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mb-2 text-white">
           🎯 Creative Banner Request Form
         </h1>
-        <p className="text-slate-600">
+        <p className="text-slate-300">
           Submit a new banner or marketing visual request below. BannerBot will automatically generate the first concept and mark it as “In Progress” for review.
         </p>
       </div>
 
       <div className="max-w-5xl mx-auto px-4 pb-16">
-        <form onSubmit={handleSubmit} className="space-y-6 bg-white rounded-xl shadow-xl border border-slate-200 p-6">
+        <form onSubmit={handleSubmit} className="space-y-6 bg-slate-900/70 rounded-xl shadow-xl border border-slate-800 p-6">
           {/* Title */}
           <div>
-            <label className="block text-sm font-medium mb-1">Banner Title</label>
+            <label className="block text-sm font-medium mb-1 text-slate-200">Banner Title</label>
             <input
               type="text"
-              className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded px-3 py-2 border border-slate-700 bg-slate-900 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
               placeholder="Mid Autumn Festival"
@@ -133,9 +133,9 @@ export default function CreativeRequestForm() {
 
           {/* Description */}
           <div>
-            <label className="block text-sm font-medium mb-1">Description</label>
+            <label className="block text-sm font-medium mb-1 text-slate-200">Description</label>
             <textarea
-              className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded px-3 py-2 border border-slate-700 bg-slate-900 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               rows={4}
               value={description}
               onChange={(e) => setDescription(e.target.value)}
@@ -146,9 +146,9 @@ export default function CreativeRequestForm() {
           {/* Country + Brand */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Country<span className="text-rose-500">*</span></label>
+              <label className="block text-sm font-medium mb-1 text-slate-200">Country<span className="text-rose-400">*</span></label>
               <select
-                className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded px-3 py-2 border border-slate-700 bg-slate-900 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={country}
                 onChange={(e) => setCountry(e.target.value)}
                 required
@@ -160,9 +160,9 @@ export default function CreativeRequestForm() {
               </select>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Brand<span className="text-rose-500">*</span></label>
+              <label className="block text-sm font-medium mb-1 text-slate-200">Brand<span className="text-rose-400">*</span></label>
               <select
-                className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded px-3 py-2 border border-slate-700 bg-slate-900 text-slate-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={brand}
                 onChange={(e) => setBrand(e.target.value)}
                 required
@@ -177,11 +177,11 @@ export default function CreativeRequestForm() {
 
           {/* Reference upload */}
           <div>
-            <label className="block text-sm font-medium mb-2">Reference <span className="text-slate-500 font-normal">(optional)</span></label>
+            <label className="block text-sm font-medium mb-2 text-slate-200">Reference <span className="text-slate-400 font-normal">(optional)</span></label>
             <div
               onDragOver={(e) => e.preventDefault()}
               onDrop={onDrop}
-              className="border-2 border-dashed rounded-lg p-6 text-center text-slate-600 bg-slate-50"
+              className="border-2 border-dashed rounded-lg p-6 text-center text-slate-300 bg-slate-900 border-slate-700"
             >
               <p className="mb-2">Drop your files here to upload</p>
               <input
@@ -202,7 +202,7 @@ export default function CreativeRequestForm() {
                 <div className="mt-4">
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                     {files.map((p, i) => (
-                      <div key={i} className="relative group border rounded-md overflow-hidden bg-white">
+                      <div key={i} className="relative group border border-slate-700 rounded-md overflow-hidden bg-slate-900">
                         {/* eslint-disable-next-line @next/next/no-img-element */}
                         <img src={p.url} alt={p.file.name} className="w-full h-28 object-cover" />
                         <button
@@ -224,7 +224,7 @@ export default function CreativeRequestForm() {
 
           {/* Sizes */}
           <div>
-            <label className="block text-sm font-medium mb-2">Outputs</label>
+            <label className="block text-sm font-medium mb-2 text-slate-200">Outputs</label>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {[
                 { key: "Push Notifications (720x480)", label: "Push Notifications (720x480)" },
@@ -234,10 +234,10 @@ export default function CreativeRequestForm() {
                 { key: "Story / Reel (1080x1920)", label: "Story / Reel (1080×1920)" },
                 { key: "Display Ad (300x250)", label: "Display Ad (300×250)" },
               ].map((opt) => (
-                <label key={opt.key} className="inline-flex items-center gap-2 text-sm text-slate-700">
+                <label key={opt.key} className="inline-flex items-center gap-2 text-sm text-slate-300">
                   <input
                     type="checkbox"
-                    className="rounded border-slate-300"
+                    className="rounded border-slate-700 bg-slate-900"
                     checked={sizes.includes(opt.key)}
                     onChange={() => toggleSize(opt.key)}
                   />
@@ -246,10 +246,10 @@ export default function CreativeRequestForm() {
               ))}
             </div>
             <div className="mt-3">
-              <label className="block text-sm font-medium mb-1">Custom Size</label>
+              <label className="block text-sm font-medium mb-1 text-slate-200">Custom Size</label>
               <input
                 type="text"
-                className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                className="w-full rounded px-3 py-2 border border-slate-700 bg-slate-900 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
                 value={customSize}
                 onChange={(e) => setCustomSize(e.target.value)}
                 placeholder="e.g., 1200×628 or 600×600"
@@ -259,10 +259,10 @@ export default function CreativeRequestForm() {
 
           {/* Requester */}
           <div>
-            <label className="block text-sm font-medium mb-1">Requester Info (Optional)</label>
+            <label className="block text-sm font-medium mb-1 text-slate-200">Requester Info (Optional)</label>
             <input
               type="text"
-              className="w-full rounded px-3 py-2 border border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              className="w-full rounded px-3 py-2 border border-slate-700 bg-slate-900 text-slate-100 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
               value={requesterInfo}
               onChange={(e) => setRequesterInfo(e.target.value)}
               placeholder="Your name or email"
@@ -280,9 +280,9 @@ export default function CreativeRequestForm() {
           {result && (
             <div className="mt-4">
               {result.success ? (
-                <div className="text-emerald-700">Task created successfully.</div>
+                <div className="text-emerald-300">Task created successfully.</div>
               ) : (
-                <div className="text-rose-700">{result.error}</div>
+                <div className="text-rose-300">{result.error}</div>
               )}
             </div>
           )}
