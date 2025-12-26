@@ -124,14 +124,23 @@ export async function POST(req: NextRequest): Promise<Response> {
     let entriesChecked = 0;
     let verifiedTrue = 0;
     let verifiedFalse = 0;
+    const debugInfo: Record<string, { total: number; sample: string[] }> = {};
 
     // Verify each campaign's blacklist
     for (const [providerCid, bucket] of byCampaign.entries()) {
       const set = await fetchBlacklistedFromPropeller(providerCid);
       if (!set) { campaignsSkipped++; continue; }
       campaignsProcessed++;
+      
+      // Store debug info: first 5 zone IDs from provider
+      debugInfo[providerCid] = { 
+        total: set.size, 
+        sample: Array.from(set).slice(0, 5) 
+      };
+      
       for (const e of bucket.entries) {
-        const present = set.has(normalizeId(e.zoneId) || "");
+        const normalized = normalizeId(e.zoneId);
+        const present = set.has(normalized || "");
         entriesChecked++;
         e.verified = present;
         e.verifiedAt = new Date().toISOString();
@@ -146,7 +155,12 @@ export async function POST(req: NextRequest): Promise<Response> {
     }
 
     return new Response(
-      JSON.stringify({ ok: true, campaigns: { processed: campaignsProcessed, skipped: campaignsSkipped, total: byCampaign.size }, entries: { checked: entriesChecked, verifiedTrue, verifiedFalse } }),
+      JSON.stringify({ 
+        ok: true, 
+        campaigns: { processed: campaignsProcessed, skipped: campaignsSkipped, total: byCampaign.size }, 
+        entries: { checked: entriesChecked, verifiedTrue, verifiedFalse },
+        debug: debugInfo
+      }),
       { status: 200, headers: { "Content-Type": "application/json" } }
     );
   } catch (err: any) {

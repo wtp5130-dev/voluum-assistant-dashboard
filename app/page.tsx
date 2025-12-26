@@ -2865,6 +2865,15 @@ function OptimizerTab(props: {
                     parts.push(`Entries checked: ${stats.checked ?? 0}`);
                     parts.push(`Verified present: ${stats.verifiedTrue ?? 0}`);
                     parts.push(`Not found: ${stats.verifiedFalse ?? 0}`);
+                    
+                    // Add debug info
+                    if (json?.debug) {
+                      parts.push(`\nProvider zones per campaign:`);
+                      for (const [cid, info] of Object.entries(json.debug as any)) {
+                        parts.push(`  Campaign ${cid}: ${info.total} zones${info.total > 0 ? ` (e.g., ${info.sample.join(', ')})` : ''}`);
+                      }
+                    }
+                    
                     showVerifyToast(`Verify complete.\n${parts.join("\n")}`, "success");
                   }
                   refreshBlacklist();
