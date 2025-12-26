@@ -119,6 +119,10 @@ export async function POST(request) {
               if (item?.type === "image" && item?.image?.url) {
                 urls.push(item.image.url);
               }
+              // Also check if the item itself has a url property (alternative structure)
+              if (item?.url && typeof item.url === 'string' && /^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(item.url)) {
+                urls.push(item.url);
+              }
             }
           }
           
@@ -130,8 +134,25 @@ export async function POST(request) {
               if (typeof u === 'string' && /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u)) urls.push(u);
             }
           }
+          
+          // Extra fallback: recursively search for image URLs in comment object
+          try {
+            const stack = [c];
+            while (stack.length) {
+              const v = stack.pop();
+              if (typeof v === 'string' && /^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(v)) {
+                urls.push(v);
+              } else if (Array.isArray(v)) {
+                for (const x of v) stack.push(x);
+              } else if (v && typeof v === 'object') {
+                for (const k of Object.keys(v)) stack.push(v[k]);
+              }
+            }
+          } catch {}
         }
-        return Array.from(new Set(urls));
+        const uniqueUrls = Array.from(new Set(urls));
+        console.log('[clickup-webhook] fetchTaskCommentImageUrls extracted:', { taskId, count: uniqueUrls.length, urls: uniqueUrls.slice(0, 3) });
+        return uniqueUrls;
       } catch (e) {
         console.warn('[clickup-webhook] fetchTaskCommentImageUrls failed', e);
         return [];
@@ -144,9 +165,20 @@ export async function POST(request) {
         const comment = body?.comment || body?.history_items?.[0]?.comment;
         const text = comment?.text || comment?.comment_text || '';
         const attachments = comment?.attachments || comment?.attachment || [];
+        
+        // Log the comment structure for debugging
+        console.log('[clickup-webhook] Comment structure:', { 
+          hasComment: !!comment, 
+          hasCommentArray: Array.isArray(comment?.comment),
+          commentArrayLength: Array.isArray(comment?.comment) ? comment.comment.length : 0,
+          commentKeys: comment ? Object.keys(comment) : [],
+          textPreview: text?.slice(0, 100)
+        });
 
         // Try to extract image URLs (very defensive parsing)
         const imageUrls = [];
+        
+        // Check attachments field
         if (Array.isArray(attachments)) {
           for (const att of attachments) {
             const url = att?.url || att?.thumb || att?.image || att?.path;
@@ -155,6 +187,19 @@ export async function POST(request) {
             }
           }
         }
+        
+        // Check comment array for image objects
+        if (Array.isArray(comment?.comment)) {
+          for (const item of comment.comment) {
+            if (item?.type === 'image' && item?.image?.url) {
+              imageUrls.push(item.image.url);
+            }
+            if (item?.url && typeof item.url === 'string' && /^https?:\/\/.+\.(png|jpe?g|webp|gif)(\?|$)/i.test(item.url)) {
+              imageUrls.push(item.url);
+            }
+          }
+        }
+        
         // Also scan text for embedded URLs
         const urlMatches = (text.match(/https?:\/\/\S+/g) || []).filter(u => /\.(png|jpe?g|webp|gif)(\?|$)/i.test(u));
         imageUrls.push(...urlMatches);
