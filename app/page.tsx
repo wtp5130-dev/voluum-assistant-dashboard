@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import CreativeGallery from "@/components/CreativeGallery";
 
 /**
  * ===========
