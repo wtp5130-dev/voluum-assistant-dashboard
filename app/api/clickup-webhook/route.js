@@ -61,6 +61,9 @@ export async function POST(request) {
           headers: { Authorization: apiKey },
         });
         const txt = await res.text();
+        if (!res.ok) {
+          console.warn('[clickup-webhook] fetchTaskMeta failed:', { status: res.status, taskId: id, response: txt?.slice(0, 200) });
+        }
         const json = txt ? JSON.parse(txt) : {};
         const desc = String(json?.description || '');
         const title = String(json?.name || '');
@@ -106,6 +109,9 @@ export async function POST(request) {
           headers: { Authorization: apiKey },
         });
         const txt = await res.text();
+        if (!res.ok) {
+          console.warn('[clickup-webhook] fetchTaskCommentImageUrls failed:', { status: res.status, taskId, response: txt?.slice(0, 200) });
+        }
         const json = txt ? JSON.parse(txt) : {};
         const comments = Array.isArray(json?.comments) ? json.comments : (Array.isArray(json) ? json : []);
         const urls = [];

@@ -104,11 +104,21 @@ export async function PATCH(req: NextRequest): Promise<Response> {
         if (body?.status) commentLines.push(`Status: ${String(body.status).replace(/_/g, ' ')}`);
         if (body?.comment?.text) commentLines.push(String(body.comment.text));
         const payload = { comment_text: commentLines.join("\n\n") } as any;
-        await fetch(`https://api.clickup.com/api/v2/task/${encodeURIComponent(next.taskId)}/comment`, {
-          method: 'POST', headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-        }).catch(() => {});
+        try {
+          const res = await fetch(`https://api.clickup.com/api/v2/task/${encodeURIComponent(next.taskId)}/comment`, {
+            method: 'POST', headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+          });
+          if (!res.ok) {
+            const txt = await res.text();
+            console.error('[creative-gallery] ClickUp comment post failed:', { status: res.status, taskId: next.taskId, response: txt?.slice(0, 500) });
+          }
+        } catch (e) {
+          console.error('[creative-gallery] ClickUp comment post error:', e);
+        }
       }
-    } catch {}
+    } catch (e) {
+      console.error('[creative-gallery] Comment sync error:', e);
+    }
     return new Response(JSON.stringify({ ok: true, item: next }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e?.message || String(e) }), { status: 500, headers: { "Content-Type": "application/json" } });
