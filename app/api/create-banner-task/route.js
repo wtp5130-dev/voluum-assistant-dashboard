@@ -22,7 +22,15 @@ export async function POST(request) {
     const body = await request.json();
 
     const apiKey = process.env.CLICKUP_API_KEY;
-    const listId = process.env.CLICKUP_LIST_ID || '901814532049';
+    // Allow overriding list via request body; fallback to env; then default
+    let listId = body.listId || body.list_id || process.env.CLICKUP_LIST_ID || '901814532049';
+    // Basic sanitization (ClickUp list IDs are numeric strings)
+    if (typeof listId !== 'string') listId = String(listId ?? '');
+    listId = listId.trim();
+    if (!/^\d{6,}$/.test(listId)) {
+      console.warn('[create-banner-task] Invalid listId provided, falling back to env/default', { listId });
+      listId = process.env.CLICKUP_LIST_ID || '901814532049';
+    }
 
     if (!apiKey) {
       console.error('[create-banner-task] Missing CLICKUP_API_KEY env var');
@@ -85,7 +93,7 @@ export async function POST(request) {
 
     const taskUrl = data?.url || null;
     const taskId = data?.id || null;
-    console.log('[create-banner-task] Task created', { taskId, taskUrl });
+    console.log('[create-banner-task] Task created', { taskId, taskUrl, listIdUsed: listId });
 
     return new Response(
       JSON.stringify({ success: true, taskUrl, taskId }),
