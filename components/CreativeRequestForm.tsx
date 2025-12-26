@@ -107,16 +107,7 @@ export default function CreativeRequestForm() {
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100">
-      <div className="max-w-5xl mx-auto px-4 pt-10 pb-6">
-        <h1 className="text-3xl md:text-4xl font-semibold tracking-tight mb-2 text-white">
-          🎯 Creative Banner Request Form
-        </h1>
-        <p className="text-slate-300">
-          Submit a new banner or marketing visual request below. BannerBot will automatically generate the first concept and mark it as “In Progress” for review.
-        </p>
-      </div>
-
-      <div className="max-w-5xl mx-auto px-4 pb-16">
+      <div className="max-w-5xl mx-auto px-4 py-8">
         <form onSubmit={handleSubmit} className="space-y-6 bg-slate-900/70 rounded-xl shadow-xl border border-slate-800 p-6">
           {/* Title */}
           <div>
