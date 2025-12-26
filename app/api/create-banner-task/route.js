@@ -118,17 +118,19 @@ export async function POST(request) {
       name,
       description: fullDescription,
       ...(statusToUse ? { status: statusToUse } : {}),
-      // Set custom fields for Brand and Region/Country
-      custom_fields: [
-        {
-          id: process.env.CLICKUP_CUSTOM_FIELD_BRAND || "d8fd8d71-58a2-4c8f-b5a6-1d8e3f6a9e2c",
-          value: brand || null,
-        },
-        {
-          id: process.env.CLICKUP_CUSTOM_FIELD_REGION || "a3f5c9e8-7d2b-4a1c-9f3e-5b8c1a7d6e4f",
-          value: region || null,
-        },
-      ].filter(f => f.value), // Only include fields that have values
+      // Set custom fields for Brand and Region/Country (if field IDs are available)
+      ...(brand || region) ? {
+        custom_fields: [
+          ...(brand ? [{
+            id: process.env.CLICKUP_CUSTOM_FIELD_BRAND || "brand_field_id_not_set",
+            value: brand,
+          }] : []),
+          ...(region ? [{
+            id: process.env.CLICKUP_CUSTOM_FIELD_REGION || "region_field_id_not_set",
+            value: region,
+          }] : []),
+        ].filter(f => !f.id.includes('not_set')), // Only include if IDs are configured
+      } : {},
     };
 
     const url = `${CLICKUP_API_BASE}/list/${encodeURIComponent(listId)}/task`;
