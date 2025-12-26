@@ -45,7 +45,11 @@ export async function POST(request) {
     const taskId = body?.task_id || body?.task?.id || body?.history_items?.[0]?.task?.id;
 
     if (!event) {
-      console.log('[clickup-webhook] Ping/unknown event received');
+      console.log('[clickup-webhook] Ping/unknown event received', {
+        bodyKeys: Object.keys(body),
+        bodyPreview: JSON.stringify(body)?.slice(0, 300),
+        bodyText: bodyText?.slice(0, 200),
+      });
       return new Response(JSON.stringify({ ok: true, note: 'No event detected' }), { status: 200, headers });
     }
 
@@ -222,7 +226,16 @@ export async function POST(request) {
           await persistImages(imageUrls, { ...meta, botComment: text, taskId });
           console.log('[clickup-webhook] saved images to gallery and media', { count: imageUrls.length });
         } else {
-          console.log('[clickup-webhook] taskCommentPosted: no images in direct parse, skipping');
+          console.log('[clickup-webhook] taskCommentPosted: no images in direct parse', {
+            taskId,
+            hasComment: !!comment,
+            commentKeys: comment ? Object.keys(comment) : [],
+            hasCommentArray: Array.isArray(comment?.comment),
+            commentArrayLength: Array.isArray(comment?.comment) ? comment.comment.length : 0,
+            commentArrayPreview: Array.isArray(comment?.comment) ? JSON.stringify(comment.comment.slice(0, 2)) : 'N/A',
+            attachmentsLength: (comment?.attachments || []).length,
+            textLength: text?.length,
+          });
         }
         break;
       }
