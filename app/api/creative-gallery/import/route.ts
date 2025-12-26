@@ -42,9 +42,22 @@ export async function GET(req: NextRequest): Promise<Response> {
     // Comments (attachments)
     const comRes = await fetch(`${CLICKUP_API_BASE}/task/${encodeURIComponent(taskId)}/comment`, {
       method: "GET",
-      headers: { Authorization: apiKey },
+      headers: { 
+        Authorization: apiKey,
+        "Content-Type": "application/json",
+      },
     });
+    const comStatus = comRes.status;
     const comTxt = await comRes.text();
+    
+    console.log(`[import] Comments request status: ${comStatus}`);
+    console.log(`[import] Comments response: ${comTxt.substring(0, 500)}`);
+    
+    if (!comRes.ok) {
+      console.warn(`[import] Failed to fetch comments: ${comStatus} ${comTxt}`);
+      return json({ ok: false, taskId, saved: 0, outputs, brandName, error: `Failed to fetch comments: ${comStatus}`, comResponse: comTxt.substring(0, 200) });
+    }
+    
     const comJson = comTxt ? JSON.parse(comTxt) : {};
     const comments: any[] = Array.isArray(comJson?.comments) ? comJson.comments : (Array.isArray(comJson) ? comJson : []);
 
