@@ -14,16 +14,32 @@ export async function OPTIONS() {
   return new Response(null, { status: 204, headers: corsHeaders() });
 }
 
+// Some webhook testers issue HEAD/GET pings. Respond 200 to pass connectivity tests.
+export async function GET() {
+  return new Response(JSON.stringify({ ok: true, ping: true }), {
+    status: 200,
+    headers: { ...corsHeaders(), 'Content-Type': 'application/json' },
+  });
+}
+
+export async function HEAD() {
+  return new Response(null, { status: 200, headers: corsHeaders() });
+}
+
 export async function POST(request) {
   const headers = { ...corsHeaders(), 'Content-Type': 'application/json' };
   try {
-    const body = await request.json();
+    // Accept empty or non-JSON bodies gracefully to satisfy ClickUp test pings
+    let bodyText = '';
+    try { bodyText = await request.text(); } catch {}
+    let body = {};
+    try { body = bodyText ? JSON.parse(bodyText) : {}; } catch { body = { raw: bodyText }; }
 
     const event = body?.event || body?.webhook_event || body?.type;
     const taskId = body?.task_id || body?.task?.id || body?.history_items?.[0]?.task?.id;
 
     if (!event) {
-      console.warn('[clickup-webhook] Unknown payload shape', body);
+      console.log('[clickup-webhook] Ping/unknown event received');
       return new Response(JSON.stringify({ ok: true, note: 'No event detected' }), { status: 200, headers });
     }
 
