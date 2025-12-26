@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, Suspense } from "react";
 import CreativeRequestForm from "@/components/CreativeRequestForm";
 import CreativeGallery from "@/components/CreativeGallery";
 
@@ -33,7 +33,9 @@ export default function CreativeRequestPage() {
         </div>
 
         {tab === "request" ? (
-          <CreativeRequestForm />
+          <Suspense fallback={<div className="max-w-2xl mx-auto px-4 py-8 text-slate-200">Loading form…</div>}>
+            <CreativeRequestForm />
+          </Suspense>
         ) : (
           <CreativeGallery />
         )}
