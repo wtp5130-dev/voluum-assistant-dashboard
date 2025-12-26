@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import { signOut as nextAuthSignOut } from "next-auth/react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 
 type Me = { username: string; role: "admin" | "user"; perms: Record<string, boolean> } | null;
 
@@ -13,6 +13,7 @@ export default function NavBar() {
   const [detail, setDetail] = useState<string>("");
   const [checking, setChecking] = useState(false);
   const pathname = usePathname();
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<"dashboard" | "optimizer" | "creatives" | "builder" | "audit">("dashboard");
 
   // Sync active tab from page
@@ -168,49 +169,49 @@ export default function NavBar() {
             </>
           ) : (
             <>
-              <a href="/?tab=dashboard#dashboard" className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Dashboard</a>
+              <button onClick={() => router.push("/?tab=dashboard#dashboard")} className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Dashboard</button>
               {(me?.role === "admin" || me?.perms?.optimizer || !me) && (
-                <a href="/?tab=optimizer#optimizer" className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Optimizer</a>
+                <button onClick={() => router.push("/?tab=optimizer#optimizer")} className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Optimizer</button>
               )}
               {(me?.role === "admin" || me?.perms?.creatives || !me) && (
-                <a href="/?tab=creatives#creatives" className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Creatives</a>
+                <button onClick={() => router.push("/?tab=creatives#creatives")} className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Creatives</button>
               )}
               {(me?.role === "admin" || me?.perms?.builder || !me) && (
-                <a href="/?tab=builder#builder" className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Campaign Builder</a>
+                <button onClick={() => router.push("/?tab=builder#builder")} className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Campaign Builder</button>
               )}
               {me?.role === "admin" && (
-                <a href="/?tab=audit#audit" className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Audit Trail</a>
+                <button onClick={() => router.push("/?tab=audit#audit")} className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Audit Trail</button>
               )}
             </>
           )}
         </div>
 
         <div className="flex items-center gap-2 ml-auto">
-          <a
-            href="/reports"
+          <button
+            onClick={() => router.push("/reports")}
             className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800 hidden sm:inline"
           >
             Reports
-          </a>
-          <a
-            href="/media/library"
+          </button>
+          <button
+            onClick={() => router.push("/media/library")}
             className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
           >
             Media
-          </a>
-          <a
-            href="/creatives/gallery"
+          </button>
+          <button
+            onClick={() => router.push("/creatives/gallery")}
             className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
           >
             Gallery
-          </a>
+          </button>
           {me?.role === "admin" && (
-            <a
-              href="/admin"
+            <button
+              onClick={() => router.push("/admin")}
               className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
             >
               Admin
-            </a>
+            </button>
           )}
           {/* Legacy auth controls only */}
           {!loading && me ? (
