@@ -68,17 +68,20 @@ export async function GET(req: NextRequest): Promise<Response> {
     const urls: string[] = [];
     let botComment: string | undefined;
     for (const c of comments) {
-      const attachments = c?.attachments || c?.attachment || [];
-      if (Array.isArray(attachments)) {
-        for (const att of attachments) {
-          const u = att?.url || att?.thumb || att?.image || att?.path;
-          if (typeof u === "string" && /(https?:\/\/.*\.(?:png|jpe?g|webp|gif|svg))(\?|$)/i.test(u)) urls.push(u);
+      // ClickUp comments structure: c.comment is an array of objects
+      const commentItems = c?.comment || [];
+      if (Array.isArray(commentItems)) {
+        for (const item of commentItems) {
+          // Look for image items: { type: "image", image: { url: "..." } }
+          if (item?.type === "image" && item?.image?.url) {
+            urls.push(item.image.url);
+          }
+          // Look for text items to get the bot comment (first text item)
+          if (item?.type !== "image" && item?.text && !botComment) {
+            botComment = item.text;
+          }
         }
       }
-      const text = c?.comment_text || c?.text || "";
-      if (!botComment && text) botComment = text;
-      const matches = (text.match(/https?:\/\/\S+/g) || []).filter((u: string) => /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u));
-      urls.push(...matches);
     }
 
     console.log(`[import] Task ${taskId}: extracted ${urls.length} URLs`);
