@@ -118,20 +118,14 @@ export async function POST(request) {
       name,
       description: fullDescription,
       ...(statusToUse ? { status: statusToUse } : {}),
-      // Set custom fields for Brand and Region/Country (if field IDs are available)
-      ...(brand || region) ? {
-        custom_fields: [
-          ...(brand ? [{
-            id: process.env.CLICKUP_CUSTOM_FIELD_BRAND || "brand_field_id_not_set",
-            value: brand,
-          }] : []),
-          ...(region ? [{
-            id: process.env.CLICKUP_CUSTOM_FIELD_REGION || "region_field_id_not_set",
-            value: region,
-          }] : []),
-        ].filter(f => !f.id.includes('not_set')), // Only include if IDs are configured
-      } : {},
     };
+    
+    // TODO: Set custom fields for Brand and Region once they're created in ClickUp
+    // Example:
+    // custom_fields: [
+    //   { id: "<brand_field_id>", value: brand },
+    //   { id: "<region_field_id>", value: region },
+    // ]
 
     const url = `${CLICKUP_API_BASE}/list/${encodeURIComponent(listId)}/task`;
     console.log('[create-banner-task] Creating task with payload:', JSON.stringify({ ...payload, description: payload.description.substring(0, 100) + '...' }, null, 2));
