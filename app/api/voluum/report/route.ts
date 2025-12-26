@@ -23,16 +23,17 @@ function normalizeDateParam(val: string | null, endOfDay: boolean): Date | null 
 }
 
 export async function GET(req: Request) {
-  const base = process.env.VOLUUM_API_BASE;
-  const accessId = process.env.VOLUUM_ACCESS_ID;
-  const accessKey = process.env.VOLUUM_ACCESS_KEY;
+  try {
+    const base = process.env.VOLUUM_API_BASE;
+    const accessId = process.env.VOLUUM_ACCESS_ID;
+    const accessKey = process.env.VOLUUM_ACCESS_KEY;
 
-  if (!base || !accessId || !accessKey) {
-    return NextResponse.json(
-      { error: "Missing Voluum credentials. Check .env.local." },
-      { status: 500 }
-    );
-  }
+    if (!base || !accessId || !accessKey) {
+      return NextResponse.json(
+        { error: "Missing Voluum credentials. Check .env.local." },
+        { status: 500 }
+      );
+    }
 
   const { searchParams } = new URL(req.url);
   const rawRange = (searchParams.get("dateRange") as DateRangeKey | null) || null;
@@ -161,4 +162,15 @@ export async function GET(req: Request) {
   };
   if (debug) payload.reportCalledUrl = url;
   return NextResponse.json(payload, { status: 200 });
+  } catch (err: any) {
+    console.error("[voluum/report] Unhandled error:", err);
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        message: err?.message || String(err),
+        stack: process.env.NODE_ENV === "development" ? err?.stack : undefined,
+      },
+      { status: 500 }
+    );
+  }
 }
