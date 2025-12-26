@@ -23,7 +23,17 @@ export async function middleware(req: NextRequest) {
   const host = req.headers.get("host") || "";
 
   // Public paths
-  const PUBLIC = [/^\/_next\//, /\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)$/i, /^\/favicon\.ico$/, /^\/login$/, /^\/api\/auth\//, /^\/marketing(\/.*)?$/];
+    const PUBLIC = [
+      /^\/_next\//,
+      /\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)$/i,
+      /^\/favicon\.ico$/,
+      /^\/login$/,
+      /^\/api\/auth\//,
+      /^\/marketing(\/.*)?$/,
+      // Public APIs for external services (ClickUp integration)
+      /^\/api\/clickup-webhook$/,
+      /^\/api\/create-banner-task$/,
+    ];
   if (PUBLIC.some((re) => re.test(pathname))) return NextResponse.next();
 
   // This project is the Sidekick app, deployed on sidekick.projectx.to only.
