@@ -2944,6 +2944,7 @@ function OptimizerTab(props: {
                   <th className="text-left p-2">Blacklisted at</th>
                   <th className="text-left p-2">Status</th>
                   <th className="text-left p-2">Verified</th>
+                  <th className="text-left p-2">Last Checked</th>
                   <th className="text-right p-2">Actions</th>
                 </tr>
               </thead>
@@ -2955,7 +2956,16 @@ function OptimizerTab(props: {
                     <td className="p-2">{b.campaignId}</td>
                     <td className="p-2">{formatDateTimeGMT8(b.timestamp)}</td>
                     <td className="p-2">{b.reverted ? (<span className="text-amber-400">Reverted</span>) : (<span className="text-emerald-400">Active</span>)}</td>
-                    <td className="p-2">{b.verified ? (<span className="text-emerald-400" title={b.verifiedAt || undefined}>Verified</span>) : (<span className="text-slate-400">—</span>)}</td>
+                    <td className="p-2">
+                      {b.verified ? (
+                        <span className="text-emerald-400" title={`Present in provider blacklist. Checked: ${b.verifiedAt || 'N/A'}`}>✓ In Provider</span>
+                      ) : b.verifiedAt ? (
+                        <span className="text-slate-500" title={`Not found in provider blacklist. Checked: ${b.verifiedAt}`}>✗ Not Found</span>
+                      ) : (
+                        <span className="text-slate-600" title="Not yet verified">—</span>
+                      )}
+                    </td>
+                    <td className="p-2 text-[11px]">{b.verifiedAt ? formatDateTimeGMT8(b.verifiedAt) : (<span className="text-slate-600">—</span>)}</td>
                     <td className="p-2 text-right">
                       <button
                         onClick={async ()=>{ if(!b.id || b.reverted) return; try{ await fetch("/api/optimizer/unblacklist", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items:[{ id:b.id, zoneId:b.zoneId, campaignId:b.campaignId }] })}); refreshBlacklist(); }catch{} }}
