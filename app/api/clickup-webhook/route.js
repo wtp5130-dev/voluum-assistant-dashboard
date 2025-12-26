@@ -95,6 +95,37 @@ export async function POST(request) {
       }
     }
 
+    async function fetchTaskCommentImageUrls(taskId) {
+      try {
+        const apiKey = process.env.CLICKUP_API_KEY;
+        if (!apiKey || !taskId) return [];
+        const res = await fetch(`${CLICKUP_API_BASE}/task/${encodeURIComponent(taskId)}/comment`, {
+          method: 'GET',
+          headers: { Authorization: apiKey },
+        });
+        const txt = await res.text();
+        const json = txt ? JSON.parse(txt) : {};
+        const comments = Array.isArray(json?.comments) ? json.comments : (Array.isArray(json) ? json : []);
+        const urls = [];
+        for (const c of comments) {
+          const attachments = c?.attachments || c?.attachment || [];
+          if (Array.isArray(attachments)) {
+            for (const att of attachments) {
+              const u = att?.url || att?.thumb || att?.image || att?.path;
+              if (typeof u === 'string' && /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u)) urls.push(u);
+            }
+          }
+          const text = c?.comment_text || c?.text || '';
+          const matches = (text?.match(/https?:\/\/\S+/g) || []).filter(u => /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u));
+          urls.push(...matches);
+        }
+        return Array.from(new Set(urls));
+      } catch (e) {
+        console.warn('[clickup-webhook] fetchTaskCommentImageUrls failed', e);
+        return [];
+      }
+    }
+
     switch (event) {
       case 'taskCommentPosted': {
         const comment = body?.comment || body?.history_items?.[0]?.comment;
@@ -139,7 +170,7 @@ export async function POST(request) {
           while (stack.length) {
             const v = stack.pop();
             if (typeof v === 'string') {
-              if (/^https?:\/\/.+\.(png|jpe?g|webp|gif)(\?|$)/i.test(v)) urls.push(v);
+              if (/^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(v)) urls.push(v);
             } else if (Array.isArray(v)) {
               for (const x of v) stack.push(x);
             } else if (v && typeof v === 'object') {
@@ -151,6 +182,14 @@ export async function POST(request) {
           const meta = await fetchTaskMeta(taskId);
           await persistImages(urls, { ...meta, taskId });
           console.log('[clickup-webhook] saved images (non-comment event)', { count: urls.length });
+        } else {
+          // Fallback: pull latest comments and extract attachments
+          const fromComments = await fetchTaskCommentImageUrls(taskId);
+          if (fromComments.length) {
+            const meta = await fetchTaskMeta(taskId);
+            await persistImages(fromComments, { ...meta, taskId });
+            console.log('[clickup-webhook] saved images from comment fetch', { count: fromComments.length });
+          }
         }
         break;
       }
