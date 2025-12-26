@@ -61,7 +61,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       }
       const text = c?.comment_text || c?.text || "";
       if (!botComment && text) botComment = text;
-      const matches = (text.match(/https?:\/\/\S+/g) || []).filter((u) => /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u));
+      const matches = (text.match(/https?:\/\/\S+/g) || []).filter((u: string) => /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u));
       urls.push(...matches);
     }
 
