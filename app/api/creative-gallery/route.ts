@@ -18,6 +18,8 @@ export type GalleryItem = {
   outputs?: string[];
   botComment?: string;
   comments?: Array<{ id: string; text: string; author?: string; ts: string }>;
+  taskId?: string;
+  status?: "open" | "approved" | "changes_requested" | "resolved";
   createdAt: string;
 };
 
@@ -51,6 +53,8 @@ export async function POST(req: NextRequest): Promise<Response> {
       outputs: Array.isArray(body?.outputs) ? body.outputs.map((s: any) => String(s)) : (typeof body?.outputs === 'string' ? String(body.outputs).split(/\s*,\s*/).filter(Boolean) : undefined),
       botComment: body?.botComment ? String(body.botComment) : undefined,
       comments: [],
+      taskId: body?.taskId ? String(body.taskId) : undefined,
+      status: "open",
       createdAt: new Date().toISOString(),
     };
     await kv.lpush(LIST_KEY, item);
@@ -83,10 +87,28 @@ export async function PATCH(req: NextRequest): Promise<Response> {
       const comm = { id: crypto.randomUUID(), text: String(body.comment.text), author: body.comment.author ? String(body.comment.author) : undefined, ts: new Date().toISOString() };
       next.comments = Array.isArray(next.comments) ? [...next.comments, comm] : [comm];
     }
+    if (body?.status) {
+      const allowed = new Set(["open", "approved", "changes_requested", "resolved"]);
+      const val = String(body.status);
+      if (allowed.has(val as any)) next.status = val as any;
+    }
     const updated = [...items];
     updated[idx] = next;
     await kv.del(LIST_KEY);
     for (let i = updated.length - 1; i >= 0; i--) await kv.lpush(LIST_KEY, updated[i]);
+    // Best-effort: sync user comment or status note back to ClickUp task as a comment
+    try {
+      const apiKey = process.env.CLICKUP_API_KEY;
+      if (apiKey && next.taskId && (body?.comment?.text || body?.status)) {
+        const commentLines: string[] = [];
+        if (body?.status) commentLines.push(`Status: ${String(body.status).replace(/_/g, ' ')}`);
+        if (body?.comment?.text) commentLines.push(String(body.comment.text));
+        const payload = { comment_text: commentLines.join("\n\n") } as any;
+        await fetch(`https://api.clickup.com/api/v2/task/${encodeURIComponent(next.taskId)}/comment`, {
+          method: 'POST', headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+        }).catch(() => {});
+      }
+    } catch {}
     return new Response(JSON.stringify({ ok: true, item: next }), { status: 200, headers: { "Content-Type": "application/json" } });
   } catch (e: any) {
     return new Response(JSON.stringify({ error: e?.message || String(e) }), { status: 500, headers: { "Content-Type": "application/json" } });

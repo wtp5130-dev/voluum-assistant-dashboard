@@ -85,7 +85,7 @@ export async function POST(request) {
           const filename = (() => {
             try { const u = new URL(url); return decodeURIComponent(u.pathname.split('/').pop() || 'image'); } catch { return 'image'; }
           })();
-          const galleryItem = { id: crypto.randomUUID(), url, provider: 'clickup', prompt: meta.prompt || meta.botComment || '(ClickUp attachment)', size: meta.size, style_preset: meta.style_preset, negative_prompt: meta.negative_prompt, brandId: meta.brandId, brandName: meta.brandName, outputs: meta.outputs, botComment: meta.botComment, comments: [], createdAt: now };
+          const galleryItem = { id: crypto.randomUUID(), url, provider: 'clickup', prompt: meta.prompt || meta.botComment || '(ClickUp attachment)', size: meta.size, style_preset: meta.style_preset, negative_prompt: meta.negative_prompt, brandId: meta.brandId, brandName: meta.brandName, outputs: meta.outputs, botComment: meta.botComment, comments: [], taskId: meta.taskId, status: 'open', createdAt: now };
           await kv.lpush(GALLERY_KEY, galleryItem); await kv.ltrim(GALLERY_KEY, 0, 999);
           const mediaItem = { id: crypto.randomUUID(), url, filename, mime: undefined, size: undefined, brandId: meta.brandId, brandName: meta.brandName, tags: undefined, kind: undefined, createdAt: now };
           await kv.lpush(MEDIA_KEY, mediaItem); await kv.ltrim(MEDIA_KEY, 0, 999);
@@ -124,7 +124,7 @@ export async function POST(request) {
 
         if (imageUrls.length) {
           const meta = await fetchTaskMeta(taskId);
-          await persistImages(imageUrls, { ...meta, botComment: text });
+          await persistImages(imageUrls, { ...meta, botComment: text, taskId });
           console.log('[clickup-webhook] saved images to gallery and media', { count: imageUrls.length });
         }
         break;
@@ -149,7 +149,7 @@ export async function POST(request) {
         } catch {}
         if (urls.length) {
           const meta = await fetchTaskMeta(taskId);
-          await persistImages(urls, meta);
+          await persistImages(urls, { ...meta, taskId });
           console.log('[clickup-webhook] saved images (non-comment event)', { count: urls.length });
         }
         break;

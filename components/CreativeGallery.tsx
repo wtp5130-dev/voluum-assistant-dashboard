@@ -77,6 +77,17 @@ export default function CreativeGallery() {
     }
   };
 
+  const setStatus = async (id: string, status: "approved" | "changes_requested" | "resolved") => {
+    try {
+      const r = await fetch("/api/creative-gallery", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, status })});
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.error || String(r.status));
+      setItems((prev) => prev.map((x) => (x.id === id ? j.item : x)));
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -151,6 +162,20 @@ export default function CreativeGallery() {
                 <div className="flex items-center justify-between">
                   <span className="text-slate-300 font-semibold">{(it.provider || "").toUpperCase()}</span>
                   <span className="text-slate-500">{new Date(it.createdAt).toLocaleString()}</span>
+                </div>
+                {/* Status */}
+                <div className="flex items-center gap-2">
+                  {(() => {
+                    const s = it.status || 'open';
+                    const color = s === 'approved' ? 'bg-emerald-700/50 border-emerald-600 text-emerald-200' : s === 'changes_requested' ? 'bg-amber-700/50 border-amber-600 text-amber-200' : s === 'resolved' ? 'bg-slate-700/50 border-slate-600 text-slate-200' : 'bg-blue-700/30 border-blue-600 text-blue-200';
+                    const label = s.replace(/_/g, ' ');
+                    return <span className={`px-2 py-0.5 rounded-full border ${color}`}>{label}</span>;
+                  })()}
+                  <div className="ml-auto inline-flex items-center gap-2">
+                    <button onClick={() => setStatus(it.id, 'approved')} className="px-2 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500">Approve</button>
+                    <button onClick={() => setStatus(it.id, 'changes_requested')} className="px-2 py-1 rounded-md bg-amber-600 hover:bg-amber-500">Request changes</button>
+                    <button onClick={() => setStatus(it.id, 'resolved')} className="px-2 py-1 rounded-md bg-slate-700 hover:bg-slate-600">Resolve</button>
+                  </div>
                 </div>
                 {Array.isArray(it.outputs) && it.outputs.length > 0 && (
                   <div className="flex flex-wrap gap-1">
