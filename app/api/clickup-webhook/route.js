@@ -41,14 +41,26 @@ export async function POST(request) {
     let body = {};
     try { body = bodyText ? JSON.parse(bodyText) : {}; } catch { body = { raw: bodyText }; }
 
-    const event = body?.event || body?.webhook_event || body?.type;
+    // Look for event in multiple possible locations
+    let event = body?.event || body?.webhook_event || body?.type;
+    // Also check history_items for event type
+    if (!event && Array.isArray(body?.history_items) && body.history_items.length > 0) {
+      event = body.history_items[0]?.event || body.history_items[0]?.type;
+    }
+    
     const taskId = body?.task_id || body?.task?.id || body?.history_items?.[0]?.task?.id;
 
     if (!event) {
+      // Log detailed info about what we received
+      const bodySize = bodyText?.length || 0;
+      const isEmpty = bodySize === 0 || (Object.keys(body).length === 0 && !bodyText);
       console.log('[clickup-webhook] Ping/unknown event received', {
+        isEmpty,
+        bodySize,
         bodyKeys: Object.keys(body),
-        bodyPreview: JSON.stringify(body)?.slice(0, 300),
-        bodyText: bodyText?.slice(0, 200),
+        hasHistoryItems: Array.isArray(body?.history_items),
+        historyItemsLength: Array.isArray(body?.history_items) ? body.history_items.length : 0,
+        bodyPreview: JSON.stringify(body)?.slice(0, 500),
       });
       return new Response(JSON.stringify({ ok: true, note: 'No event detected' }), { status: 200, headers });
     }
