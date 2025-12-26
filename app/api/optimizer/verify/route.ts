@@ -114,7 +114,12 @@ export async function POST(req: NextRequest): Promise<Response> {
     let entriesChecked = 0;
     let verifiedTrue = 0;
     let verifiedFalse = 0;
-    const debugInfo: Record<string, { total: number; sample: string[] }> = {};
+    const debugInfo: Record<string, { 
+      total: number; 
+      sample: string[];
+      checking: string[];
+      providerZones: string[];
+    }> = {};
 
     // Verify each campaign's blacklist
     for (const [providerCid, bucket] of byCampaign.entries()) {
@@ -122,10 +127,15 @@ export async function POST(req: NextRequest): Promise<Response> {
       if (!set) { campaignsSkipped++; continue; }
       campaignsProcessed++;
       
-      // Store debug info: first 5 zone IDs from provider
+      // Collect zones we're checking for this campaign
+      const checkingZones = bucket.entries.map(e => normalizeId(e.zoneId) || e.zoneId).slice(0, 10);
+      
+      // Store debug info: first 10 zone IDs from provider and what we're checking
       debugInfo[providerCid] = { 
-        total: set.size, 
-        sample: Array.from(set).slice(0, 5) 
+        total: set.size,
+        sample: Array.from(set).slice(0, 10),
+        checking: checkingZones,
+        providerZones: Array.from(set)
       };
       
       for (const e of bucket.entries) {

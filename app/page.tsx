@@ -2870,8 +2870,14 @@ function OptimizerTab(props: {
                     if (json?.debug) {
                       parts.push(`\nProvider zones per campaign:`);
                       for (const [cid, info] of Object.entries(json.debug as any)) {
-                        const debugInfo = info as { total: number; sample: string[] };
-                        parts.push(`  Campaign ${cid}: ${debugInfo.total} zones${debugInfo.total > 0 ? ` (e.g., ${debugInfo.sample.join(', ')})` : ''}`);
+                        const debugInfo = info as { total: number; sample: string[]; checking: string[]; providerZones: string[] };
+                        parts.push(`  Campaign ${cid}: ${debugInfo.total} zones in provider`);
+                        if (debugInfo.checking?.length > 0) {
+                          parts.push(`    Checking for: ${debugInfo.checking.slice(0, 5).join(', ')}${debugInfo.checking.length > 5 ? '...' : ''}`);
+                        }
+                        if (debugInfo.total > 0 && debugInfo.sample?.length > 0) {
+                          parts.push(`    Provider has: ${debugInfo.sample.slice(0, 5).join(', ')}${debugInfo.total > 5 ? '...' : ''}`);
+                        }
                       }
                     }
                     
