@@ -193,18 +193,7 @@ export default function NavBar() {
           >
             Reports
           </button>
-          <button
-            onClick={() => router.push("/media/library")}
-            className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
-          >
-            Media
-          </button>
-          <button
-            onClick={() => router.push("/creatives/gallery")}
-            className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
-          >
-            Gallery
-          </button>
+          {/* Media and Gallery removed from top nav; accessible inside Creatives */}
           {me?.role === "admin" && (
             <button
               onClick={() => router.push("/admin")}
