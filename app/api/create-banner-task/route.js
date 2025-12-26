@@ -118,15 +118,24 @@ export async function POST(request) {
       name,
       description: fullDescription,
       ...(statusToUse ? { status: statusToUse } : {}),
-      // Set custom fields for Brand and Country
+      // Set custom fields for Brand and Country using option UUIDs
       custom_fields: [
         ...(brand ? [{
           id: "b61295d4-a40f-46cf-b26c-bb5d0ccfe787", // Brand dropdown
-          value: brand,
+          value: {
+            "3Star88": "517b3c83-a4c1-4ec7-a7dc-a4d39db6fa65",
+            "Sol88": "fb0d410a-1abc-49f7-b67c-b6fbc0d544cb",
+          }[brand] || brand,
         }] : []),
         ...(region ? [{
           id: "0316edfe-3f07-41d5-9576-25f746285602", // Country dropdown
-          value: region,
+          value: {
+            "Malaysia": "111ba6eb-42b9-4025-b3a2-be694056a194",
+            "Indonesia": "cda9e804-dfc8-4925-adca-02b4711cac0c",
+            "Thailand": "efd3809d-c91b-47db-9049-877977fb3a3b",
+            "Singapore": "2b9d8866-70b6-4f64-8ae9-1051195c737d",
+            "Mexico": "a8f31c37-2600-445c-8abf-144aa1a1656c",
+          }[region] || region,
         }] : []),
       ],
     };
