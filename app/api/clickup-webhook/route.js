@@ -5,6 +5,8 @@ import { kv } from '@vercel/kv';
 
 const GALLERY_KEY = 'gallery:images';
 const MEDIA_KEY = 'media:items';
+const MEDIA_SEEN_KEY = 'media:seen';
+const CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 
 function corsHeaders() {
   return {
@@ -47,6 +49,50 @@ export async function POST(request) {
       return new Response(JSON.stringify({ ok: true, note: 'No event detected' }), { status: 200, headers });
     }
 
+    // Helper: fetch brand/region from task description
+    async function fetchTaskMeta(id) {
+      try {
+        const apiKey = process.env.CLICKUP_API_KEY;
+        if (!apiKey || !id) return {};
+        const res = await fetch(`${CLICKUP_API_BASE}/task/${encodeURIComponent(id)}`, {
+          method: 'GET',
+          headers: { Authorization: apiKey },
+        });
+        const txt = await res.text();
+        const json = txt ? JSON.parse(txt) : {};
+        const desc = String(json?.description || '');
+        const title = String(json?.name || '');
+        const getLine = (label) => {
+          const m = desc.match(new RegExp(`${label}\\s*:\\s*(.+)`, 'i'));
+          return m ? m[1].trim() : undefined;
+        };
+        const brandName = getLine('Brand');
+        const region = getLine('Region');
+        return { brandName, region, title };
+      } catch {
+        return {};
+      }
+    }
+
+    async function persistImages(urls, meta = {}) {
+      if (!urls || !urls.length) return;
+      const now = new Date().toISOString();
+      for (const url of urls) {
+        try {
+          try { const added = await kv.sadd(MEDIA_SEEN_KEY, url); if (added === 0) continue; } catch {}
+          const filename = (() => {
+            try { const u = new URL(url); return decodeURIComponent(u.pathname.split('/').pop() || 'image'); } catch { return 'image'; }
+          })();
+          const galleryItem = { id: crypto.randomUUID(), url, provider: 'clickup', prompt: meta.prompt || '(ClickUp attachment)', size: meta.size, style_preset: meta.style_preset, negative_prompt: meta.negative_prompt, brandId: meta.brandId, brandName: meta.brandName, createdAt: now };
+          await kv.lpush(GALLERY_KEY, galleryItem); await kv.ltrim(GALLERY_KEY, 0, 999);
+          const mediaItem = { id: crypto.randomUUID(), url, filename, mime: undefined, size: undefined, brandId: meta.brandId, brandName: meta.brandName, tags: undefined, kind: undefined, createdAt: now };
+          await kv.lpush(MEDIA_KEY, mediaItem); await kv.ltrim(MEDIA_KEY, 0, 999);
+        } catch (e) {
+          console.error('[clickup-webhook] persist image failed', e);
+        }
+      }
+    }
+
     switch (event) {
       case 'taskCommentPosted': {
         const comment = body?.comment || body?.history_items?.[0]?.comment;
@@ -74,60 +120,39 @@ export async function POST(request) {
           imageUrls,
         });
 
-        // Persist images to Creative Gallery and Media Library
         if (imageUrls.length) {
-          try {
-            const now = new Date().toISOString();
-            // Save to gallery
-            for (const url of imageUrls) {
-              const galleryItem = {
-                id: crypto.randomUUID(),
-                url,
-                provider: 'clickup',
-                prompt: text || '(ClickUp attachment)',
-                createdAt: now,
-              };
-              await kv.lpush(GALLERY_KEY, galleryItem);
-              await kv.ltrim(GALLERY_KEY, 0, 999);
-            }
-            // Save to media
-            for (const url of imageUrls) {
-              const filename = (() => {
-                try { const u = new URL(url); return decodeURIComponent(u.pathname.split('/').pop() || 'image'); } catch { return 'image'; }
-              })();
-              const mediaItem = {
-                id: crypto.randomUUID(),
-                url,
-                filename,
-                mime: undefined,
-                size: undefined,
-                createdAt: now,
-              };
-              await kv.lpush(MEDIA_KEY, mediaItem);
-              await kv.ltrim(MEDIA_KEY, 0, 999);
-            }
-            console.log('[clickup-webhook] saved images to gallery and media', { count: imageUrls.length });
-          } catch (err) {
-            console.error('[clickup-webhook] failed to save images', err);
-          }
+          const meta = await fetchTaskMeta(taskId);
+          await persistImages(imageUrls, { ...meta, prompt: text });
+          console.log('[clickup-webhook] saved images to gallery and media', { count: imageUrls.length });
         }
         break;
       }
+      case 'taskAttachmentPosted':
+      case 'taskAttachmentCreated':
       case 'taskStatusUpdated': {
-        // ClickUp often sends a history change structure
-        const item = body?.history_items?.[0];
-        const before = item?.before || body?.before;
-        const after = item?.after || body?.after;
-        const beforeStatus = before?.status || before?.status_type || before;
-        const afterStatus = after?.status || after?.status_type || after;
-
-        console.log('[clickup-webhook] taskStatusUpdated', {
-          taskId,
-          beforeStatus,
-          afterStatus,
-        });
+        // Deep scan payload for any image-like URLs
+        const urls = [];
+        try {
+          const stack = [body];
+          while (stack.length) {
+            const v = stack.pop();
+            if (typeof v === 'string') {
+              if (/^https?:\/\/.+\.(png|jpe?g|webp|gif)(\?|$)/i.test(v)) urls.push(v);
+            } else if (Array.isArray(v)) {
+              for (const x of v) stack.push(x);
+            } else if (v && typeof v === 'object') {
+              for (const k of Object.keys(v)) stack.push(v[k]);
+            }
+          }
+        } catch {}
+        if (urls.length) {
+          const meta = await fetchTaskMeta(taskId);
+          await persistImages(urls, meta);
+          console.log('[clickup-webhook] saved images (non-comment event)', { count: urls.length });
+        }
         break;
       }
+      
       default: {
         // Log other events for visibility during setup
         console.log('[clickup-webhook] event received', { event, taskId });

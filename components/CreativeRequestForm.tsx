@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, DragEvent } from "react";
+import { useState, useRef, DragEvent, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useSearchParams } from "next/navigation";
 
@@ -18,7 +18,8 @@ export default function CreativeRequestForm() {
   const [sizes, setSizes] = useState<string[]>([]);
   const [customSize, setCustomSize] = useState("");
   const [requesterInfo, setRequesterInfo] = useState("");
-  const [files, setFiles] = useState<File[]>([]);
+  type Picked = { file: File; url: string };
+  const [files, setFiles] = useState<Picked[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [loading, setLoading] = useState(false);
   const [result, setResult] = useState<
@@ -38,11 +39,7 @@ export default function CreativeRequestForm() {
         setLoading(false);
         return;
       }
-      if (files.length === 0) {
-        setResult({ success: false, error: "Please upload at least one reference file." });
-        setLoading(false);
-        return;
-      }
+      // Reference files are optional
 
       const fd = new FormData();
       fd.append("title", title);
@@ -54,7 +51,7 @@ export default function CreativeRequestForm() {
       if (customSize) fd.append("customSize", customSize);
       if (requesterInfo) fd.append("requesterInfo", requesterInfo);
       if (listIdParam) fd.append("listId", listIdParam);
-      files.forEach((f) => fd.append("reference", f));
+      files.forEach(({ file }) => fd.append("reference", file));
 
       const res = await fetch("/api/create-banner-task", { method: "POST", body: fd });
       const text = await res.text();
@@ -81,7 +78,8 @@ export default function CreativeRequestForm() {
   // file helpers
   const onPickFiles = (fs: FileList | null) => {
     if (!fs) return;
-    setFiles((prev) => [...prev, ...Array.from(fs)]);
+    const next: Picked[] = Array.from(fs).map((f) => ({ file: f, url: URL.createObjectURL(f) }));
+    setFiles((prev) => [...prev, ...next]);
   };
   const onDrop = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -90,6 +88,22 @@ export default function CreativeRequestForm() {
   const toggleSize = (val: string) => {
     setSizes((prev) => (prev.includes(val) ? prev.filter((x) => x !== val) : [...prev, val]));
   };
+
+  const removeFile = (idx: number) => {
+    setFiles((prev) => {
+      const copy = [...prev];
+      const [removed] = copy.splice(idx, 1);
+      try { if (removed?.url) URL.revokeObjectURL(removed.url); } catch {}
+      return copy;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      // cleanup all blob urls on unmount
+      try { files.forEach((p) => p?.url && URL.revokeObjectURL(p.url)); } catch {}
+    };
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#f8f9fb] text-slate-900">
@@ -163,7 +177,7 @@ export default function CreativeRequestForm() {
 
           {/* Reference upload */}
           <div>
-            <label className="block text-sm font-medium mb-2">Reference<span className="text-rose-500">*</span></label>
+            <label className="block text-sm font-medium mb-2">Reference <span className="text-slate-500 font-normal">(optional)</span></label>
             <div
               onDragOver={(e) => e.preventDefault()}
               onDrop={onDrop}
@@ -185,10 +199,24 @@ export default function CreativeRequestForm() {
                 Choose Files
               </button>
               {files.length > 0 && (
-                <div className="mt-3 text-left text-sm text-slate-700">
-                  {files.map((f, i) => (
-                    <div key={i} className="truncate">• {f.name}</div>
-                  ))}
+                <div className="mt-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                    {files.map((p, i) => (
+                      <div key={i} className="relative group border rounded-md overflow-hidden bg-white">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img src={p.url} alt={p.file.name} className="w-full h-28 object-cover" />
+                        <button
+                          type="button"
+                          onClick={() => removeFile(i)}
+                          className="absolute top-1.5 right-1.5 rounded-full bg-black/60 text-white text-xs px-2 py-0.5 opacity-0 group-hover:opacity-100 transition"
+                          aria-label={`Remove ${p.file.name}`}
+                        >
+                          Remove
+                        </button>
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/40 text-white text-[10px] px-1 py-0.5 truncate" title={p.file.name}>{p.file.name}</div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
               )}
             </div>
