@@ -33,6 +33,7 @@ export async function middleware(req: NextRequest) {
       // Public APIs for external services (ClickUp integration)
       /^\/api\/clickup-webhook(?:\/.*)?$/,
       /^\/api\/create-banner-task(?:\/.*)?$/,
+      /^\/api\/creative-gallery\/seed(?:\/.*)?$/,
     ];
   if (PUBLIC.some((re) => re.test(pathname))) return NextResponse.next();
 
@@ -98,6 +99,6 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: [
     // Exclude static assets and public API endpoints from middleware
-    "/((?!_next|.*\\..*|favicon.ico|api/clickup-webhook|api/create-banner-task).*)",
+    "/((?!_next|.*\\..*|favicon.ico|api/clickup-webhook|api/create-banner-task|api/creative-gallery/seed).*)",
   ],
 };
