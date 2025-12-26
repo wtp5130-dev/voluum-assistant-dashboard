@@ -107,7 +107,20 @@ export async function POST(request) {
         const json = txt ? JSON.parse(txt) : {};
         const comments = Array.isArray(json?.comments) ? json.comments : (Array.isArray(json) ? json : []);
         const urls = [];
+        
         for (const c of comments) {
+          // ClickUp comments structure: c.comment is an array of objects
+          const commentItems = c?.comment || [];
+          if (Array.isArray(commentItems)) {
+            for (const item of commentItems) {
+              // Look for image items: { type: "image", image: { url: "..." } }
+              if (item?.type === "image" && item?.image?.url) {
+                urls.push(item.image.url);
+              }
+            }
+          }
+          
+          // Legacy fallback: check for attachments field
           const attachments = c?.attachments || c?.attachment || [];
           if (Array.isArray(attachments)) {
             for (const att of attachments) {
@@ -115,9 +128,6 @@ export async function POST(request) {
               if (typeof u === 'string' && /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u)) urls.push(u);
             }
           }
-          const text = c?.comment_text || c?.text || '';
-          const matches = (text?.match(/https?:\/\/\S+/g) || []).filter(u => /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u));
-          urls.push(...matches);
         }
         return Array.from(new Set(urls));
       } catch (e) {
