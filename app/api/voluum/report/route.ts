@@ -14,9 +14,14 @@ type DateRangeKey =
 function normalizeDateParam(val: string | null, endOfDay: boolean): Date | null {
   if (!val) return null;
   if (/^\d{4}-\d{2}-\d{2}$/.test(val)) {
-    const t = endOfDay ? "T23:59:59.999Z" : "T00:00:00.000Z";
+    const t = "T00:00:00.000Z";
     const d = new Date(val + t);
-    return isNaN(d.getTime()) ? null : d;
+    if (isNaN(d.getTime())) return null;
+    // Voluum requires times rounded to the hour; for end-of-day, use midnight of next day
+    if (endOfDay) {
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+    return d;
   }
   const d = new Date(val);
   return isNaN(d.getTime()) ? null : d;
@@ -57,7 +62,7 @@ export async function GET(req: Request) {
       from = new Date(to); from.setUTCHours(0, 0, 0, 0);
     } else if (dateRange === "yesterday") {
       from = new Date(to); from.setUTCDate(from.getUTCDate() - 1); from.setUTCHours(0, 0, 0, 0);
-      to = new Date(from); to.setUTCHours(23, 59, 59, 999);
+      to = new Date(from); to.setUTCDate(to.getUTCDate() + 1); to.setUTCHours(0, 0, 0, 0);
     } else if (dateRange === "last30days") {
       from = new Date(to); from.setUTCDate(from.getUTCDate() - 30); from.setUTCHours(0, 0, 0, 0);
     } else if (dateRange === "last7days") {
