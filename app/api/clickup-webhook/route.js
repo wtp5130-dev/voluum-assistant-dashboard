@@ -49,6 +49,8 @@ export async function POST(request) {
       return new Response(JSON.stringify({ ok: true, note: 'No event detected' }), { status: 200, headers });
     }
 
+    console.log('[clickup-webhook] Event received:', { event, taskId, bodyKeys: Object.keys(body) });
+
     // Helper: fetch brand/region from task description
     async function fetchTaskMeta(id) {
       try {
@@ -138,6 +140,7 @@ export async function POST(request) {
 
     switch (event) {
       case 'taskCommentPosted': {
+        console.log('[clickup-webhook] Handling taskCommentPosted', { taskId });
         const comment = body?.comment || body?.history_items?.[0]?.comment;
         const text = comment?.text || comment?.comment_text || '';
         const attachments = comment?.attachments || comment?.attachment || [];
@@ -156,7 +159,7 @@ export async function POST(request) {
         const urlMatches = (text.match(/https?:\/\/\S+/g) || []).filter(u => /\.(png|jpe?g|webp|gif)(\?|$)/i.test(u));
         imageUrls.push(...urlMatches);
 
-        console.log('[clickup-webhook] taskCommentPosted', {
+        console.log('[clickup-webhook] taskCommentPosted extracted URLs:', {
           taskId,
           textPreview: text?.slice(0, 140),
           imageCount: imageUrls.length,
@@ -167,12 +170,15 @@ export async function POST(request) {
           const meta = await fetchTaskMeta(taskId);
           await persistImages(imageUrls, { ...meta, botComment: text, taskId });
           console.log('[clickup-webhook] saved images to gallery and media', { count: imageUrls.length });
+        } else {
+          console.log('[clickup-webhook] taskCommentPosted: no images in direct parse, skipping');
         }
         break;
       }
       case 'taskAttachmentPosted':
       case 'taskAttachmentCreated':
       case 'taskStatusUpdated': {
+        console.log('[clickup-webhook] Handling attachment/status event:', { event, taskId });
         // Deep scan payload for any image-like URLs
         const urls = [];
         try {
@@ -188,13 +194,16 @@ export async function POST(request) {
             }
           }
         } catch {}
+        console.log('[clickup-webhook] Deep scan found URLs:', { event, taskId, count: urls.length });
         if (urls.length) {
           const meta = await fetchTaskMeta(taskId);
           await persistImages(urls, { ...meta, taskId });
           console.log('[clickup-webhook] saved images (non-comment event)', { count: urls.length });
         } else {
           // Fallback: pull latest comments and extract attachments
+          console.log('[clickup-webhook] No URLs in deep scan, trying comment fallback...', { taskId });
           const fromComments = await fetchTaskCommentImageUrls(taskId);
+          console.log('[clickup-webhook] Comment fallback found URLs:', { taskId, count: fromComments.length, urls: fromComments.slice(0, 2) });
           if (fromComments.length) {
             const meta = await fetchTaskMeta(taskId);
             await persistImages(fromComments, { ...meta, taskId });
@@ -206,7 +215,7 @@ export async function POST(request) {
       
       default: {
         // Log other events for visibility during setup
-        console.log('[clickup-webhook] event received', { event, taskId });
+        console.log('[clickup-webhook] event received (unhandled type)', { event, taskId });
       }
     }
 
