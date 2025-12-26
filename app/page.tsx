@@ -105,6 +105,13 @@ const CHAT_API_URL = "/api/chat";
 const OPTIMIZER_PREVIEW_URL = "/api/optimizer/preview";
 const OPTIMIZER_APPLY_URL = "/api/optimizer/apply";
 
+const AD_TYPES: Record<string, { label: string }> = {
+  "push-classic": { label: "Propeller Push" },
+  "inpage-push": { label: "In-Page Push" },
+  interstitial: { label: "Interstitial" },
+  onclick: { label: "Onclick / Direct Click" },
+};
+
 const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
   { key: "today", label: "Today" },
   { key: "yesterday", label: "Yesterday" },
