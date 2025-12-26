@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useSearchParams } from "next/navigation";
 
 export default function CreativeRequestPage() {
+  const search = useSearchParams();
+  const listIdParam = search?.get("listId") || search?.get("list_id") || "";
   const [bannerName, setBannerName] = useState("");
   const [description, setDescription] = useState("");
   const [region, setRegion] = useState("");
@@ -22,7 +25,7 @@ export default function CreativeRequestPage() {
       const res = await fetch("/api/create-banner-task", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ bannerName, description, region, brand }),
+        body: JSON.stringify({ bannerName, description, region, brand, ...(listIdParam ? { listId: listIdParam } : {}) }),
       });
       const text = await res.text();
       let data: any;
