@@ -118,14 +118,18 @@ export async function POST(request) {
       name,
       description: fullDescription,
       ...(statusToUse ? { status: statusToUse } : {}),
+      // Set custom fields for Brand and Country
+      custom_fields: [
+        ...(brand ? [{
+          id: "b61295d4-a40f-46cf-b26c-bb5d0ccfe787", // Brand dropdown
+          value: brand,
+        }] : []),
+        ...(region ? [{
+          id: "0316edfe-3f07-41d5-9576-25f746285602", // Country dropdown
+          value: region,
+        }] : []),
+      ],
     };
-    
-    // TODO: Set custom fields for Brand and Region once they're created in ClickUp
-    // Example:
-    // custom_fields: [
-    //   { id: "<brand_field_id>", value: brand },
-    //   { id: "<region_field_id>", value: region },
-    // ]
 
     const url = `${CLICKUP_API_BASE}/list/${encodeURIComponent(listId)}/task`;
     console.log('[create-banner-task] Creating task with payload:', JSON.stringify({ ...payload, description: payload.description.substring(0, 100) + '...' }, null, 2));
