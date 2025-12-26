@@ -10,9 +10,14 @@ export default function ThankYouPage() {
         <h1 className="text-2xl font-semibold mb-2">Request received</h1>
         <p className="text-slate-300">BannerBot is generating your design now.</p>
         <p className="text-slate-400 mb-6">this should take a few minutes, images should appear in the Gallery in moment</p>
-        <Link href="/creative-request" className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-md">
-          Submit another request
-        </Link>
+        <div className="flex items-center justify-center gap-3">
+          <Link href="/creative-request" className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-md">
+            Submit another request
+          </Link>
+          <Link href="/creative-request?view=gallery" className="inline-flex items-center gap-2 border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-100 px-5 py-2.5 rounded-md">
+            Go to Gallery
+          </Link>
+        </div>
       </div>
     </main>
   );
