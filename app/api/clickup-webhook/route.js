@@ -51,6 +51,27 @@ export async function POST(request) {
     const taskId = body?.task_id || body?.task?.id || body?.history_items?.[0]?.task?.id;
 
     if (!event) {
+      // Fallback: ClickUp Automations may wrap data in { payload: {...} }
+      const payloadTaskId = body?.payload?.task_id || body?.payload?.id;
+      if (payloadTaskId) {
+        console.log('[clickup-webhook] Fallback payload-only event detected', {
+          taskId: payloadTaskId,
+          payloadKeys: Object.keys(body?.payload || {}),
+        });
+        try {
+          const meta = await fetchTaskMeta(payloadTaskId);
+          const fromComments = await fetchTaskCommentImageUrls(payloadTaskId);
+          console.log('[clickup-webhook] Fallback comment fetch URLs:', { count: fromComments.length, urls: fromComments.slice(0, 3) });
+          if (fromComments.length) {
+            await persistImages(fromComments, { ...meta, taskId: payloadTaskId });
+            console.log('[clickup-webhook] saved images from fallback payload', { count: fromComments.length });
+          }
+        } catch (e) {
+          console.warn('[clickup-webhook] Fallback processing error', e);
+        }
+        return new Response(JSON.stringify({ ok: true, note: 'Processed payload-only event' }), { status: 200, headers });
+      }
+
       // Log detailed info about what we received
       const bodySize = bodyText?.length || 0;
       const isEmpty = bodySize === 0 || (Object.keys(body).length === 0 && !bodyText);
