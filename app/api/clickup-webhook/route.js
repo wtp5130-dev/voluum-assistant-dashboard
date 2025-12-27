@@ -35,6 +35,8 @@ export async function HEAD() {
 export async function POST(request) {
   const headers = { ...corsHeaders(), 'Content-Type': 'application/json' };
   try {
+    // small sleep helper for retry loops
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
     // Accept empty or non-JSON bodies gracefully to satisfy ClickUp test pings
     let bodyText = '';
     try { bodyText = await request.text(); } catch {}
@@ -81,6 +83,20 @@ export async function POST(request) {
           if (!payloadUrls.length && fromComments.length) {
             await persistImages(fromComments, { ...meta, taskId: payloadTaskId });
             console.log('[clickup-webhook] saved images from fallback comment fetch', { count: fromComments.length });
+          }
+
+          // 3) If still nothing, retry a few times (agent may post comment with delay)
+          if (!payloadUrls.length && (!fromComments || fromComments.length === 0)) {
+            for (let i = 0; i < 3; i++) {
+              await sleep(3000);
+              const retry = await fetchTaskCommentImageUrls(payloadTaskId);
+              console.log('[clickup-webhook] Retry comment fetch', { attempt: i + 1, count: retry.length });
+              if (retry.length) {
+                await persistImages(retry, { ...meta, taskId: payloadTaskId });
+                console.log('[clickup-webhook] saved images after retry', { count: retry.length });
+                break;
+              }
+            }
           }
         } catch (e) {
           console.warn('[clickup-webhook] Fallback processing error', e);
