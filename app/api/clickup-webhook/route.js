@@ -77,16 +77,26 @@ export async function POST(request) {
             console.log('[clickup-webhook] saved images from payload.attachments', { count: payloadUrls.length });
           }
 
-          // 2) Fallback to fetching recent comments
+          // 2) Try task attachments from task object
+          let fromTaskAtts = [];
+          if (!payloadUrls.length) {
+            fromTaskAtts = await fetchTaskAttachmentImageUrls(payloadTaskId);
+            if (fromTaskAtts.length) {
+              await persistImages(fromTaskAtts, { ...meta, taskId: payloadTaskId });
+              console.log('[clickup-webhook] saved images from task.attachments', { count: fromTaskAtts.length });
+            }
+          }
+
+          // 3) Fallback to fetching recent comments
           const fromComments = await fetchTaskCommentImageUrls(payloadTaskId);
           console.log('[clickup-webhook] Fallback comment fetch URLs:', { count: fromComments.length, urls: fromComments.slice(0, 3) });
-          if (!payloadUrls.length && fromComments.length) {
+          if (!payloadUrls.length && !fromTaskAtts.length && fromComments.length) {
             await persistImages(fromComments, { ...meta, taskId: payloadTaskId });
             console.log('[clickup-webhook] saved images from fallback comment fetch', { count: fromComments.length });
           }
 
-          // 3) If still nothing, retry a few times (agent may post comment with delay)
-          if (!payloadUrls.length && (!fromComments || fromComments.length === 0)) {
+          // 4) If still nothing, retry a few times (agent may post comment with delay)
+          if (!payloadUrls.length && (!fromTaskAtts || fromTaskAtts.length === 0) && (!fromComments || fromComments.length === 0)) {
             for (let i = 0; i < 3; i++) {
               await sleep(3000);
               const retry = await fetchTaskCommentImageUrls(payloadTaskId);
@@ -232,6 +242,36 @@ export async function POST(request) {
         return uniqueUrls;
       } catch (e) {
         console.warn('[clickup-webhook] fetchTaskCommentImageUrls failed', e);
+        return [];
+      }
+    }
+
+    async function fetchTaskAttachmentImageUrls(taskId) {
+      try {
+        const apiKey = process.env.CLICKUP_API_KEY;
+        if (!apiKey || !taskId) return [];
+        const res = await fetch(`${CLICKUP_API_BASE}/task/${encodeURIComponent(taskId)}`, {
+          method: 'GET',
+          headers: { Authorization: apiKey },
+        });
+        const txt = await res.text();
+        if (!res.ok) {
+          console.warn('[clickup-webhook] fetchTaskAttachmentImageUrls failed:', { status: res.status, taskId, response: txt?.slice(0, 200) });
+        }
+        const json = txt ? JSON.parse(txt) : {};
+        const atts = Array.isArray(json?.attachments) ? json.attachments : [];
+        const urls = [];
+        for (const att of atts) {
+          const u = att?.url || att?.thumb || att?.image || att?.path || att?.download_url;
+          const mime = att?.mime || att?.mimetype || att?.content_type || att?.type;
+          const isImg = (typeof mime === 'string' && mime.toLowerCase().startsWith('image/')) || (typeof att?.type === 'string' && att.type.toLowerCase() === 'image');
+          if (typeof u === 'string' && (isImg || /^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u))) urls.push(u);
+        }
+        const unique = Array.from(new Set(urls));
+        console.log('[clickup-webhook] fetchTaskAttachmentImageUrls extracted:', { taskId, count: unique.length, urls: unique.slice(0, 3) });
+        return unique;
+      } catch (e) {
+        console.warn('[clickup-webhook] fetchTaskAttachmentImageUrls error', e);
         return [];
       }
     }

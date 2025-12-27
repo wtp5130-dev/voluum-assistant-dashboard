@@ -39,6 +39,17 @@ export async function GET(req: NextRequest): Promise<Response> {
     const outsLine = getLine("Requested Outputs");
     const outputs = outsLine ? outsLine.split(/\s*,\s*/).filter(Boolean) : undefined;
 
+    // First, parse task attachments on the task itself
+    const taskAtts: any[] = Array.isArray((info as any)?.attachments) ? (info as any).attachments : [];
+    const urls: string[] = [];
+    for (const att of taskAtts) {
+      const u = att?.url || att?.thumb || att?.image || att?.path || att?.download_url;
+      const mime = att?.mime || att?.mimetype || att?.content_type || att?.type;
+      const isImg = (typeof mime === 'string' && mime.toLowerCase().startsWith('image/')) || (typeof att?.type === 'string' && att.type.toLowerCase() === 'image');
+      if (typeof u === 'string' && (isImg || /^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u))) urls.push(u);
+    }
+    console.log(`[import] Task ${taskId}: task.attachments found=${taskAtts.length}, extracted=${urls.length}`);
+
     // Comments (attachments)
     const comRes = await fetch(`${CLICKUP_API_BASE}/task/${encodeURIComponent(taskId)}/comment`, {
       method: "GET",
@@ -64,8 +75,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     console.log(`[import] Task ${taskId}: found ${comments.length} comments`);
     console.log(`[import] Full comments JSON:`, JSON.stringify(comments, null, 2).substring(0, 3000));
 
-    // Extract image URLs and a bot comment if any
-    const urls: string[] = [];
+    // Extract image URLs and a bot comment if any (merge into urls)
     let botComment: string | undefined;
     for (const c of comments) {
       // ClickUp comments structure: c.comment is an array of objects
