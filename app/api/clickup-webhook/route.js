@@ -65,6 +65,10 @@ export async function POST(request) {
 
           // 1) Try attachments embedded in payload
           const payloadAttachments = Array.isArray(body?.payload?.attachments) ? body.payload.attachments : [];
+          console.log('[clickup-webhook] payload.attachments', {
+            count: payloadAttachments.length,
+            sampleKeys: payloadAttachments[0] ? Object.keys(payloadAttachments[0]).slice(0, 10) : [],
+          });
           const payloadUrls = [];
           for (const att of payloadAttachments) {
             const u = att?.url || att?.thumb || att?.image || att?.path || att?.download_url;
@@ -97,8 +101,8 @@ export async function POST(request) {
 
           // 4) If still nothing, retry a few times (agent may post comment with delay)
           if (!payloadUrls.length && (!fromTaskAtts || fromTaskAtts.length === 0) && (!fromComments || fromComments.length === 0)) {
-            for (let i = 0; i < 3; i++) {
-              await sleep(3000);
+            for (let i = 0; i < 5; i++) {
+              await sleep(5000);
               const retry = await fetchTaskCommentImageUrls(payloadTaskId);
               console.log('[clickup-webhook] Retry comment fetch', { attempt: i + 1, count: retry.length });
               if (retry.length) {
