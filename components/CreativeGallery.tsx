@@ -6,6 +6,9 @@ export default function CreativeGallery() {
   const [items, setItems] = useState<Array<any>>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [importTask, setImportTask] = useState<string>("");
+  const [importBusy, setImportBusy] = useState<boolean>(false);
+  const [importMsg, setImportMsg] = useState<string>("");
   const [brands, setBrands] = useState<Array<{ id: string; name: string }>>([]);
   const [filterBrand, setFilterBrand] = useState<string>("");
   // style filter removed
@@ -24,6 +27,28 @@ export default function CreativeGallery() {
       setError(e?.message || String(e));
     } finally {
       setLoading(false);
+    }
+  };
+
+  const importFromClickUp = async () => {
+    const raw = (importTask || "").trim();
+    if (!raw) return;
+    // Extract task id from full URL or direct id
+    const m = raw.match(/[a-z0-9]{5,}/i);
+    const taskId = m ? m[0] : raw;
+    const token = process.env.NEXT_PUBLIC_SEED_TOKEN || "";
+    setImportBusy(true); setImportMsg("");
+    try {
+      if (!token) throw new Error("Missing client import token (NEXT_PUBLIC_SEED_TOKEN)");
+      const res = await fetch(`/api/creative-gallery/import?token=${encodeURIComponent(token)}&task=${encodeURIComponent(taskId)}`, { cache: "no-store" });
+      const json = await res.json();
+      if (!res.ok || json?.error) throw new Error(json?.error || `Import failed (${res.status})`);
+      setImportMsg(`Imported ${json?.saved || 0} image(s) from task ${taskId}.`);
+      await load();
+    } catch (e: any) {
+      setImportMsg(e?.message || String(e));
+    } finally {
+      setImportBusy(false);
     }
   };
 
@@ -95,11 +120,24 @@ export default function CreativeGallery() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3 flex-wrap">
         <h2 className="text-lg font-semibold">Gallery</h2>
-        <button onClick={load} className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Refresh</button>
+        <div className="flex items-end gap-2">
+          <div className="flex flex-col">
+            <label className="text-[10px] uppercase tracking-wide text-slate-400">Import from ClickUp (Task URL or ID)</label>
+            <input
+              value={importTask}
+              onChange={(e)=>setImportTask(e.target.value)}
+              placeholder="https://app.clickup.com/t/86evzqpw1 or 86evzqpw1"
+              className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[12px] min-w-[260px]"
+            />
+          </div>
+          <button onClick={importFromClickUp} disabled={importBusy} className="text-[11px] px-3 py-1 rounded-md bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50">{importBusy?"Importing…":"Import"}</button>
+          <button onClick={load} className="text-[11px] px-3 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800">Refresh</button>
+        </div>
       </div>
       {error && <div className="text-rose-400 text-sm">{error}</div>}
+      {importMsg && <div className="text-[12px] text-slate-300">{importMsg}</div>}
       {loading && <div className="text-sm text-slate-400">Please be patient…</div>}
       <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-[11px] flex flex-wrap items-end gap-3">
         <div>
