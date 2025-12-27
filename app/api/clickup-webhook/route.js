@@ -60,11 +60,27 @@ export async function POST(request) {
         });
         try {
           const meta = await fetchTaskMeta(payloadTaskId);
+
+          // 1) Try attachments embedded in payload
+          const payloadAttachments = Array.isArray(body?.payload?.attachments) ? body.payload.attachments : [];
+          const payloadUrls = [];
+          for (const att of payloadAttachments) {
+            const u = att?.url || att?.thumb || att?.image || att?.path || att?.download_url;
+            const mime = att?.mime || att?.mimetype || att?.content_type;
+            const isImg = (typeof mime === 'string' && mime.toLowerCase().startsWith('image/')) || att?.type === 'image';
+            if (typeof u === 'string' && (isImg || /^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u))) payloadUrls.push(u);
+          }
+          if (payloadUrls.length) {
+            await persistImages(payloadUrls, { ...meta, taskId: payloadTaskId });
+            console.log('[clickup-webhook] saved images from payload.attachments', { count: payloadUrls.length });
+          }
+
+          // 2) Fallback to fetching recent comments
           const fromComments = await fetchTaskCommentImageUrls(payloadTaskId);
           console.log('[clickup-webhook] Fallback comment fetch URLs:', { count: fromComments.length, urls: fromComments.slice(0, 3) });
-          if (fromComments.length) {
+          if (!payloadUrls.length && fromComments.length) {
             await persistImages(fromComments, { ...meta, taskId: payloadTaskId });
-            console.log('[clickup-webhook] saved images from fallback payload', { count: fromComments.length });
+            console.log('[clickup-webhook] saved images from fallback comment fetch', { count: fromComments.length });
           }
         } catch (e) {
           console.warn('[clickup-webhook] Fallback processing error', e);

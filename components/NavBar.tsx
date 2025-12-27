@@ -69,8 +69,8 @@ export default function NavBar() {
     const checks = [
       { name: "kv", url: "/api/optimizer/blacklist-log" },
       { name: "dashboard", url: "/api/voluum-dashboard?dateRange=last7days" },
-      { name: "creative-doctor", url: "/api/creative-doctor" },
-      { name: "creative-assets", url: "/api/creative-assets" },
+      { name: "gallery", url: "/api/creative-gallery" },
+      { name: "webhook", url: "/api/clickup-webhook" },
     ];
     const results: string[] = [];
     let okCount = 0;
