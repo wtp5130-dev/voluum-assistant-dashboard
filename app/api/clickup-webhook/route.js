@@ -153,7 +153,9 @@ export async function POST(request) {
           if (Array.isArray(attachments)) {
             for (const att of attachments) {
               const u = att?.url || att?.thumb || att?.image || att?.path;
-              if (typeof u === 'string' && /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u)) urls.push(u);
+              const mime = att?.mime || att?.mimetype || att?.content_type;
+              const isImg = (typeof mime === 'string' && mime.toLowerCase().startsWith('image/')) || att?.type === 'image';
+              if (typeof u === 'string' && (isImg || /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u))) urls.push(u);
             }
           }
           
@@ -204,7 +206,9 @@ export async function POST(request) {
         if (Array.isArray(attachments)) {
           for (const att of attachments) {
             const url = att?.url || att?.thumb || att?.image || att?.path;
-            if (typeof url === 'string' && /\.(png|jpe?g|webp|gif)(\?|$)/i.test(url)) {
+            const mime = att?.mime || att?.mimetype || att?.content_type;
+            const isImg = (typeof mime === 'string' && mime.toLowerCase().startsWith('image/')) || att?.type === 'image';
+            if (typeof url === 'string' && (isImg || /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(url))) {
               imageUrls.push(url);
             }
           }
