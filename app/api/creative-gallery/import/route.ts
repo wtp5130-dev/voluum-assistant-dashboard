@@ -50,6 +50,34 @@ export async function GET(req: NextRequest): Promise<Response> {
     }
     console.log(`[import] Task ${taskId}: task.attachments found=${taskAtts.length}, extracted=${urls.length}`);
 
+    // Deep scan task JSON for any image-like URLs
+    try {
+      const deepScan = (root: any): string[] => {
+        const out: string[] = [];
+        const stack: any[] = [root];
+        while (stack.length) {
+          const v = stack.pop();
+          if (typeof v === 'string') {
+            if (/^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(v)) out.push(v);
+          } else if (Array.isArray(v)) {
+            for (const x of v) stack.push(x);
+          } else if (v && typeof v === 'object') {
+            const u = (v as any).url || (v as any).thumb || (v as any).image || (v as any).path || (v as any).download_url;
+            const mime = (v as any).mime || (v as any).mimetype || (v as any).content_type || (v as any).type;
+            const isImg = (typeof mime === 'string' && mime.toLowerCase().startsWith('image/')) || (typeof (v as any).type === 'string' && (v as any).type.toLowerCase() === 'image');
+            if (typeof u === 'string' && (isImg || /^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u))) out.push(u);
+            for (const k of Object.keys(v)) stack.push((v as any)[k]);
+          }
+        }
+        return Array.from(new Set(out));
+      };
+      const scanUrls = deepScan(info);
+      if (scanUrls.length) {
+        for (const u of scanUrls) if (!urls.includes(u)) urls.push(u);
+      }
+      console.log(`[import] Task ${taskId}: deep-scan found ${scanUrls.length} URL(s)`);
+    } catch {}
+
     // Comments (attachments)
     const comRes = await fetch(`${CLICKUP_API_BASE}/task/${encodeURIComponent(taskId)}/comment`, {
       method: "GET",

@@ -37,6 +37,29 @@ export async function POST(request) {
   try {
     // small sleep helper for retry loops
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    // deep scan helper to find any image-like URLs anywhere in an object
+    const deepScanImageUrls = (root) => {
+      const urls = [];
+      try {
+        const stack = [root];
+        while (stack.length) {
+          const v = stack.pop();
+          if (typeof v === 'string') {
+            if (/^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(v)) urls.push(v);
+          } else if (Array.isArray(v)) {
+            for (const x of v) stack.push(x);
+          } else if (v && typeof v === 'object') {
+            // If object has explicit mime/type, prefer those too
+            const u = v.url || v.thumb || v.image || v.path || v.download_url;
+            const mime = v.mime || v.mimetype || v.content_type || v.type;
+            const isImg = (typeof mime === 'string' && mime.toLowerCase().startsWith('image/')) || (typeof v.type === 'string' && v.type.toLowerCase() === 'image');
+            if (typeof u === 'string' && (isImg || /^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u))) urls.push(u);
+            for (const k of Object.keys(v)) stack.push(v[k]);
+          }
+        }
+      } catch {}
+      return Array.from(new Set(urls));
+    };
     // Accept empty or non-JSON bodies gracefully to satisfy ClickUp test pings
     let bodyText = '';
     try { bodyText = await request.text(); } catch {}
@@ -91,6 +114,18 @@ export async function POST(request) {
             }
           }
 
+          // 2b) Deep-scan payload JSON for any image-like URLs
+          let fromPayloadScan = [];
+          if (!payloadUrls.length && !fromTaskAtts.length) {
+            fromPayloadScan = deepScanImageUrls(body?.payload);
+            if (fromPayloadScan.length) {
+              await persistImages(fromPayloadScan, { ...meta, taskId: payloadTaskId });
+              console.log('[clickup-webhook] saved images from payload deep-scan', { count: fromPayloadScan.length });
+            } else {
+              console.log('[clickup-webhook] payload deep-scan found 0 image URLs');
+            }
+          }
+
           // 3) Fallback to fetching recent comments
           const fromComments = await fetchTaskCommentImageUrls(payloadTaskId);
           console.log('[clickup-webhook] Fallback comment fetch URLs:', { count: fromComments.length, urls: fromComments.slice(0, 3) });
@@ -100,7 +135,7 @@ export async function POST(request) {
           }
 
           // 4) If still nothing, retry a few times (agent may post comment with delay)
-          if (!payloadUrls.length && (!fromTaskAtts || fromTaskAtts.length === 0) && (!fromComments || fromComments.length === 0)) {
+          if (!payloadUrls.length && (!fromTaskAtts || fromTaskAtts.length === 0) && (!fromPayloadScan || fromPayloadScan.length === 0) && (!fromComments || fromComments.length === 0)) {
             for (let i = 0; i < 5; i++) {
               await sleep(5000);
               const retry = await fetchTaskCommentImageUrls(payloadTaskId);
