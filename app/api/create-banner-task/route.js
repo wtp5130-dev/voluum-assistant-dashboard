@@ -125,6 +125,8 @@ export async function POST(request) {
 
     // Attempt to locate and prepare the "Sidekick" custom field on the list
     let sidekickFieldEntry = null;
+    // Collect dynamic field entries mapped from form values (outputs, requester info, custom size, etc.)
+    const dynamicFieldEntries = [];
     try {
       const listRes = await fetch(`${CLICKUP_API_BASE}/list/${encodeURIComponent(listId)}`, {
         method: 'GET',
@@ -158,6 +160,59 @@ export async function POST(request) {
         }
         sidekickFieldEntry = { id: sidekick.id, value };
       }
+
+      // Map Outputs (checkboxes) to matching ClickUp checkbox fields by name
+      const norm = (s) => String(s || '').replace(/[×]/g, 'x').toLowerCase().trim();
+      const selected = new Set((sizes || []).map((s) => norm(s)));
+      const outputNames = [
+        'Push Notifications (720x480)',
+        'Telegram (900x900)',
+        'Facebook / Instagram Post (1080x1080)',
+        'Story / Reel (1080x1920)',
+        'Website Banner (1920x1080)',
+        'Display Ad (300x250)'
+      ];
+      for (const f of fields) {
+        const fname = String(f?.name || '');
+        const ftype = String(f?.type || '').toLowerCase();
+        if (!f?.id) continue;
+        const isCheckbox = ftype.includes('checkbox') || ftype.includes('bool');
+        if (!isCheckbox) continue;
+        const match = outputNames.find((n) => norm(n) === norm(fname));
+        if (match && selected.has(norm(match))) {
+          dynamicFieldEntries.push({ id: f.id, value: true });
+        }
+      }
+
+      // Requester Info (text field)
+      if (requesterInfo) {
+        const textField = fields.find((f) => String(f?.name || '').toLowerCase().includes('requester') && String(f?.type || '').toLowerCase().includes('text'));
+        if (textField?.id) dynamicFieldEntries.push({ id: textField.id, value: requesterInfo });
+      }
+
+      // Custom Size: set a text field named Image Size/Custom Size if present, and tick a checkbox named Custom Size if present
+      if (customSize) {
+        const textTargets = fields.filter((f) => {
+          const nm = String(f?.name || '').toLowerCase();
+          const t = String(f?.type || '').toLowerCase();
+          return (nm.includes('image size') || nm.includes('custom size')) && t.includes('text');
+        });
+        for (const tf of textTargets) {
+          if (tf?.id) dynamicFieldEntries.push({ id: tf.id, value: customSize });
+        }
+        const csCheckbox = fields.find((f) => {
+          const nm = String(f?.name || '').toLowerCase();
+          const t = String(f?.type || '').toLowerCase();
+          return nm.includes('custom size') && (t.includes('checkbox') || t.includes('bool'));
+        });
+        if (csCheckbox?.id) dynamicFieldEntries.push({ id: csCheckbox.id, value: true });
+      }
+
+      // Also mirror Country (text) if there is a text field named Country
+      if (region) {
+        const countryText = fields.find((f) => String(f?.name || '').toLowerCase() === 'country' && String(f?.type || '').toLowerCase().includes('text'));
+        if (countryText?.id) dynamicFieldEntries.push({ id: countryText.id, value: region });
+      }
     } catch {}
 
     const payload = {
@@ -185,6 +240,8 @@ export async function POST(request) {
         }] : []),
         // Always mark Sidekick field if present
         ...(sidekickFieldEntry ? [sidekickFieldEntry] : []),
+        // Dynamic mapped field entries
+        ...dynamicFieldEntries,
       ],
     };
 
