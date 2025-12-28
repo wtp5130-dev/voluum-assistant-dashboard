@@ -167,25 +167,31 @@ export async function POST(request) {
         sidekickFieldEntryUpdate = { id: sidekick.id, value: valueUpdate };
       }
 
-      // Map Outputs (checkboxes) to matching ClickUp checkbox fields by name
-      const norm = (s) => String(s || '').replace(/[×]/g, 'x').toLowerCase().trim();
-      const selected = new Set((sizes || []).map((s) => norm(s)));
-      const outputNames = [
-        'Push Notifications (720x480)',
-        'Telegram (900x900)',
-        'Facebook / Instagram Post (1080x1080)',
-        'Story / Reel (1080x1920)',
-        'Website Banner (1920x1080)',
-        'Display Ad (300x250)'
-      ];
+      // Map Outputs (checkboxes) to matching ClickUp checkbox fields by fuzzy name
+      const norm = (s) => String(s || '').replace(/[×]/g, 'x').replace(/[^a-z0-9x ]+/ig,'').toLowerCase().trim();
+      const sel = (sizes || []).map((s) => norm(s));
+      const isSel = (tokens) => sel.some((v) => tokens.every((t) => v.includes(t)));
       for (const f of fields) {
-        const fname = String(f?.name || '');
-        const ftype = String(f?.type || '').toLowerCase();
         if (!f?.id) continue;
-        const isCheckbox = ftype.includes('checkbox') || ftype.includes('bool');
+        const t = String(f?.type || '').toLowerCase();
+        const isCheckbox = t.includes('checkbox') || t.includes('bool');
         if (!isCheckbox) continue;
-        const match = outputNames.find((n) => norm(n) === norm(fname));
-        if (match && selected.has(norm(match))) {
+        const fname = norm(f?.name || '');
+        let shouldTick = false;
+        if (fname.includes('push') && fname.includes('720x480')) {
+          shouldTick = isSel(['push','720x480']);
+        } else if (fname.includes('telegram') && fname.includes('900x900')) {
+          shouldTick = isSel(['telegram','900x900']);
+        } else if ((fname.includes('facebook') || fname.includes('instagram') || fname.includes('fb')) && fname.includes('1080x1080')) {
+          shouldTick = isSel(['1080x1080']) && sel.some(v => (v.includes('facebook')||v.includes('instagram')||v.includes('fb')));
+        } else if ((fname.includes('story') || fname.includes('reel')) && fname.includes('1080x1920')) {
+          shouldTick = isSel(['1080x1920']) && sel.some(v => (v.includes('story')||v.includes('reel')));
+        } else if (fname.includes('website') && fname.includes('banner') && fname.includes('1920x1080')) {
+          shouldTick = isSel(['website','banner','1920x1080']);
+        } else if (fname.includes('display') && fname.includes('300x250')) {
+          shouldTick = isSel(['display','300x250']);
+        }
+        if (shouldTick) {
           dynamicFieldEntriesCreate.push({ id: f.id, value: true });
           dynamicFieldEntriesUpdate.push({ id: f.id, value: 1 });
         }
