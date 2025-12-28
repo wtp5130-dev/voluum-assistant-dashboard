@@ -36,6 +36,7 @@ export async function POST(request) {
         sizes: (fd.getAll('sizes') || fd.getAll('sizes[]') || []).map(toStr).filter(Boolean),
         customSize: toStr(fd.get('customSize') || ''),
         requesterInfo: toStr(fd.get('requesterInfo') || ''),
+        sidekick: toStr(fd.get('sidekick') || '') // "1" or "0"
       };
       // Collect reference files (can be multiple)
       const refs = fd.getAll('reference').concat(fd.getAll('references') || []);
@@ -71,6 +72,13 @@ export async function POST(request) {
     const sizes = Array.isArray(body.sizes) ? body.sizes : [];
     const customSize = body.customSize || '';
     const requesterInfo = body.requesterInfo || '';
+    const sidekickFlag = (() => {
+      const v = body.sidekick;
+      if (typeof v === 'boolean') return v;
+      if (typeof v === 'number') return v !== 0;
+      if (typeof v === 'string') return v === '1' || v.toLowerCase() === 'true' || v.toLowerCase() === 'on';
+      return false;
+    })();
     const requestedStatus = (body.status || process.env.CLICKUP_DEFAULT_STATUS || 'design requested').toString().trim();
 
     if (!name || typeof name !== 'string') {
@@ -125,10 +133,10 @@ export async function POST(request) {
       try { listJson = listText ? JSON.parse(listText) : {}; } catch { listJson = { raw: listText }; }
       const fields = Array.isArray(listJson?.custom_fields) ? listJson.custom_fields : [];
       const sidekick = fields.find((f) => String(f?.name || '').trim().toLowerCase() === 'sidekick');
-      if (sidekick?.id) {
+      if (sidekick?.id && sidekickFlag) {
         // Determine appropriate value based on field type
         const t = String(sidekick.type || '').toLowerCase();
-        let value = true; // default to true/Yes
+        let value = true; // default to true/Yes when checked
         if (t.includes('drop')) {
           // dropdown: try to find option named Yes/Sidekick; else use the first option id
           const opts = (sidekick.type_config && Array.isArray(sidekick.type_config.options)) ? sidekick.type_config.options : [];
