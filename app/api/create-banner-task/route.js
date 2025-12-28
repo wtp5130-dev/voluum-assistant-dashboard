@@ -124,9 +124,13 @@ export async function POST(request) {
     }
 
     // Attempt to locate and prepare the "Sidekick" custom field on the list
-    let sidekickFieldEntry = null;
+    // We'll keep two sets: values for CREATE payload (boolean true for checkboxes)
+    // and values for POST-CREATE fallback updates (numeric 1 for checkboxes).
+    let sidekickFieldEntryCreate = null;
+    let sidekickFieldEntryUpdate = null;
     // Collect dynamic field entries mapped from form values (outputs, requester info, custom size, etc.)
-    const dynamicFieldEntries = [];
+    const dynamicFieldEntriesCreate = [];
+    const dynamicFieldEntriesUpdate = [];
     try {
       const listRes = await fetch(`${CLICKUP_API_BASE}/list/${encodeURIComponent(listId)}`, {
         method: 'GET',
@@ -140,25 +144,27 @@ export async function POST(request) {
       if (sidekick?.id && sidekickFlag) {
         // Determine appropriate value based on field type
         const t = String(sidekick.type || '').toLowerCase();
-        let value = 1; // ClickUp checkbox commonly accepts 1/0
+        let valueCreate = true; // create payload prefers boolean
+        let valueUpdate = 1;    // fallback update accepts 1/0
         if (t.includes('drop')) {
           // dropdown: try to find option named Yes/Sidekick; else use the first option id
           const opts = (sidekick.type_config && Array.isArray(sidekick.type_config.options)) ? sidekick.type_config.options : [];
           const prefer = opts.find((o) => String(o?.name || '').toLowerCase() === 'yes')
             || opts.find((o) => String(o?.name || '').toLowerCase() === 'sidekick')
             || opts[0];
-          if (prefer?.id) value = prefer.id; else value = 'Yes';
+          if (prefer?.id) { valueCreate = prefer.id; valueUpdate = prefer.id; } else { valueCreate = 'Yes'; valueUpdate = 'Yes'; }
         } else if (t.includes('short') || t.includes('text')) {
-          value = 'Yes';
+          valueCreate = 'Yes'; valueUpdate = 'Yes';
         } else if (t.includes('number')) {
-          value = 1;
+          valueCreate = 1; valueUpdate = 1;
         } else if (t.includes('checkbox') || t.includes('bool') || t.includes('boolean')) {
-          value = 1;
+          valueCreate = true; valueUpdate = 1;
         } else {
           // default fallback string
-          value = 'Yes';
+          valueCreate = 'Yes'; valueUpdate = 'Yes';
         }
-        sidekickFieldEntry = { id: sidekick.id, value };
+        sidekickFieldEntryCreate = { id: sidekick.id, value: valueCreate };
+        sidekickFieldEntryUpdate = { id: sidekick.id, value: valueUpdate };
       }
 
       // Map Outputs (checkboxes) to matching ClickUp checkbox fields by name
@@ -180,14 +186,15 @@ export async function POST(request) {
         if (!isCheckbox) continue;
         const match = outputNames.find((n) => norm(n) === norm(fname));
         if (match && selected.has(norm(match))) {
-          dynamicFieldEntries.push({ id: f.id, value: 1 });
+          dynamicFieldEntriesCreate.push({ id: f.id, value: true });
+          dynamicFieldEntriesUpdate.push({ id: f.id, value: 1 });
         }
       }
 
       // Requester Info (text field)
       if (requesterInfo) {
         const textField = fields.find((f) => String(f?.name || '').toLowerCase().includes('requester') && String(f?.type || '').toLowerCase().includes('text'));
-        if (textField?.id) dynamicFieldEntries.push({ id: textField.id, value: requesterInfo });
+        if (textField?.id) { dynamicFieldEntriesCreate.push({ id: textField.id, value: requesterInfo }); dynamicFieldEntriesUpdate.push({ id: textField.id, value: requesterInfo }); }
       }
 
       // Custom Size: set a text field named Image Size/Custom Size if present, and tick a checkbox named Custom Size if present
@@ -198,20 +205,20 @@ export async function POST(request) {
           return (nm.includes('image size') || nm.includes('custom size')) && t.includes('text');
         });
         for (const tf of textTargets) {
-          if (tf?.id) dynamicFieldEntries.push({ id: tf.id, value: customSize });
+          if (tf?.id) { dynamicFieldEntriesCreate.push({ id: tf.id, value: customSize }); dynamicFieldEntriesUpdate.push({ id: tf.id, value: customSize }); }
         }
         const csCheckbox = fields.find((f) => {
           const nm = String(f?.name || '').toLowerCase();
           const t = String(f?.type || '').toLowerCase();
           return nm.includes('custom size') && (t.includes('checkbox') || t.includes('bool'));
         });
-        if (csCheckbox?.id) dynamicFieldEntries.push({ id: csCheckbox.id, value: 1 });
+        if (csCheckbox?.id) { dynamicFieldEntriesCreate.push({ id: csCheckbox.id, value: true }); dynamicFieldEntriesUpdate.push({ id: csCheckbox.id, value: 1 }); }
       }
 
       // Also mirror Country (text) if there is a text field named Country
       if (region) {
         const countryText = fields.find((f) => String(f?.name || '').toLowerCase() === 'country' && String(f?.type || '').toLowerCase().includes('text'));
-        if (countryText?.id) dynamicFieldEntries.push({ id: countryText.id, value: region });
+        if (countryText?.id) { dynamicFieldEntriesCreate.push({ id: countryText.id, value: region }); dynamicFieldEntriesUpdate.push({ id: countryText.id, value: region }); }
       }
     } catch {}
 
@@ -238,10 +245,10 @@ export async function POST(request) {
             "Mexico": "a8f31c37-2600-445c-8abf-144aa1a1656c",
           }[region] || region,
         }] : []),
-        // Always mark Sidekick field if present
-        ...(sidekickFieldEntry ? [sidekickFieldEntry] : []),
-        // Dynamic mapped field entries
-        ...dynamicFieldEntries,
+        // Always mark Sidekick field if present (create payload values)
+        ...(sidekickFieldEntryCreate ? [sidekickFieldEntryCreate] : []),
+        // Dynamic mapped field entries (create payload)
+        ...dynamicFieldEntriesCreate,
       ],
     };
 
@@ -283,8 +290,8 @@ export async function POST(request) {
     try {
       if (taskId) {
         const postCreateEntries = [];
-        if (sidekickFieldEntry) postCreateEntries.push(sidekickFieldEntry);
-        if (dynamicFieldEntries && dynamicFieldEntries.length) postCreateEntries.push(...dynamicFieldEntries);
+        if (sidekickFieldEntryUpdate) postCreateEntries.push(sidekickFieldEntryUpdate);
+        if (dynamicFieldEntriesUpdate && dynamicFieldEntriesUpdate.length) postCreateEntries.push(...dynamicFieldEntriesUpdate);
         for (const entry of postCreateEntries) {
           try {
             const uf = await fetch(`${CLICKUP_API_BASE}/task/${encodeURIComponent(taskId)}/field/${encodeURIComponent(entry.id)}`, {
