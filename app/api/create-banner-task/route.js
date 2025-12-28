@@ -113,6 +113,43 @@ export async function POST(request) {
       console.warn('[create-banner-task] Could not read list statuses; proceeding without explicit status', e);
     }
 
+    // Attempt to locate and prepare the "Sidekick" custom field on the list
+    let sidekickFieldEntry = null;
+    try {
+      const listRes = await fetch(`${CLICKUP_API_BASE}/list/${encodeURIComponent(listId)}`, {
+        method: 'GET',
+        headers: { 'Authorization': apiKey },
+      });
+      const listText = await listRes.text();
+      let listJson;
+      try { listJson = listText ? JSON.parse(listText) : {}; } catch { listJson = { raw: listText }; }
+      const fields = Array.isArray(listJson?.custom_fields) ? listJson.custom_fields : [];
+      const sidekick = fields.find((f) => String(f?.name || '').trim().toLowerCase() === 'sidekick');
+      if (sidekick?.id) {
+        // Determine appropriate value based on field type
+        const t = String(sidekick.type || '').toLowerCase();
+        let value = true; // default to true/Yes
+        if (t.includes('drop')) {
+          // dropdown: try to find option named Yes/Sidekick; else use the first option id
+          const opts = (sidekick.type_config && Array.isArray(sidekick.type_config.options)) ? sidekick.type_config.options : [];
+          const prefer = opts.find((o) => String(o?.name || '').toLowerCase() === 'yes')
+            || opts.find((o) => String(o?.name || '').toLowerCase() === 'sidekick')
+            || opts[0];
+          if (prefer?.id) value = prefer.id; else value = 'Yes';
+        } else if (t.includes('short') || t.includes('text')) {
+          value = 'Yes';
+        } else if (t.includes('number')) {
+          value = 1;
+        } else if (t.includes('checkbox') || t.includes('bool') || t.includes('boolean')) {
+          value = true;
+        } else {
+          // default fallback string
+          value = 'Yes';
+        }
+        sidekickFieldEntry = { id: sidekick.id, value };
+      }
+    } catch {}
+
     const payload = {
       name,
       description: fullDescription,
@@ -136,6 +173,8 @@ export async function POST(request) {
             "Mexico": "a8f31c37-2600-445c-8abf-144aa1a1656c",
           }[region] || region,
         }] : []),
+        // Always mark Sidekick field if present
+        ...(sidekickFieldEntry ? [sidekickFieldEntry] : []),
       ],
     };
 
