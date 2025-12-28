@@ -140,7 +140,7 @@ export async function POST(request) {
       if (sidekick?.id && sidekickFlag) {
         // Determine appropriate value based on field type
         const t = String(sidekick.type || '').toLowerCase();
-        let value = true; // default to true/Yes when checked
+        let value = 1; // ClickUp checkbox commonly accepts 1/0
         if (t.includes('drop')) {
           // dropdown: try to find option named Yes/Sidekick; else use the first option id
           const opts = (sidekick.type_config && Array.isArray(sidekick.type_config.options)) ? sidekick.type_config.options : [];
@@ -153,7 +153,7 @@ export async function POST(request) {
         } else if (t.includes('number')) {
           value = 1;
         } else if (t.includes('checkbox') || t.includes('bool') || t.includes('boolean')) {
-          value = true;
+          value = 1;
         } else {
           // default fallback string
           value = 'Yes';
@@ -180,7 +180,7 @@ export async function POST(request) {
         if (!isCheckbox) continue;
         const match = outputNames.find((n) => norm(n) === norm(fname));
         if (match && selected.has(norm(match))) {
-          dynamicFieldEntries.push({ id: f.id, value: true });
+          dynamicFieldEntries.push({ id: f.id, value: 1 });
         }
       }
 
@@ -205,7 +205,7 @@ export async function POST(request) {
           const t = String(f?.type || '').toLowerCase();
           return nm.includes('custom size') && (t.includes('checkbox') || t.includes('bool'));
         });
-        if (csCheckbox?.id) dynamicFieldEntries.push({ id: csCheckbox.id, value: true });
+        if (csCheckbox?.id) dynamicFieldEntries.push({ id: csCheckbox.id, value: 1 });
       }
 
       // Also mirror Country (text) if there is a text field named Country
@@ -278,6 +278,30 @@ export async function POST(request) {
     const taskUrl = data?.url || null;
     const taskId = data?.id || null;
     console.log('[create-banner-task] Task created', { taskId, taskUrl, listIdUsed: listId, statusUsed: statusToUse || '(default)' });
+
+    // Fallback: some checkbox fields may not set during create; update via field endpoint
+    try {
+      if (taskId) {
+        const postCreateEntries = [];
+        if (sidekickFieldEntry) postCreateEntries.push(sidekickFieldEntry);
+        if (dynamicFieldEntries && dynamicFieldEntries.length) postCreateEntries.push(...dynamicFieldEntries);
+        for (const entry of postCreateEntries) {
+          try {
+            const uf = await fetch(`${CLICKUP_API_BASE}/task/${encodeURIComponent(taskId)}/field/${encodeURIComponent(entry.id)}`, {
+              method: 'POST',
+              headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ value: entry.value })
+            });
+            if (!uf.ok) {
+              const t = await uf.text();
+              console.warn('[create-banner-task] Post-create field update failed', { field: entry.id, status: uf.status, body: t?.slice(0, 300) });
+            }
+          } catch (e) {
+            console.warn('[create-banner-task] Post-create field update error', { field: entry.id, err: String(e) });
+          }
+        }
+      }
+    } catch {}
 
     // If files were uploaded, attach them to the new task
     if (taskId && uploadFiles && uploadFiles.length) {
