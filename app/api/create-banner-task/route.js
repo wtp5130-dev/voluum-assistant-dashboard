@@ -36,7 +36,8 @@ export async function POST(request) {
         sizes: (fd.getAll('sizes') || fd.getAll('sizes[]') || []).map(toStr).filter(Boolean),
         customSize: toStr(fd.get('customSize') || ''),
         requesterInfo: toStr(fd.get('requesterInfo') || ''),
-        sidekick: toStr(fd.get('sidekick') || '') // "1" or "0"
+        // sidekick field now defaults to enabled automatically
+        sidekick: toStr(fd.get('sidekick') || '') // kept for backward compatibility
       };
       // Collect reference files (can be multiple)
       const refs = fd.getAll('reference').concat(fd.getAll('references') || []);
@@ -74,10 +75,11 @@ export async function POST(request) {
     const requesterInfo = body.requesterInfo || '';
     const sidekickFlag = (() => {
       const v = body.sidekick;
+      if (v === undefined || v === null || v === '') return true; // default ON if not provided
       if (typeof v === 'boolean') return v;
       if (typeof v === 'number') return v !== 0;
       if (typeof v === 'string') return v === '1' || v.toLowerCase() === 'true' || v.toLowerCase() === 'on';
-      return false;
+      return true;
     })();
     const requestedStatus = (body.status || process.env.CLICKUP_DEFAULT_STATUS || 'design requested').toString().trim();
 

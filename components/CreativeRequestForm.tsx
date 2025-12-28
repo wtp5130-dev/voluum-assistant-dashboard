@@ -18,7 +18,6 @@ export default function CreativeRequestForm() {
   const [sizes, setSizes] = useState<string[]>([]);
   const [customSize, setCustomSize] = useState("");
   const [requesterInfo, setRequesterInfo] = useState("");
-  const [sidekick, setSidekick] = useState<boolean>(true);
   type Picked = { file: File; url: string };
   const [files, setFiles] = useState<Picked[]>([]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -51,8 +50,6 @@ export default function CreativeRequestForm() {
       sizes.forEach((s) => fd.append("sizes", s));
       if (customSize) fd.append("customSize", customSize);
       if (requesterInfo) fd.append("requesterInfo", requesterInfo);
-      // sidekick checkbox controls ClickUp custom field
-      fd.append("sidekick", sidekick ? "1" : "0");
       if (listIdParam) fd.append("listId", listIdParam);
       files.forEach(({ file }) => fd.append("reference", file));
 
@@ -263,19 +260,7 @@ export default function CreativeRequestForm() {
             />
           </div>
 
-          {/* Sidekick flag (ClickUp custom field) */}
-          <div>
-            <label className="inline-flex items-center gap-2 text-sm text-slate-300">
-              <input
-                type="checkbox"
-                className="rounded border-slate-700 bg-slate-900"
-                checked={sidekick}
-                onChange={(e) => setSidekick(e.target.checked)}
-              />
-              Mark as Sidekick
-            </label>
-            <div className="text-[11px] text-slate-500 mt-1">Sets the Sidekick custom field in ClickUp on task creation.</div>
-          </div>
+          {/* Sidekick custom field now set automatically on submission */}
 
           <button
             type="submit"
