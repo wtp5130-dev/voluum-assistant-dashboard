@@ -2243,6 +2243,8 @@ function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; m
     Object.fromEntries(metrics.map(m => [m.key, true]))
   ));
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const [hoverX, setHoverX] = useState<number | null>(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const padding = 32;
   const w = 800; // internal width; SVG will scale to container
   const h = height;
@@ -2280,12 +2282,13 @@ function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; m
   const yRight = (v: number) => h - padding - ((v - yMinRight) / (yMaxRight - yMinRight)) * (h - padding * 2);
 
   const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    const rect = (e.currentTarget.firstChild as SVGSVGElement)?.getBoundingClientRect();
+    const rect = (containerRef.current?.firstChild as SVGSVGElement | null)?.getBoundingClientRect();
     if (!rect) return;
-    const mx = e.clientX - rect.left;
+    const mx = Math.max(0, Math.min(rect.width, e.clientX - rect.left));
     const ratio = (mx - padding) / Math.max(1, (rect.width - padding * 2));
     const idx = Math.round(ratio * (n - 1));
     setHoverIdx(Math.max(0, Math.min(n - 1, idx)));
+    setHoverX(mx);
   };
 
   const onLeave = () => setHoverIdx(null);
@@ -2309,7 +2312,7 @@ function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; m
         ))}
         <div className="ml-auto text-[10px] text-slate-500">Click to toggle series</div>
       </div>
-      <div onMouseMove={onMove} onMouseLeave={onLeave} className="relative">
+      <div ref={containerRef} onMouseMove={onMove} onMouseLeave={onLeave} className="relative">
         <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`}>
           {/* Y grid */}
           {gridY.map((gy, i) => (
@@ -2346,16 +2349,13 @@ function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; m
               })}
             </g>
           )}
-        </svg>
 
-        {/* Axes labels */}
-        <svg className="absolute inset-0 pointer-events-none" viewBox={`0 0 ${w} ${h}`}>        
           {/* Left axis ticks */}
           {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
             const val = yMaxLeft - (yMaxLeft - yMinLeft) * p;
             const fmt = (leftMetrics[0]?.formatter ?? formatMoney);
             return (
-              <text key={`ly${i}`} x={4} y={padding + (h - padding * 2) * p + 3} fontSize={10} fill="#94a3b8">{fmt(val)}</text>
+              <text key={`ly${i}`} x={6} y={padding + (h - padding * 2) * p + 3} fontSize={10} fill="#94a3b8">{fmt(val)}</text>
             );
           })}
           {/* Right axis ticks */}
@@ -2363,7 +2363,7 @@ function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; m
             const val = yMaxRight - (yMaxRight - yMinRight) * p;
             const fmt = (rightMetrics[0]?.formatter ?? formatInteger);
             return (
-              <text key={`ry${i}`} x={w - 4} y={padding + (h - padding * 2) * p + 3} fontSize={10} fill="#94a3b8" textAnchor="end">{fmt(val)}</text>
+              <text key={`ry${i}`} x={w - 6} y={padding + (h - padding * 2) * p + 3} fontSize={10} fill="#94a3b8" textAnchor="end">{fmt(val)}</text>
             );
           })}
         </svg>
@@ -2372,7 +2372,7 @@ function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; m
         {hoverIdx !== null && (
           <div
             className="pointer-events-none absolute -translate-x-1/2 -translate-y-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[11px] text-slate-200 shadow-lg"
-            style={{ left: `${(padding + (hoverIdx * (w - padding * 2)) / Math.max(1, n - 1)) / w * 100}%`, top: 8 }}
+            style={{ left: `${hoverX ?? 0}px`, top: 8 }}
           >
             <div className="text-[10px] text-slate-400 mb-1">{dateFmt(data[hoverIdx].date)}</div>
             {enabledMetrics.map(m => {
