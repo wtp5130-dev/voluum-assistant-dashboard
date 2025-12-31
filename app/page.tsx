@@ -38,6 +38,43 @@ type Zone = {
   roi: number;
 };
 
+/**
+ * ===========
+ * Types
+ * ===========
+ */
+
+type KPI = {
+  id: string;
+  label: string;
+  value: string;
+  delta: string;
+  positive: boolean;
+};
+
+type Zone = {
+  id: string;
+  visits: number;
+  conversions: number;
+  signups: number;
+  deposits: number;
+  revenue: number;
+  cost: number;
+  roi: number;
+};
+
+type Creative = {
+  id: string;
+  name?: string | null;
+  visits: number;
+  conversions: number;
+  signups: number;
+  deposits: number;
+  revenue: number;
+  cost: number;
+  roi: number;
+};
+
 type Campaign = {
   id: string;
   name: string;
@@ -56,77 +93,42 @@ type Campaign = {
   creatives?: Creative[];
 };
 
+type SeriesPoint = {
+  date: string;
+  cost: number;
+  revenue: number;
+  profit: number;
+  signups: number;
+  deposits: number;
+  cpa: number | null;
+  cpr: number | null;
+};
+
 type DashboardData = {
   dateRange: string;
   from: string;
-  cpr: number | null;
+  to: string;
+  kpis: KPI[];
+  campaigns: Campaign[];
+  series?: SeriesPoint[];
+};
+
+type DateRangeKey =
+  | "today"
+  | "yesterday"
+  | "last3days"
+  | "last7days"
+  | "last30days"
+  | "thismonth"
+  | "custom";
+
+type ChatMessage = {
+  role: "user" | "assistant";
+  content: string;
 };
 
 type TabKey = "dashboard" | "optimizer" | "creatives" | "builder" | "audit" | "updates";
 type ViewMode = "standard" | "charts";
-
-/**
- * ===========
- * Config
- * ===========
- */
-
-const DASHBOARD_API_URL = "/api/voluum-dashboard";
-const CHAT_API_URL = "/api/chat";
-const OPTIMIZER_PREVIEW_URL = "/api/optimizer/preview";
-const OPTIMIZER_APPLY_URL = "/api/optimizer/apply";
-
-const AD_TYPES: Record<string, { label: string }> = {
-  "push-classic": { label: "Propeller Push" },
-  "inpage-push": { label: "In-Page Push" },
-  interstitial: { label: "Interstitial" },
-  onclick: { label: "Onclick / Direct Click" },
-};
-
-const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
-  { key: "today", label: "Today" },
-  { key: "yesterday", label: "Yesterday" },
-  { key: "last3days", label: "Last 3 days" },
-  { key: "last7days", label: "Last 7 days" },
-  { key: "last30days", label: "Last 30 days" },
-  { key: "thismonth", label: "This month" },
-  { key: "custom", label: "Custom…" },
-];
-
-/**
- * ===========
- * Helpers
- * ===========
- */
-
-function formatMoney(value: number | string): string {
-  if (typeof value === "string") return value;
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    }).format(value);
-  } catch {
-    const sign = value < 0 ? "-" : "";
-    const abs = Math.abs(value);
-    return `${sign}$${abs.toFixed(2)}`;
-  }
-}
-
-function formatPercent(value: number): string {
-  return `${value.toFixed(2)}%`;
-}
-
-function formatInteger(value: number): string {
-  try {
-    return Number(value).toLocaleString("en-US");
-  } catch {
-    return String(value);
-  }
-}
-
 function formatDateYMD(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
