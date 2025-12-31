@@ -2355,7 +2355,7 @@ function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; m
             const val = yMaxLeft - (yMaxLeft - yMinLeft) * p;
             const fmt = (leftMetrics[0]?.formatter ?? formatMoney);
             return (
-              <text key={`ly${i}`} x={6} y={padding + (h - padding * 2) * p + 3} fontSize={10} fill="#94a3b8">{fmt(val)}</text>
+              <text key={`ly${i}`} x={padding - 6} y={padding + (h - padding * 2) * p + 3} fontSize={10} fill="#94a3b8" textAnchor="end">{fmt(val)}</text>
             );
           })}
           {/* Right axis ticks */}
@@ -2363,7 +2363,7 @@ function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; m
             const val = yMaxRight - (yMaxRight - yMinRight) * p;
             const fmt = (rightMetrics[0]?.formatter ?? formatInteger);
             return (
-              <text key={`ry${i}`} x={w - 6} y={padding + (h - padding * 2) * p + 3} fontSize={10} fill="#94a3b8" textAnchor="end">{fmt(val)}</text>
+              <text key={`ry${i}`} x={(w - padding) + 6} y={padding + (h - padding * 2) * p + 3} fontSize={10} fill="#94a3b8" textAnchor="start">{fmt(val)}</text>
             );
           })}
         </svg>
