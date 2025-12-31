@@ -107,6 +107,25 @@ const OPTIMIZER_PREVIEW_URL = "/api/optimizer/preview";
 const OPTIMIZER_APPLY_URL = "/api/optimizer/apply";
 const IMAGE_PROVIDER_DEFAULT = (process.env.NEXT_PUBLIC_IMAGE_PROVIDER as string) || "ideogram";
 
+// Date range UI options
+const DATE_RANGE_OPTIONS: { key: DateRangeKey; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "yesterday", label: "Yesterday" },
+  { key: "last3days", label: "Last 3 days" },
+  { key: "last7days", label: "Last 7 days" },
+  { key: "last30days", label: "Last 30 days" },
+  { key: "thismonth", label: "This month" },
+  { key: "custom", label: "Custom…" },
+];
+
+// Minimal ad types (labels used in Builder select)
+const AD_TYPES: Record<string, { label: string }> = {
+  "push-classic": { label: "Propeller Push" },
+  "inpage-push": { label: "In-Page Push" },
+  interstitial: { label: "Interstitial" },
+  onclick: { label: "Onclick / Direct Click" },
+};
+
 /**
  * ===========
  * Helpers
