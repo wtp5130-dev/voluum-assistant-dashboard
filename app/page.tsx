@@ -1652,44 +1652,7 @@ function DashboardTab(props: {
     return { cost, revenue, profit, signups, deposits, cpa, cpr };
   }, [seriesInRange]);
 
-  // When in Charts view, render a dedicated charts-only layout
-  if (viewMode === "charts") {
-    const src = trendResolution === "weekly" ? weeklySeries : dailySeries;
-    return (
-      <section className="grid gap-6">
-        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Charts view</h3>
-            <div className="flex items-center gap-2">
-              <div className="text-[10px] text-slate-500 hidden md:block">Resolution</div>
-              <div className="inline-flex rounded-md border border-slate-700 overflow-hidden">
-                <button onClick={()=>setTrendResolution("weekly")} className={`text-[10px] px-2 py-1 ${trendResolution==='weekly'?'bg-slate-800 text-slate-200':'bg-slate-900 text-slate-400 hover:text-slate-200'}`}>Weekly</button>
-                <button onClick={()=>setTrendResolution("daily")} className={`text-[10px] px-2 py-1 ${trendResolution==='daily'?'bg-slate-800 text-slate-200':'bg-slate-900 text-slate-400 hover:text-slate-200'}`}>Daily</button>
-              </div>
-            </div>
-          </div>
-
-          {src.length === 0 ? (
-            <p className="text-[11px] text-slate-500">No time series available for this range.</p>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              <TrendCard title="Profit" values={src.map(p=>p.profit)} color="#10b981" formatter={formatMoney} displayValue={rangeTotals.profit} />
-              <TrendCard title="Revenue" values={src.map(p=>p.revenue)} color="#22c55e" formatter={formatMoney} displayValue={rangeTotals.revenue} />
-              <TrendCard title="Cost" values={src.map(p=>p.cost)} color="#f59e0b" formatter={formatMoney} displayValue={rangeTotals.cost} />
-              <TrendCard title="Signups" values={src.map(p=>p.signups)} color="#64748b" formatter={(n)=>formatInteger(n)} displayValue={rangeTotals.signups} />
-              <TrendCard title="Deposits" values={src.map(p=>p.deposits)} color="#60a5fa" formatter={(n)=>formatInteger(n)} displayValue={rangeTotals.deposits} />
-              <TrendCard title="CPA (per deposit)" values={src.map(p=>p.cpa ?? 0)} color="#06b6d4" formatter={formatMoney} displayValue={rangeTotals.cpa} />
-              <TrendCard title="CPR (per signup)" values={src.map(p=>p.cpr ?? 0)} color="#8b5cf6" formatter={formatMoney} displayValue={rangeTotals.cpr} />
-            </div>
-          )}
-        </div>
-      </section>
-    );
-  }
-
-  
-
-  // Guided tour for Creative Doctor
+  // Guided tour for Creative Doctor (hooks must be declared before any conditional returns)
   const [doctorTourOpen, setDoctorTourOpen] = useState<boolean>(false);
   const [doctorTourStep, setDoctorTourStep] = useState<number>(0);
   const titleRef = useRef<HTMLDivElement | null>(null);
@@ -1749,6 +1712,41 @@ function DashboardTab(props: {
       window.removeEventListener('resize', update);
     };
   }, [doctorTourOpen, doctorTourStep, activeStep?.ref]);
+
+  // When in Charts view, render a dedicated charts-only layout
+  if (viewMode === "charts") {
+    const src = trendResolution === "weekly" ? weeklySeries : dailySeries;
+    return (
+      <section className="grid gap-6">
+        <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Charts view</h3>
+            <div className="flex items-center gap-2">
+              <div className="text-[10px] text-slate-500 hidden md:block">Resolution</div>
+              <div className="inline-flex rounded-md border border-slate-700 overflow-hidden">
+                <button onClick={()=>setTrendResolution("weekly")} className={`text-[10px] px-2 py-1 ${trendResolution==='weekly'?'bg-slate-800 text-slate-200':'bg-slate-900 text-slate-400 hover:text-slate-200'}`}>Weekly</button>
+                <button onClick={()=>setTrendResolution("daily")} className={`text-[10px] px-2 py-1 ${trendResolution==='daily'?'bg-slate-800 text-slate-200':'bg-slate-900 text-slate-400 hover:text-slate-200'}`}>Daily</button>
+              </div>
+            </div>
+          </div>
+
+          {src.length === 0 ? (
+            <p className="text-[11px] text-slate-500">No time series available for this range.</p>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <TrendCard title="Profit" values={src.map(p=>p.profit)} color="#10b981" formatter={formatMoney} displayValue={rangeTotals.profit} />
+              <TrendCard title="Revenue" values={src.map(p=>p.revenue)} color="#22c55e" formatter={formatMoney} displayValue={rangeTotals.revenue} />
+              <TrendCard title="Cost" values={src.map(p=>p.cost)} color="#f59e0b" formatter={formatMoney} displayValue={rangeTotals.cost} />
+              <TrendCard title="Signups" values={src.map(p=>p.signups)} color="#64748b" formatter={(n)=>formatInteger(n)} displayValue={rangeTotals.signups} />
+              <TrendCard title="Deposits" values={src.map(p=>p.deposits)} color="#60a5fa" formatter={(n)=>formatInteger(n)} displayValue={rangeTotals.deposits} />
+              <TrendCard title="CPA (per deposit)" values={src.map(p=>p.cpa ?? 0)} color="#06b6d4" formatter={formatMoney} displayValue={rangeTotals.cpa} />
+              <TrendCard title="CPR (per signup)" values={src.map(p=>p.cpr ?? 0)} color="#8b5cf6" formatter={formatMoney} displayValue={rangeTotals.cpr} />
+            </div>
+          )}
+        </div>
+      </section>
+    );
+  }
 
   return (
     <section className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,4fr)]">
