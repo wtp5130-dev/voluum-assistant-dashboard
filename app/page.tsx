@@ -105,6 +105,7 @@ const DASHBOARD_API_URL = "/api/voluum-dashboard";
 const CHAT_API_URL = "/api/chat";
 const OPTIMIZER_PREVIEW_URL = "/api/optimizer/preview";
 const OPTIMIZER_APPLY_URL = "/api/optimizer/apply";
+const IMAGE_PROVIDER_DEFAULT = (process.env.NEXT_PUBLIC_IMAGE_PROVIDER as string) || "ideogram";
 
 /**
  * ===========
@@ -417,8 +418,6 @@ export default function DashboardPage() {
     } catch {}
   }, [activeTab]);
 
-<<<<<<< HEAD
-=======
   // Initialize and persist view mode (standard/charts) in URL and localStorage
   useEffect(() => {
     // on mount: read from URL or localStorage
@@ -478,7 +477,6 @@ const [saveToGallery, setSaveToGallery] = useState<boolean>(true);
 const [charRefInfluence, setCharRefInfluence] = useState<number>(70);
 const [remixInfluence, setRemixInfluence] = useState<number>(70);
 
->>>>>>> bfbf4a7 (Fix: Charts view toggle  persist view in URL/localStorage and auto-switch to Dashboard tab)
   /**
    * Fetch dashboard data whenever dateRange or custom dates change
    * (client-side only, no full page reload)
