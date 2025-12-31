@@ -1751,11 +1751,13 @@ function DashboardTab(props: {
               <CombinedChart
                 data={src}
                 metrics={[
-                  { key: "profit", label: "Profit", color: "#10b981", formatter: formatMoney },
-                  { key: "revenue", label: "Revenue", color: "#22c55e", formatter: formatMoney },
-                  { key: "cost", label: "Cost", color: "#f59e0b", formatter: formatMoney },
+                  { key: "profit", label: "Profit", color: "#10b981", formatter: formatMoney, axis: 'left' },
+                  { key: "revenue", label: "Revenue", color: "#22c55e", formatter: formatMoney, axis: 'left' },
+                  { key: "cost", label: "Cost", color: "#f59e0b", formatter: formatMoney, axis: 'left' },
+                  { key: "signups", label: "Signups", color: "#64748b", formatter: (n)=>formatInteger(n), axis: 'right' },
+                  { key: "deposits", label: "Deposits", color: "#60a5fa", formatter: (n)=>formatInteger(n), axis: 'right' },
                 ]}
-                height={220}
+                height={240}
               />
             </div>
           )}
@@ -2235,7 +2237,7 @@ function TrendCard({ title, values, color, formatter, displayValue }: { title: s
   );
 }
 
-type CombinedMetric = { key: keyof SeriesPoint; label: string; color: string; formatter: (n: number) => string };
+type CombinedMetric = { key: keyof SeriesPoint; label: string; color: string; formatter: (n: number) => string; axis: 'left' | 'right' };
 function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; metrics: CombinedMetric[]; height?: number }) {
   const [enabled, setEnabled] = useState<Record<string, boolean>>(() => (
     Object.fromEntries(metrics.map(m => [m.key, true]))
@@ -2246,24 +2248,36 @@ function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; m
   const h = height;
   const n = data.length;
   const enabledMetrics = metrics.filter(m => enabled[m.key]);
+  const leftMetrics = enabledMetrics.filter(m => m.axis === 'left');
+  const rightMetrics = enabledMetrics.filter(m => m.axis === 'right');
   const x = (i: number) => padding + (n <= 1 ? 0 : (i * (w - padding * 2)) / Math.max(1, n - 1));
-  // Compute shared Y domain across enabled metrics for money values
-  const [yMin, yMax] = useMemo(() => {
+  // Compute domains per axis
+  const [yMinLeft, yMaxLeft] = useMemo(() => {
     let min = Infinity, max = -Infinity;
-    for (const m of enabledMetrics) {
+    for (const m of leftMetrics) {
       for (const p of data) {
         const v = (p as any)[m.key] as number | null;
-        if (typeof v === 'number') {
-          if (v < min) min = v;
-          if (v > max) max = v;
-        }
+        if (typeof v === 'number') { if (v < min) min = v; if (v > max) max = v; }
       }
     }
     if (!isFinite(min) || !isFinite(max)) { min = 0; max = 1; }
-    if (min === max) { max = min + 1; }
+    if (min === max) max = min + 1;
     return [min, max];
-  }, [data, enabledMetrics]);
-  const y = (v: number) => h - padding - ((v - yMin) / (yMax - yMin)) * (h - padding * 2);
+  }, [data, leftMetrics]);
+  const [yMinRight, yMaxRight] = useMemo(() => {
+    let min = Infinity, max = -Infinity;
+    for (const m of rightMetrics) {
+      for (const p of data) {
+        const v = (p as any)[m.key] as number | null;
+        if (typeof v === 'number') { if (v < min) min = v; if (v > max) max = v; }
+      }
+    }
+    if (!isFinite(min) || !isFinite(max)) { min = 0; max = 1; }
+    if (min === max) max = min + 1;
+    return [min, max];
+  }, [data, rightMetrics]);
+  const yLeft = (v: number) => h - padding - ((v - yMinLeft) / (yMaxLeft - yMinLeft)) * (h - padding * 2);
+  const yRight = (v: number) => h - padding - ((v - yMinRight) / (yMaxRight - yMinRight)) * (h - padding * 2);
 
   const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = (e.currentTarget.firstChild as SVGSVGElement)?.getBoundingClientRect();
@@ -2312,7 +2326,7 @@ function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; m
             const d = data
               .map((p, i) => {
                 const v = (p as any)[m.key] as number | null;
-                const yv = typeof v === 'number' ? y(v) : null;
+                const yv = typeof v === 'number' ? (m.axis === 'left' ? yLeft(v) : yRight(v)) : null;
                 if (yv === null) return '';
                 return `${i === 0 ? 'M' : 'L'}${x(i)},${yv}`;
               })
@@ -2328,10 +2342,30 @@ function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; m
               {enabledMetrics.map(m => {
                 const v = (data[hoverIdx] as any)[m.key] as number | null;
                 if (typeof v !== 'number') return null;
-                return <circle key={`pt-${m.key as string}`} cx={x(hoverIdx)} cy={y(v)} r={3} fill={m.color} />;
+                return <circle key={`pt-${m.key as string}`} cx={x(hoverIdx)} cy={(m.axis==='left'?yLeft(v):yRight(v))} r={3} fill={m.color} />;
               })}
             </g>
           )}
+        </svg>
+
+        {/* Axes labels */}
+        <svg className="absolute inset-0 pointer-events-none" viewBox={`0 0 ${w} ${h}`}>        
+          {/* Left axis ticks */}
+          {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
+            const val = yMaxLeft - (yMaxLeft - yMinLeft) * p;
+            const fmt = (leftMetrics[0]?.formatter ?? formatMoney);
+            return (
+              <text key={`ly${i}`} x={4} y={padding + (h - padding * 2) * p + 3} fontSize={10} fill="#94a3b8">{fmt(val)}</text>
+            );
+          })}
+          {/* Right axis ticks */}
+          {[0, 0.25, 0.5, 0.75, 1].map((p, i) => {
+            const val = yMaxRight - (yMaxRight - yMinRight) * p;
+            const fmt = (rightMetrics[0]?.formatter ?? formatInteger);
+            return (
+              <text key={`ry${i}`} x={w - 4} y={padding + (h - padding * 2) * p + 3} fontSize={10} fill="#94a3b8" textAnchor="end">{fmt(val)}</text>
+            );
+          })}
         </svg>
 
         {/* Tooltip */}
