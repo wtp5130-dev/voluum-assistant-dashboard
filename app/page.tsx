@@ -21,41 +21,6 @@ type Zone = {
   id: string;
   visits: number;
   conversions: number;
-  signups: number;   // 👈 NEW
-  deposits: number;  // 👈 NEW
-  revenue: number;
-  cost: number;
-  roi: number;
-};
-  // Initialize and persist view mode (standard/charts) in URL and localStorage
-  name?: string | null;
-    // on mount: read from URL or localStorage
-  conversions: number;
-  signups: number;   // 👈 NEW
-  deposits: number;  // 👈 NEW
-  revenue: number;
-  cost: number;
-  roi: number;
-};
-
-/**
- * ===========
- * Types
- * ===========
- */
-
-type KPI = {
-  id: string;
-  label: string;
-  value: string;
-  delta: string;
-  positive: boolean;
-};
-
-type Zone = {
-  id: string;
-  visits: number;
-  conversions: number;
   signups: number;
   deposits: number;
   revenue: number;
@@ -129,6 +94,52 @@ type ChatMessage = {
 
 type TabKey = "dashboard" | "optimizer" | "creatives" | "builder" | "audit" | "updates";
 type ViewMode = "standard" | "charts";
+
+/**
+ * ===========
+ * Config
+ * ===========
+ */
+
+const DASHBOARD_API_URL = "/api/voluum-dashboard";
+const CHAT_API_URL = "/api/chat";
+const OPTIMIZER_PREVIEW_URL = "/api/optimizer/preview";
+const OPTIMIZER_APPLY_URL = "/api/optimizer/apply";
+
+/**
+ * ===========
+ * Helpers
+ * ===========
+ */
+
+function formatMoney(value: number | string): string {
+  if (typeof value === "string") return value;
+  try {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value);
+  } catch {
+    const sign = value < 0 ? "-" : "";
+    const abs = Math.abs(value);
+    return `${sign}$${abs.toFixed(2)}`;
+  }
+}
+
+function formatPercent(value: number): string {
+  return `${value.toFixed(2)}%`;
+}
+
+function formatInteger(value: number): string {
+  try {
+    return Number(value).toLocaleString("en-US");
+  } catch {
+    return String(value);
+  }
+}
+
 function formatDateYMD(date: Date): string {
   const y = date.getFullYear();
   const m = String(date.getMonth() + 1).padStart(2, "0");
