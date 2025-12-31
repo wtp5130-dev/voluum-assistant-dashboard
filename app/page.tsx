@@ -27,11 +27,9 @@ type Zone = {
   cost: number;
   roi: number;
 };
-
-type Creative = {
-  id: string;
+  // Initialize and persist view mode (standard/charts) in URL and localStorage
   name?: string | null;
-  visits: number;
+    // on mount: read from URL or localStorage
   conversions: number;
   signups: number;   // 👈 NEW
   deposits: number;  // 👈 NEW
@@ -61,34 +59,6 @@ type Campaign = {
 type DashboardData = {
   dateRange: string;
   from: string;
-  to: string;
-  kpis: KPI[];
-  campaigns: Campaign[];
-  series?: SeriesPoint[];
-};
-
-type DateRangeKey =
-  | "today"
-  | "yesterday"
-  | "last3days"
-  | "last7days"
-  | "last30days"
-  | "thismonth"
-  | "custom";
-
-type ChatMessage = {
-  role: "user" | "assistant";
-  content: string;
-};
-
-type SeriesPoint = {
-  date: string;
-  cost: number;
-  revenue: number;
-  profit: number;
-  signups: number;
-  deposits: number;
-  cpa: number | null;
   cpr: number | null;
 };
 
@@ -434,6 +404,68 @@ export default function DashboardPage() {
     } catch {}
   }, [activeTab]);
 
+<<<<<<< HEAD
+=======
+  // Initialize and persist view mode (standard/charts) in URL and localStorage
+  useEffect(() => {
+    // on mount: read from URL or localStorage
+    try {
+      const url = new URL(window.location.href);
+      const v = url.searchParams.get("view");
+      const ls = localStorage.getItem("dashboard:viewMode");
+      const next = (v === "charts" || v === "standard") ? (v as ViewMode) : ((ls === "charts" || ls === "standard") ? (ls as ViewMode) : null);
+      if (next && next !== viewMode) setViewMode(next);
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    try {
+      // persist to URL
+      const url = new URL(window.location.href);
+      url.searchParams.set("view", viewMode);
+      window.history.replaceState(null, "", url.toString());
+      // persist to localStorage
+      localStorage.setItem("dashboard:viewMode", viewMode);
+      // broadcast to any listeners
+      window.dispatchEvent(new CustomEvent("view:current", { detail: viewMode }));
+    } catch {}
+  }, [viewMode]);
+
+  // If user switches to charts view while on other tabs, auto-focus Dashboard tab
+  useEffect(() => {
+    if (viewMode === "charts" && activeTab !== "dashboard") {
+      setActiveTab("dashboard");
+    }
+  }, [viewMode, activeTab]);
+
+// Creative image generator
+const [imagePrompt, setImagePrompt] = useState(
+  "High-converting casino push banner, bold CTA, mobile-first, 1:1 format."
+);
+const [adType, setAdType] = useState<string>("push-classic");
+const [assetTitle, setAssetTitle] = useState("");
+const [assetDescription, setAssetDescription] = useState("");
+const [mainImagePrompt, setMainImagePrompt] = useState("");
+const [mainImageSize, setMainImageSize] = useState("1024x1024");
+const [imageLoading, setImageLoading] = useState(false);
+const [imageError, setImageError] = useState<string | null>(null);
+const [imageUrl, setImageUrl] = useState<string | null>(null);
+const [imageProvider, setImageProvider] = useState<string>(IMAGE_PROVIDER_DEFAULT);
+const [assetsLoading, setAssetsLoading] = useState(false);
+const [assetsError, setAssetsError] = useState<string | null>(null);
+// Ideogram advanced controls
+const [stylePreset, setStylePreset] = useState<string>("");
+const [negativePrompt, setNegativePrompt] = useState<string>("");
+const [seed, setSeed] = useState<string>("");
+const [charRefFiles, setCharRefFiles] = useState<File[]>([]);
+const [imageRefFile, setImageRefFile] = useState<File | null>(null);
+const [saveToGallery, setSaveToGallery] = useState<boolean>(true);
+// Reference influence for character/image refs
+const [charRefInfluence, setCharRefInfluence] = useState<number>(70);
+const [remixInfluence, setRemixInfluence] = useState<number>(70);
+
+>>>>>>> bfbf4a7 (Fix: Charts view toggle  persist view in URL/localStorage and auto-switch to Dashboard tab)
   /**
    * Fetch dashboard data whenever dateRange or custom dates change
    * (client-side only, no full page reload)
