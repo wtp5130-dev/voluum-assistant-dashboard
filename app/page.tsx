@@ -1746,6 +1746,19 @@ function DashboardTab(props: {
               <TrendCard title="CPR (per signup)" values={src.map(p=>p.cpr ?? 0)} color="#8b5cf6" formatter={formatMoney} displayValue={rangeTotals.cpr} />
             </div>
           )}
+          {src.length > 1 && (
+            <div className="mt-4">
+              <CombinedChart
+                data={src}
+                metrics={[
+                  { key: "profit", label: "Profit", color: "#10b981", formatter: formatMoney },
+                  { key: "revenue", label: "Revenue", color: "#22c55e", formatter: formatMoney },
+                  { key: "cost", label: "Cost", color: "#f59e0b", formatter: formatMoney },
+                ]}
+                height={220}
+              />
+            </div>
+          )}
         </div>
       </section>
     );
@@ -2218,6 +2231,130 @@ function TrendCard({ title, values, color, formatter, displayValue }: { title: s
         </div>
       </div>
       <MiniLineChart values={values} color={color} showGrid={true} showPoints={true} />
+    </div>
+  );
+}
+
+type CombinedMetric = { key: keyof SeriesPoint; label: string; color: string; formatter: (n: number) => string };
+function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; metrics: CombinedMetric[]; height?: number }) {
+  const [enabled, setEnabled] = useState<Record<string, boolean>>(() => (
+    Object.fromEntries(metrics.map(m => [m.key, true]))
+  ));
+  const [hoverIdx, setHoverIdx] = useState<number | null>(null);
+  const padding = 32;
+  const w = 800; // internal width; SVG will scale to container
+  const h = height;
+  const n = data.length;
+  const enabledMetrics = metrics.filter(m => enabled[m.key]);
+  const x = (i: number) => padding + (n <= 1 ? 0 : (i * (w - padding * 2)) / Math.max(1, n - 1));
+  // Compute shared Y domain across enabled metrics for money values
+  const [yMin, yMax] = useMemo(() => {
+    let min = Infinity, max = -Infinity;
+    for (const m of enabledMetrics) {
+      for (const p of data) {
+        const v = (p as any)[m.key] as number | null;
+        if (typeof v === 'number') {
+          if (v < min) min = v;
+          if (v > max) max = v;
+        }
+      }
+    }
+    if (!isFinite(min) || !isFinite(max)) { min = 0; max = 1; }
+    if (min === max) { max = min + 1; }
+    return [min, max];
+  }, [data, enabledMetrics]);
+  const y = (v: number) => h - padding - ((v - yMin) / (yMax - yMin)) * (h - padding * 2);
+
+  const onMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    const rect = (e.currentTarget.firstChild as SVGSVGElement)?.getBoundingClientRect();
+    if (!rect) return;
+    const mx = e.clientX - rect.left;
+    const ratio = (mx - padding) / Math.max(1, (rect.width - padding * 2));
+    const idx = Math.round(ratio * (n - 1));
+    setHoverIdx(Math.max(0, Math.min(n - 1, idx)));
+  };
+
+  const onLeave = () => setHoverIdx(null);
+
+  const gridY = [0, 0.25, 0.5, 0.75, 1].map(p => padding + (h - padding * 2) * p);
+  const dateFmt = (iso: string) => new Date(iso).toLocaleDateString();
+
+  return (
+    <div className="rounded-xl border border-slate-800 bg-slate-900/50 p-3">
+      <div className="flex flex-wrap items-center gap-2 px-1 pb-2">
+        {metrics.map((m) => (
+          <button
+            key={m.key as string}
+            onClick={() => setEnabled(prev => ({ ...prev, [m.key]: !prev[m.key] }))}
+            className={`text-[10px] px-2 py-1 rounded-full border ${enabled[m.key] ? 'bg-slate-800 border-slate-700 text-slate-200' : 'bg-slate-900 border-slate-800 text-slate-500'}`}
+            style={{ boxShadow: enabled[m.key] ? `inset 0 0 0 2px ${m.color}20` : undefined }}
+            aria-pressed={!!enabled[m.key]}
+          >
+            <span className="inline-block w-2 h-2 rounded-full mr-1" style={{ background: m.color }} />{m.label}
+          </button>
+        ))}
+        <div className="ml-auto text-[10px] text-slate-500">Click to toggle series</div>
+      </div>
+      <div onMouseMove={onMove} onMouseLeave={onLeave} className="relative">
+        <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`}>
+          {/* Y grid */}
+          {gridY.map((gy, i) => (
+            <line key={i} x1={padding} x2={w - padding} y1={gy} y2={gy} stroke="#334155" strokeOpacity={i === gridY.length - 1 ? 0.6 : 0.3} strokeWidth={1} />
+          ))}
+          {/* X grid (ticks) */}
+          {n > 1 && Array.from({ length: Math.min(8, n) }).map((_, i) => {
+            const idx = Math.round((i / Math.min(7, n - 1)) * (n - 1));
+            const xv = x(idx);
+            return <line key={`vx${i}`} x1={xv} x2={xv} y1={padding} y2={h - padding} stroke="#334155" strokeOpacity={0.15} />;
+          })}
+          {/* Lines */}
+          {enabledMetrics.map((m) => {
+            const d = data
+              .map((p, i) => {
+                const v = (p as any)[m.key] as number | null;
+                const yv = typeof v === 'number' ? y(v) : null;
+                if (yv === null) return '';
+                return `${i === 0 ? 'M' : 'L'}${x(i)},${yv}`;
+              })
+              .filter(Boolean)
+              .join(' ');
+            return <path key={m.key as string} d={d} fill="none" stroke={m.color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />;
+          })}
+
+          {/* Hover cursor + points */}
+          {hoverIdx !== null && (
+            <g>
+              <line x1={x(hoverIdx)} x2={x(hoverIdx)} y1={padding} y2={h - padding} stroke="#94a3b8" strokeDasharray="4 3" strokeOpacity={0.6} />
+              {enabledMetrics.map(m => {
+                const v = (data[hoverIdx] as any)[m.key] as number | null;
+                if (typeof v !== 'number') return null;
+                return <circle key={`pt-${m.key as string}`} cx={x(hoverIdx)} cy={y(v)} r={3} fill={m.color} />;
+              })}
+            </g>
+          )}
+        </svg>
+
+        {/* Tooltip */}
+        {hoverIdx !== null && (
+          <div
+            className="pointer-events-none absolute -translate-x-1/2 -translate-y-full bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-[11px] text-slate-200 shadow-lg"
+            style={{ left: `${(padding + (hoverIdx * (w - padding * 2)) / Math.max(1, n - 1)) / w * 100}%`, top: 8 }}
+          >
+            <div className="text-[10px] text-slate-400 mb-1">{dateFmt(data[hoverIdx].date)}</div>
+            {enabledMetrics.map(m => {
+              const v = (data[hoverIdx] as any)[m.key] as number | null;
+              if (typeof v !== 'number') return null;
+              return (
+                <div key={`tt-${m.key as string}`} className="flex items-center gap-2">
+                  <span className="inline-block w-2 h-2 rounded-full" style={{ background: m.color }} />
+                  <span className="text-slate-300">{m.label}</span>
+                  <span className="ml-auto font-medium">{m.formatter(v)}</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
