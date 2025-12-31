@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState, useCallback, useRef } from "react";
+import React, { useEffect, useMemo, useState, useCallback, useRef, useId } from "react";
 import CreativeGallery from "@/components/CreativeGallery";
 
 /**
@@ -1720,7 +1720,10 @@ function DashboardTab(props: {
       <section className="grid gap-6">
         <div className="rounded-xl border border-slate-800 bg-slate-900/60 p-4">
           <div className="flex items-center justify-between mb-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Charts view</h3>
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-slate-300">Charts view</h3>
+              <p className="text-[10px] text-slate-500">{new Date(data.from).toLocaleDateString()} – {new Date(data.to).toLocaleDateString()}</p>
+            </div>
             <div className="flex items-center gap-2">
               <div className="text-[10px] text-slate-500 hidden md:block">Resolution</div>
               <div className="inline-flex rounded-md border border-slate-700 overflow-hidden">
@@ -2157,49 +2160,64 @@ function DashboardTab(props: {
 }
 
 /** Lightweight line chart (SVG) used in Trends */
-function MiniLineChart({ values, color = "#10b981", width = 280, height = 80 }: { values: number[]; color?: string; width?: number; height?: number }) {
-  const padding = 8;
+function MiniLineChart({ values, color = "#10b981", width = 280, height = 84, showGrid = true, showPoints = true }: { values: number[]; color?: string; width?: number; height?: number; showGrid?: boolean; showPoints?: boolean }) {
+  const id = useId();
+  const padding = 10;
   const w = width;
   const h = height;
   const n = Math.max(0, values.length);
   const domainMin = Math.min(...values, 0);
   const domainMax = Math.max(...values, 1);
   const span = domainMax - domainMin || 1;
-  const x = (i: number) => padding + (n <= 1 ? 0 : (i * (w - padding * 2)) / (n - 1));
+  const x = (i: number) => padding + (n <= 1 ? 0 : (i * (w - padding * 2)) / Math.max(1, (n - 1)));
   const y = (v: number) => h - padding - ((v - domainMin) / span) * (h - padding * 2);
-  const d = values.map((v, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(v)}`).join(" ");
+  const points = values.map((v, i) => ({ x: x(i), y: y(v) }));
+  const pathD = values.map((v, i) => `${i === 0 ? "M" : "L"}${x(i)},${y(v)}`).join(" ");
+  const gradId = `grad_${id}`;
+
   return (
     <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
       <defs>
-        <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor={color} stopOpacity="0.35" />
           <stop offset="100%" stopColor={color} stopOpacity="0" />
         </linearGradient>
       </defs>
-      {/* Area */}
-      {n > 1 && (
-        <path
-          d={`${d} L ${x(n - 1)},${y(domainMin)} L ${x(0)},${y(domainMin)} Z`}
-          fill="url(#grad)"
-          stroke="none"
-        />
+      {showGrid && (
+        <g>
+          {[0.25, 0.5, 0.75].map((p, i) => (
+            <line key={i} x1={padding} x2={w - padding} y1={padding + (h - padding * 2) * p} y2={padding + (h - padding * 2) * p} stroke="#334155" strokeOpacity="0.4" strokeWidth={1} />
+          ))}
+        </g>
       )}
-      {/* Line */}
-      <path d={d} fill="none" stroke={color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+      {n > 1 && (
+        <path d={`${pathD} L ${x(n - 1)},${y(domainMin)} L ${x(0)},${y(domainMin)} Z`} fill={`url(#${gradId})`} stroke="none" />
+      )}
+      <path d={pathD} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
+      {showPoints && points.length > 0 && (
+        <circle cx={points[points.length - 1].x} cy={points[points.length - 1].y} r={2.8} fill={color} />
+      )}
     </svg>
   );
 }
 
 function TrendCard({ title, values, color, formatter, displayValue }: { title: string; values: number[]; color: string; formatter: (n: number) => string; displayValue?: number }) {
+  const start = values.length ? values[0] : 0;
   const last = values.length ? values[values.length - 1] : 0;
   const valueToShow = typeof displayValue === "number" ? displayValue : last;
+  const absDelta = last - start;
+  const pctDelta = start !== 0 ? (absDelta / Math.abs(start)) * 100 : (last !== 0 ? 100 : 0);
+  const positive = absDelta >= 0;
   return (
-    <div className="border border-slate-800 rounded-lg p-3 bg-slate-950/40">
-      <div className="flex items-baseline justify-between mb-1">
-        <div className="text-[11px] text-slate-400">{title}</div>
-        <div className="text-[11px] font-medium text-slate-200">{formatter(valueToShow)}</div>
+    <div className="border border-slate-800 rounded-xl p-3 bg-slate-950/40 hover:bg-slate-950/60 transition-colors">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="text-[11px] tracking-wide uppercase text-slate-400">{title}</div>
+        <div className="flex items-baseline gap-2">
+          <div className="text-sm font-semibold text-slate-100">{formatter(valueToShow)}</div>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded-full border ${positive ? "text-emerald-300 border-emerald-500/30 bg-emerald-500/10" : "text-rose-300 border-rose-500/30 bg-rose-500/10"}`}>{positive ? "▲" : "▼"} {Math.abs(pctDelta).toFixed(1)}%</span>
+        </div>
       </div>
-      <MiniLineChart values={values} color={color} />
+      <MiniLineChart values={values} color={color} showGrid={true} showPoints={true} />
     </div>
   );
 }
