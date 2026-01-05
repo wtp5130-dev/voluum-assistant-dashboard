@@ -2574,7 +2574,18 @@ function OptimizerTab(props: {
   const [mapLoading, setMapLoading] = useState<boolean>(false);
   const [mapping, setMapping] = useState<Record<string, string>>({});
   const [mapDrafts, setMapDrafts] = useState<Record<string, string>>({});
-  const optimCampaigns = useMemo(() => (data?.campaigns || []).map(c => ({ id: c.id, name: c.name })).slice(0, 50), [data]);
+  // Filter mapping list by current source/country selection
+  const inferCountryMap = (c: { name?: string; country?: string }): string | null => {
+    if (c.country && /^[A-Z]{2}$/.test(String(c.country))) return String(c.country);
+    const m = (c.name || "").toUpperCase().match(/\b(MY|MX|TH|ID|SG)\b/);
+    return m ? m[1] : null;
+  };
+  const optimCampaigns = useMemo(() => {
+    let list = (data?.campaigns || []);
+    if (trafficSourceFilter !== "all") list = list.filter(c => c.trafficSource === trafficSourceFilter);
+    if (typeof countryFilter === 'string' && countryFilter !== 'all') list = list.filter(c => inferCountryMap(c) === countryFilter);
+    return list.map(c => ({ id: c.id, name: c.name })).slice(0, 50);
+  }, [data, trafficSourceFilter, countryFilter]);
   const guessIdFromName = (name?: string) => {
     if (!name) return "";
     const m = name.match(/\d{6,}/);
