@@ -609,7 +609,8 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
   // Country inference and options
   const inferCountry = (c: Campaign): string | null => {
     if ((c as any).country && /^[A-Z]{2}$/.test((c as any).country)) return (c as any).country as string;
-    const m = (c.name || "").toUpperCase().match(/\b(MY|MX|TH|ID|SG)\b/);
+    const upper = (c.name || "").toUpperCase();
+    const m = upper.match(/(?:^|[^A-Z])(MY|MX|TH|ID|SG)(?:[^A-Z]|$)/);
     return m ? m[1] : null;
   };
   const allCountries: string[] = useMemo(() => {
@@ -2577,7 +2578,8 @@ function OptimizerTab(props: {
   // Filter mapping list by current source/country selection
   const inferCountryMap = (c: { name?: string; country?: string }): string | null => {
     if (c.country && /^[A-Z]{2}$/.test(String(c.country))) return String(c.country);
-    const m = (c.name || "").toUpperCase().match(/\b(MY|MX|TH|ID|SG)\b/);
+    const upper = (c.name || "").toUpperCase();
+    const m = upper.match(/(?:^|[^A-Z])(MY|MX|TH|ID|SG)(?:[^A-Z]|$)/);
     return m ? m[1] : null;
   };
   const optimCampaigns = useMemo(() => {

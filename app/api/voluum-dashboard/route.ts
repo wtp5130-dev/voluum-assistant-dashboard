@@ -532,7 +532,7 @@ export async function GET(request: Request) {
         p.append("filter1", "trafficSource");
         p.append("filter1Value", ts);
       }
-      if (cc && cc !== "all") {
+      if (cc && cc !== "ALL") {
         const fKey = p.has("filter1") ? "filter2" : "filter1";
         const fVal = p.has("filter1") ? "filter2Value" : "filter1Value";
         p.append(fKey, "country");
@@ -636,13 +636,14 @@ export async function GET(request: Request) {
     // Apply server-side filters as a safety net (in case provider ignored filters)
     const inferCountryFromName = (name?: string): string | null => {
       if (!name) return null;
-      const m = String(name).toUpperCase().match(/\b(MY|MX|TH|ID|SG)\b/);
+      const upper = String(name).toUpperCase();
+      const m = upper.match(/(?:^|[^A-Z])(MY|MX|TH|ID|SG)(?:[^A-Z]|$)/);
       return m ? m[1] : null;
     };
     if (trafficSourceFilter && trafficSourceFilter !== "all") {
       campaigns = campaigns.filter((c) => c.trafficSource === trafficSourceFilter);
     }
-    if (countryFilter && countryFilter !== "all") {
+    if (countryFilter && countryFilter !== "ALL") {
       campaigns = campaigns.filter((c) => inferCountryFromName(c.name) === countryFilter);
     }
 
@@ -800,7 +801,7 @@ export async function GET(request: Request) {
       tsColumns.forEach((c) => tsParams.append("column", c));
       const applyFiltersTo = (p: URLSearchParams, ts?: string, cc?: string) => {
         if (ts && ts !== "all") { p.append("filter1", "trafficSource"); p.append("filter1Value", ts); }
-        if (cc && cc !== "all") { const fk = p.has("filter1")?"filter2":"filter1"; const fv=p.has("filter1")?"filter2Value":"filter1Value"; p.append(fk, "country"); p.append(fv, cc); }
+        if (cc && cc !== "ALL") { const fk = p.has("filter1")?"filter2":"filter1"; const fv=p.has("filter1")?"filter2Value":"filter1Value"; p.append(fk, "country"); p.append(fv, cc); }
       };
       // Try filters with fallback similar to campaigns
       const trySeries = async (ts?: string, cc?: string) => {
