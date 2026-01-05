@@ -66,9 +66,27 @@ async function resolveProviderCampaignId(dashboardId: string, campaignName?: str
  * - You MUST verify the exact endpoint + payload in their docs and adjust.
  * - Uses env: PROPELLER_API_TOKEN
  */
-async function pauseZoneInPropeller(
-  zone: ZoneToPausePayload
-): Promise<{ ok: boolean; message: string }> {
+async function fetchProviderCampaignIdByName(name?: string): Promise<string | null> {
+  try {
+    const token = process.env.PROPELLER_API_TOKEN;
+    if (!token || !name) return null;
+    let baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com";
+    let path = process.env.PROPELLER_LIST_CAMPAIGNS_PATH || "/v5/adv/campaigns";
+    if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
+    if (baseUrl.match(/\/v\d+(?:$|\/)/) && path.match(/^\/v\d+\//)) path = path.replace(/^\/v\d+/, "");
+    if (!path.startsWith("/")) path = `/${path}`;
+    const url = `${baseUrl}${path}?search=${encodeURIComponent(name)}`;
+    const res = await fetch(url, { method: "GET", headers: { Authorization: `Bearer ${token}`, Accept: "application/json" } });
+    const txt = await res.text();
+    let js: any = null; try { js = txt ? JSON.parse(txt) : null; } catch {}
+    const items: any[] = js?.data || js?.items || js?.campaigns || [];
+    const first = Array.isArray(items) && items.length > 0 ? items[0] : null;
+    const id = first?.id ?? first?.campaign_id ?? first?.campaignId;
+    return id ? String(id) : null;
+  } catch { return null; }
+}
+
+async function pauseZoneInPropeller(zone: ZoneToPausePayload): Promise<{ ok: boolean; message: string }> {
   const token = process.env.PROPELLER_API_TOKEN;
 
   if (!token) {
@@ -85,14 +103,19 @@ async function pauseZoneInPropeller(
   // Default to plural "zones" path; can be overridden via env
   const pathTmpl = process.env.PROPELLER_ADD_BLACKLIST_PATH || process.env.PROPELLER_GET_BLACKLIST_PATH || "/v5/adv/campaigns/{campaignId}/targeting/exclude/zones";
   // Ensure we call provider with provider campaign id
-  const providerCid = await resolveProviderCampaignId(zone.campaignId, (zone as any).campaignName);
+  let providerCid = await resolveProviderCampaignId(zone.campaignId, (zone as any).campaignName);
+  if (!/^\d+$/.test(providerCid)) {
+    // Attempt live lookup by campaign name
+    const byName = await fetchProviderCampaignIdByName((zone as any).campaignName);
+    if (byName) providerCid = byName;
+  }
   let path = pathTmpl.replace("{campaignId}", encodeURIComponent(providerCid));
   if (baseUrl.endsWith("/")) baseUrl = baseUrl.slice(0, -1);
   if (baseUrl.match(/\/v\d+(?:$|\/)/) && path.match(/^\/v\d+\//)) {
     path = path.replace(/^\/v\d+/, "");
   }
   if (!path.startsWith("/")) path = `/${path}`;
-  const url = `${baseUrl}${path}`;
+  const urlBase = `${baseUrl}${path}`;
 
   try {
     const key = process.env.PROPELLER_ADD_ZONE_KEY || "zone_ids";
@@ -120,12 +143,20 @@ async function pauseZoneInPropeller(
 
     const preferred = (process.env.PROPELLER_ADD_METHOD || "PATCH").toUpperCase();
     const tryOrder = preferred === "PUT" ? ["PUT", "PATCH"] : ["PATCH", "PUT"]; // fallback between PATCH/PUT
+    const pathVariants = [
+      urlBase,
+      urlBase.replace(/\/exclude\/zone(\b|$)/, "/exclude/zones"),
+      urlBase.replace(/\/exclude\/zones(\b|$)/, "/exclude/zone"),
+      // legacy pattern some accounts expose
+      urlBase.replace(/\/targeting\/exclude\/(?:zones?|zone)/, "/zones/blacklist"),
+    ].filter((u, i, a) => a.indexOf(u) === i);
 
     let lastStatus = 0;
     let lastText = "";
     for (const method of tryOrder) {
-      for (const p of payloads) {
-        const res = await fetch(url, {
+      for (const candidate of pathVariants) {
+        for (const p of payloads) {
+          const res = await fetch(candidate, {
           method,
           headers: {
             Authorization: `Bearer ${token}`,
@@ -140,12 +171,14 @@ async function pauseZoneInPropeller(
         lastStatus = res.status;
         lastText = await res.text();
         // If clearly method not allowed, try next method; if empty data, try next payload; otherwise stop
-        if (res.status === 405) break; // switch method
-        if (res.status === 400 && /Empty data/i.test(lastText)) {
-          continue; // try next payload shape
+          if (res.status === 405) break; // switch method
+          if (res.status === 404) continue; // try next route variant
+          if (res.status === 400 && /Empty data/i.test(lastText)) {
+            continue; // try next payload shape
+          }
+          // Other errors: stop trying payload variants for this route/method
+          break;
         }
-        // Other errors: stop trying payload variants for this method
-        break;
       }
       // If we got 405, loop will try the other method; otherwise we already tried variants, move on
     }
