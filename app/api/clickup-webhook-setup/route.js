@@ -19,22 +19,18 @@ export async function POST(request) {
     }
 
     const webhookUrl = process.env.WEBHOOK_URL || 'https://sidekick.projectx.to/api/clickup-webhook';
-    const teamId = process.env.CLICKUP_TEAM_ID || '9018118988'; // Your team/workspace ID
+    // Prefer list-level webhook per agent design
+    const listId = url.searchParams.get('list_id') || process.env.CLICKUP_LIST_ID || '901814679820';
 
-    // Create webhook subscription with specific events
     const payload = {
       endpoint: webhookUrl,
-      events: [
-        'taskCommentPosted',
-        'taskAttachmentCreated',
-        'taskAttachmentUpdated',
-        'taskStatusUpdated',
-      ],
+      events: ['commentCreated'],
+      list_id: String(listId),
     };
 
-    console.log('[clickup-webhook-setup] Creating webhook with payload:', payload);
+    console.log('[clickup-webhook-setup] Creating LIST-level webhook with payload:', payload);
 
-    const res = await fetch(`${CLICKUP_API_BASE}/team/${encodeURIComponent(teamId)}/webhook`, {
+    const res = await fetch(`${CLICKUP_API_BASE}/list/${encodeURIComponent(listId)}/webhook`, {
       method: 'POST',
       headers: {
         'Authorization': apiKey,
