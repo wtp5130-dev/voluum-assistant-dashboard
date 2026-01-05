@@ -579,7 +579,7 @@ export async function GET(request: Request) {
 
     const rows: any[] = reportJson.rows || reportJson.data || [];
 
-    const campaigns: DashboardCampaign[] = [];
+    let campaigns: DashboardCampaign[] = [];
 
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index];
@@ -631,6 +631,19 @@ export async function GET(request: Request) {
         zones,
         creatives,
       });
+    }
+
+    // Apply server-side filters as a safety net (in case provider ignored filters)
+    const inferCountryFromName = (name?: string): string | null => {
+      if (!name) return null;
+      const m = String(name).toUpperCase().match(/\b(MY|MX|TH|ID|SG)\b/);
+      return m ? m[1] : null;
+    };
+    if (trafficSourceFilter && trafficSourceFilter !== "all") {
+      campaigns = campaigns.filter((c) => c.trafficSource === trafficSourceFilter);
+    }
+    if (countryFilter && countryFilter !== "all") {
+      campaigns = campaigns.filter((c) => inferCountryFromName(c.name) === countryFilter);
     }
 
     // 3) KPIs
