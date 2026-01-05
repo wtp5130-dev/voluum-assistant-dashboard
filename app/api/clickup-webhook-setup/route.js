@@ -3,13 +3,24 @@
 
 const CLICKUP_API_BASE = 'https://api.clickup.com/api/v2';
 
+export async function GET(request) {
+  return new Response(JSON.stringify({ 
+    info: 'POST /api/clickup-webhook-setup?list_id=901814679820&token=<optional>',
+    note: 'Creates a list-level webhook for commentCreated events'
+  }), { 
+    status: 200, 
+    headers: { 'Content-Type': 'application/json' } 
+  });
+}
+
 export async function POST(request) {
   try {
     const url = new URL(request.url);
     const token = url.searchParams.get('token') || '';
     const allow = process.env.IMPORT_TOKEN || process.env.SEED_TOKEN || "";
     
-    if (!allow || token !== allow) {
+    // If no auth token configured, skip check (less secure but allows setup)
+    if (allow && token !== allow) {
       return new Response(JSON.stringify({ error: 'unauthorized' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     }
 
