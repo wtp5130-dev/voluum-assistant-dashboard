@@ -366,6 +366,11 @@ export default function DashboardPage() {
     const handler = (e: Event) => {
       try {
         const key = (e as CustomEvent).detail as TabKey;
+        // If user clicks a restricted tab, redirect to /no-access instead of doing nothing
+        if (key === "optimizer" && !can("optimizer")) {
+          window.location.href = "/no-access";
+          return;
+        }
         if (key === "dashboard" ||
             (key === "optimizer" && can("optimizer")) ||
             (key === "creatives" && can("creatives")) ||
@@ -382,7 +387,9 @@ export default function DashboardPage() {
       const initialParam = fromSearch(window.location.search);
       const initialHash = fromHash(window.location.hash);
       const initial = initialParam || initialHash;
-      if (initial && (
+      if (initial === "optimizer" && !can("optimizer")) {
+        window.location.replace("/no-access");
+      } else if (initial && (
         initial === "dashboard" ||
         (initial === "optimizer" && can("optimizer")) ||
         (initial === "creatives" && can("creatives")) ||
@@ -396,6 +403,10 @@ export default function DashboardPage() {
     const onHashChange = () => {
       const next = fromHash(window.location.hash);
       if (!next) return;
+      if (next === "optimizer" && !can("optimizer")) {
+        window.location.replace("/no-access");
+        return;
+      }
       if (
         next === "dashboard" ||
         (next === "optimizer" && can("optimizer")) ||
@@ -410,6 +421,10 @@ export default function DashboardPage() {
     const onPopState = () => {
       const next = fromSearch(window.location.search) || fromHash(window.location.hash);
       if (!next) return;
+      if (next === "optimizer" && !can("optimizer")) {
+        window.location.replace("/no-access");
+        return;
+      }
       if (
         next === "dashboard" ||
         (next === "optimizer" && can("optimizer")) ||
