@@ -82,7 +82,8 @@ async function pauseZoneInPropeller(
   // Build provider URL using configurable path (matches sync route)
   let baseUrl = process.env.PROPELLER_API_BASE_URL || "https://ssp-api.propellerads.com";
   // Prefer an explicit add/blacklist path for POST operations; fall back to the GET path
-  const pathTmpl = process.env.PROPELLER_ADD_BLACKLIST_PATH || process.env.PROPELLER_GET_BLACKLIST_PATH || "/v5/adv/campaigns/{campaignId}/targeting/exclude/zone";
+  // Default to plural "zones" path; can be overridden via env
+  const pathTmpl = process.env.PROPELLER_ADD_BLACKLIST_PATH || process.env.PROPELLER_GET_BLACKLIST_PATH || "/v5/adv/campaigns/{campaignId}/targeting/exclude/zones";
   // Ensure we call provider with provider campaign id
   const providerCid = await resolveProviderCampaignId(zone.campaignId, (zone as any).campaignName);
   let path = pathTmpl.replace("{campaignId}", encodeURIComponent(providerCid));
