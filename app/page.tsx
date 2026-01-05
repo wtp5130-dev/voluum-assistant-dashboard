@@ -213,6 +213,7 @@ export default function DashboardPage() {
 
   const [trafficSourceFilter, setTrafficSourceFilter] =
     useState<string>("all");
+  const [countryFilter, setCountryFilter] = useState<string>("all");
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(
     null
   );
@@ -597,16 +598,33 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
     return Array.from(set);
   }, [data]);
 
+  // Country inference and options
+  const inferCountry = (c: Campaign): string | null => {
+    if ((c as any).country && /^[A-Z]{2}$/.test((c as any).country)) return (c as any).country as string;
+    const m = (c.name || "").toUpperCase().match(/\b(MY|MX|TH|ID|SG)\b/);
+    return m ? m[1] : null;
+  };
+  const allCountries: string[] = useMemo(() => {
+    if (!data) return ["MY","MX","TH","ID","SG"]; // default set
+    const set = new Set<string>(["MY","MX","TH","ID","SG"]);
+    data.campaigns.forEach((c)=>{ const iso = inferCountry(c); if (iso) set.add(iso); });
+    return Array.from(set).sort();
+  }, [data]);
+
   /**
    * Filter campaigns by traffic source
    */
   const filteredCampaigns: Campaign[] = useMemo(() => {
     if (!data) return [];
-    if (trafficSourceFilter === "all") return data.campaigns;
-    return data.campaigns.filter(
-      (c) => c.trafficSource === trafficSourceFilter
-    );
-  }, [data, trafficSourceFilter]);
+    let list = data.campaigns;
+    if (trafficSourceFilter !== "all") {
+      list = list.filter((c) => c.trafficSource === trafficSourceFilter);
+    }
+    if (countryFilter !== "all") {
+      list = list.filter((c) => inferCountry(c) === countryFilter);
+    }
+    return list;
+  }, [data, trafficSourceFilter, countryFilter]);
 
   /**
    * Ensure selected campaign exists in filtered list
@@ -752,6 +770,7 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
         body: JSON.stringify({
           dashboard: data,
           trafficSourceFilter,
+          countryFilter,
         }),
       });
 
@@ -958,6 +977,23 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
               </select>
             </div>
 
+            {/* Country selector */}
+            <div className="flex flex-col gap-1">
+              <label className="text-[10px] uppercase tracking-wide text-slate-500">
+                Country
+              </label>
+              <select
+                value={countryFilter}
+                onChange={(e)=> setCountryFilter(e.target.value)}
+                className="bg-slate-900 border border-slate-700 rounded-md px-2 py-1 text-xs min-w-[120px]"
+              >
+                <option value="all">All</option>
+                {allCountries.map((cc)=> (
+                  <option key={cc} value={cc}>{cc}</option>
+                ))}
+              </select>
+            </div>
+
             {/* View mode selector */}
             <div className="flex flex-col gap-1">
               <label className="text-[10px] uppercase tracking-wide text-slate-500">View</label>
@@ -1057,6 +1093,7 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
         <OptimizerTab
           data={data}
           trafficSourceFilter={trafficSourceFilter}
+          countryFilter={countryFilter}
           previewLoading={optimizerPreviewLoading}
           applyLoading={optimizerApplyLoading}
           previewResult={optimizerPreviewResult}
@@ -2418,6 +2455,7 @@ function CombinedChart({ data, metrics, height = 220 }: { data: SeriesPoint[]; m
 function OptimizerTab(props: {
   data: DashboardData;
   trafficSourceFilter: string;
+  countryFilter: string;
   previewLoading: boolean;
   applyLoading: boolean;
   previewResult: { rules: any[]; zonesToPauseNow: any[]; meta?: any } | null;
@@ -2435,6 +2473,7 @@ function OptimizerTab(props: {
   const {
     data,
     trafficSourceFilter,
+    countryFilter,
     previewLoading,
     applyLoading,
     previewResult,
@@ -2586,6 +2625,8 @@ function OptimizerTab(props: {
                 ? "All traffic sources"
                 : trafficSourceFilter}
             </span>{" "}
+            • Country:{" "}
+            <span className="font-medium text-slate-200">{countryFilter === 'all' ? 'All' : countryFilter}</span>{" "}
             • Date:{" "}
             <span className="font-medium text-slate-200">
               {data.dateRange}
