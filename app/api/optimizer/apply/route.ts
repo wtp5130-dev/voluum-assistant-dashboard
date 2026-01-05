@@ -20,6 +20,7 @@ type ZoneToPausePayload = {
   zoneId: string;
   reason?: string;
   metrics?: ZoneMetrics;
+  providerCampaignId?: string;
 };
 
 type ApplyRequestBody = {
@@ -103,7 +104,10 @@ async function pauseZoneInPropeller(zone: ZoneToPausePayload): Promise<{ ok: boo
   // Default to plural "zones" path; can be overridden via env
   const pathTmpl = process.env.PROPELLER_ADD_BLACKLIST_PATH || process.env.PROPELLER_GET_BLACKLIST_PATH || "/v5/adv/campaigns/{campaignId}/targeting/exclude/zones";
   // Ensure we call provider with provider campaign id
-  let providerCid = await resolveProviderCampaignId(zone.campaignId, (zone as any).campaignName);
+  let providerCid = (zone as any).providerCampaignId as string | undefined;
+  if (!providerCid) {
+    providerCid = await resolveProviderCampaignId(zone.campaignId, (zone as any).campaignName);
+  }
   if (!/^\d+$/.test(providerCid)) {
     // Attempt live lookup by campaign name
     const byName = await fetchProviderCampaignIdByName((zone as any).campaignName);

@@ -2665,7 +2665,14 @@ function OptimizerTab(props: {
               {previewLoading ? "Generating…" : "Generate pause plan"}
             </button>
             <button
-              onClick={() => runApply(zonesToPause.filter((z:any)=> selectedZoneIds.has(zoneKey(z))))}
+              onClick={() => runApply(
+                zonesToPause
+                  .filter((z:any)=> selectedZoneIds.has(zoneKey(z)))
+                  .map((z:any)=> ({
+                    ...z,
+                    providerCampaignId: (mapping as any)?.[z.campaignId] || (mapping as any)?.[z.campaignName] || guessIdFromName(z.campaignName)
+                  }))
+              )}
               disabled={
                 applyLoading ||
                 !previewResult ||
