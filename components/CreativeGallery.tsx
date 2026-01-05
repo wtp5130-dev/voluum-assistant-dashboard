@@ -166,7 +166,18 @@ export default function CreativeGallery() {
             <div key={it.id} className="rounded-xl border border-slate-800 bg-slate-900/70 overflow-hidden flex flex-col">
               <div className="aspect-video bg-slate-950 flex items-center justify-center overflow-hidden">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={it.url} alt="creative" className="w-full h-full object-contain" />
+                <img
+                  src={it.url}
+                  alt="creative"
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    const el = e.currentTarget as HTMLImageElement;
+                    const proxied = `/api/image-proxy?u=${encodeURIComponent(it.url)}`;
+                    if (!el.src.includes("/api/image-proxy?")) {
+                      el.src = proxied;
+                    }
+                  }}
+                />
               </div>
               <div className="p-3 text-[11px] space-y-2">
                 <div className="flex items-center justify-between">
