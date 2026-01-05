@@ -478,12 +478,16 @@ export default function DashboardPage() {
     } catch {}
   }, [viewMode]);
 
-  // If user switches to charts view while on other tabs, auto-focus Dashboard tab
+  // If user switches the VIEW mode to charts, ensure Dashboard tab is shown once
+  // Do NOT override tab changes while staying in charts view
+  const prevViewRef = useRef<ViewMode>(viewMode);
   useEffect(() => {
-    if (viewMode === "charts" && activeTab !== "dashboard") {
-      setActiveTab("dashboard");
+    const prev = prevViewRef.current;
+    if (viewMode === "charts" && prev !== "charts") {
+      setActiveTab((t) => (t === "dashboard" ? t : "dashboard"));
     }
-  }, [viewMode, activeTab]);
+    prevViewRef.current = viewMode;
+  }, [viewMode]);
 
 // Creative image generator
 const [imagePrompt, setImagePrompt] = useState(
