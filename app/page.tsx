@@ -1055,29 +1055,31 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
 
       {/* Main tabs now live in sticky navbar */}
 
-      {/* KPI cards (always visible) */}
-      <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
-        {data.kpis.map((kpi) => (
-          <div
-            key={kpi.id}
-            className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 flex flex-col gap-1 shadow-sm hover:shadow-md transition-shadow"
-          >
-            <div className="text-xs uppercase tracking-wide text-slate-400">
-              {kpi.label}
-            </div>
-            <div className="text-lg font-semibold">{kpi.value}</div>
-            {kpi.delta !== "–" && (
-              <div
-                className={`text-xs ${
-                  kpi.positive ? "text-emerald-400" : "text-rose-400"
-                }`}
-              >
-                {kpi.delta}
+      {/* KPI cards (hidden in Creatives to reduce clutter) */}
+      {activeTab !== "creatives" && (
+        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
+          {data.kpis.map((kpi) => (
+            <div
+              key={kpi.id}
+              className="rounded-xl border border-slate-800 bg-slate-900/70 px-4 py-3 flex flex-col gap-1 shadow-sm hover:shadow-md transition-shadow"
+            >
+              <div className="text-xs uppercase tracking-wide text-slate-400">
+                {kpi.label}
               </div>
-            )}
-          </div>
-        ))}
-      </section>
+              <div className="text-lg font-semibold">{kpi.value}</div>
+              {kpi.delta !== "–" && (
+                <div
+                  className={`text-xs ${
+                    kpi.positive ? "text-emerald-400" : "text-rose-400"
+                  }`}
+                >
+                  {kpi.delta}
+                </div>
+              )}
+            </div>
+          ))}
+        </section>
+      )}
 
       {/* Tabs content */}
       {activeTab === "dashboard" && (
@@ -3113,6 +3115,10 @@ function OptimizerTab(props: {
 function CreativesTab(props?: {}) {
   return (
     <section className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">Gallery</h2>
+        <a href="/creative-request" className="text-xs px-3 py-1 rounded-md border border-slate-700 bg-emerald-600 hover:bg-emerald-500 text-slate-900">Open Banner Generator</a>
+      </div>
       <CreativeGallery />
     </section>
   );
