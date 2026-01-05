@@ -160,7 +160,7 @@ export default function NavBar() {
               {(me?.role === "admin" || me?.perms?.creatives || !me) && (
                 <>
                   {/* By default, open the Request Creative (generator) page */}
-                  <button onClick={() => router.push("/creative-request")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${pathname === "/creative-request" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Creatives</button>
+                  <button onClick={() => router.push("/creative-request")} className={"px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200"}>Creatives</button>
                   {/* Separate entry to the in-app gallery */}
                   <button onClick={() => selectTab("creatives")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "creatives" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Gallery</button>
                 </>
