@@ -526,53 +526,56 @@ export async function GET(request: Request) {
 
     campaignColumns.forEach((col) => params.append("column", col));
 
-    // Optional filters
-    // Filter 1: traffic source
-    if (trafficSourceFilter && trafficSourceFilter !== "all") {
-      params.append("filter1", "trafficSource");
-      params.append("filter1Value", trafficSourceFilter);
+    // Helper to set filters on a given URLSearchParams instance
+    const setFilters = (p: URLSearchParams, ts: string | undefined, cc: string | undefined) => {
+      if (ts && ts !== "all") {
+        p.append("filter1", "trafficSource");
+        p.append("filter1Value", ts);
+      }
+      if (cc && cc !== "all") {
+        const fKey = p.has("filter1") ? "filter2" : "filter1";
+        const fVal = p.has("filter1") ? "filter2Value" : "filter1Value";
+        p.append(fKey, "country");
+        p.append(fVal, cc);
+      }
+    };
+
+    // Attempt with both filters, then fall back progressively if the provider rejects the combination
+    const tryReport = async (ts?: string, cc?: string) => {
+      const p = new URLSearchParams(params.toString());
+      setFilters(p, ts, cc);
+      const url = `${base.replace(/\/$/, "")}/report?${p.toString()}`;
+      const res = await fetch(url, { method: "GET", headers: { "cwauth-token": token, Accept: "application/json" } });
+      const txt = await res.text();
+      let js: any = null; try { js = txt ? JSON.parse(txt) : null; } catch {}
+      return { res, js, txt, url } as const;
+    };
+
+    let reportAttempt = await tryReport(trafficSourceFilter, countryFilter);
+    if (!reportAttempt.res.ok || !reportAttempt.js?.rows) {
+      reportAttempt = await tryReport(trafficSourceFilter, undefined);
     }
-    // Filter 2: country (ISO), if provided
-    if (countryFilter && countryFilter !== "all") {
-      // Voluum country filter key is "country" in /report API
-      // If the environment doesn't support it, the API will ignore the filter silently.
-      const fKey = params.has("filter1") ? "filter2" : "filter1";
-      const fVal = params.has("filter1") ? "filter2Value" : "filter1Value";
-      params.append(fKey, "country");
-      params.append(fVal, countryFilter);
+    if (!reportAttempt.res.ok || !reportAttempt.js?.rows) {
+      reportAttempt = await tryReport(undefined, countryFilter);
     }
-
-    const reportUrl = `${base.replace(/\/$/, "")}/report?${params.toString()}`;
-
-    const reportRes = await fetch(reportUrl, {
-      method: "GET",
-      headers: {
-        "cwauth-token": token,
-        Accept: "application/json",
-      },
-    });
-
-    const reportText = await reportRes.text();
-    let reportJson: any = null;
-    try {
-      reportJson = reportText ? JSON.parse(reportText) : null;
-    } catch {
-      // ignore
+    if (!reportAttempt.res.ok || !reportAttempt.js?.rows) {
+      reportAttempt = await tryReport(undefined, undefined);
     }
-
-    if (!reportRes.ok || !reportJson) {
+    if (!reportAttempt.res.ok || !reportAttempt.js) {
       return NextResponse.json(
         {
           step: "report",
-          reportCalledUrl: reportUrl,
-          status: reportRes.status,
-          ok: reportRes.ok,
-          body: reportJson || reportText,
-          message: "Voluum /report call failed. Check parameters in code.",
+          reportCalledUrl: reportAttempt.url,
+          status: reportAttempt.res.status,
+          ok: reportAttempt.res.ok,
+          body: reportAttempt.js || reportAttempt.txt,
+          message: "Voluum /report call failed after fallback attempts.",
         },
         { status: 500 }
       );
     }
+
+    const reportJson = reportAttempt.js;
 
     const rows: any[] = reportJson.rows || reportJson.data || [];
 
@@ -782,25 +785,25 @@ export async function GET(request: Request) {
         "roi",
       ];
       tsColumns.forEach((c) => tsParams.append("column", c));
-      // Apply same optional filters to the series query
-      if (trafficSourceFilter && trafficSourceFilter !== "all") {
-        tsParams.append("filter1", "trafficSource");
-        tsParams.append("filter1Value", trafficSourceFilter);
-      }
-      if (countryFilter && countryFilter !== "all") {
-        const fKey = tsParams.has("filter1") ? "filter2" : "filter1";
-        const fVal = tsParams.has("filter1") ? "filter2Value" : "filter1Value";
-        tsParams.append(fKey, "country");
-        tsParams.append(fVal, countryFilter);
-      }
-      const tsUrl = `${base.replace(/\/$/, "")}/report?${tsParams.toString()}`;
-      const tsRes = await fetch(tsUrl, {
-        method: "GET",
-        headers: { "cwauth-token": token, Accept: "application/json" },
-      });
-      const tsText = await tsRes.text();
-      let tsJson: any = null;
-      try { tsJson = tsText ? JSON.parse(tsText) : null; } catch {}
+      const applyFiltersTo = (p: URLSearchParams, ts?: string, cc?: string) => {
+        if (ts && ts !== "all") { p.append("filter1", "trafficSource"); p.append("filter1Value", ts); }
+        if (cc && cc !== "all") { const fk = p.has("filter1")?"filter2":"filter1"; const fv=p.has("filter1")?"filter2Value":"filter1Value"; p.append(fk, "country"); p.append(fv, cc); }
+      };
+      // Try filters with fallback similar to campaigns
+      const trySeries = async (ts?: string, cc?: string) => {
+        const p = new URLSearchParams(tsParams.toString());
+        applyFiltersTo(p, ts, cc);
+        const url = `${base.replace(/\/$/, "")}/report?${p.toString()}`;
+        const res = await fetch(url, { method: "GET", headers: { "cwauth-token": token, Accept: "application/json" } });
+        const txt = await res.text();
+        let js: any = null; try { js = txt ? JSON.parse(txt) : null; } catch {}
+        return { res, js, txt } as const;
+      };
+      let tsAttempt = await trySeries(trafficSourceFilter, countryFilter);
+      if (!tsAttempt.res.ok || !tsAttempt.js?.rows) tsAttempt = await trySeries(trafficSourceFilter, undefined);
+      if (!tsAttempt.res.ok || !tsAttempt.js?.rows) tsAttempt = await trySeries(undefined, countryFilter);
+      if (!tsAttempt.res.ok || !tsAttempt.js?.rows) tsAttempt = await trySeries(undefined, undefined);
+      const tsJson: any = tsAttempt.js;
       const tsRows: any[] = (tsJson?.rows || tsJson?.data || []) as any[];
       if (Array.isArray(tsRows) && tsRows.length > 0) {
         series = tsRows.map((r, idx) => {
