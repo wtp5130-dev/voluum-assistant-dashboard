@@ -550,6 +550,14 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
           params.set("dateRange", dateRange);
         }
 
+        // Include filters for server-side KPIs/series
+        if (trafficSourceFilter && trafficSourceFilter !== "all") {
+          params.set("trafficSource", trafficSourceFilter);
+        }
+        if (countryFilter && countryFilter !== "all") {
+          params.set("country", countryFilter);
+        }
+
         const url = `${DASHBOARD_API_URL}?${params.toString()}`;
         const res = await fetch(url);
 
@@ -586,7 +594,7 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
     };
 
     fetchData();
-  }, [dateRange, fromDate, toDate]);
+  }, [dateRange, fromDate, toDate, trafficSourceFilter, countryFilter]);
 
   /**
    * Traffic source options

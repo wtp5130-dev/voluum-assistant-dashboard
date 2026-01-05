@@ -361,6 +361,8 @@ export async function GET(request: Request) {
 
   const { searchParams } = new URL(request.url);
   const rawDateRange = (searchParams.get("dateRange") as DateRangeKey | null) || null;
+  const trafficSourceFilter = (searchParams.get("trafficSource") || "all").toString();
+  const countryFilter = (searchParams.get("country") || "all").toString().toUpperCase();
   // Normalize dateRange: support both "custom" and "custom-date-time" as custom
   const dateRangeParam: DateRangeKey = (rawDateRange === "custom-date-time"
     ? "custom"
@@ -523,6 +525,22 @@ export async function GET(request: Request) {
     ];
 
     campaignColumns.forEach((col) => params.append("column", col));
+
+    // Optional filters
+    // Filter 1: traffic source
+    if (trafficSourceFilter && trafficSourceFilter !== "all") {
+      params.append("filter1", "trafficSource");
+      params.append("filter1Value", trafficSourceFilter);
+    }
+    // Filter 2: country (ISO), if provided
+    if (countryFilter && countryFilter !== "all") {
+      // Voluum country filter key is "country" in /report API
+      // If the environment doesn't support it, the API will ignore the filter silently.
+      const fKey = params.has("filter1") ? "filter2" : "filter1";
+      const fVal = params.has("filter1") ? "filter2Value" : "filter1Value";
+      params.append(fKey, "country");
+      params.append(fVal, countryFilter);
+    }
 
     const reportUrl = `${base.replace(/\/$/, "")}/report?${params.toString()}`;
 
@@ -764,6 +782,17 @@ export async function GET(request: Request) {
         "roi",
       ];
       tsColumns.forEach((c) => tsParams.append("column", c));
+      // Apply same optional filters to the series query
+      if (trafficSourceFilter && trafficSourceFilter !== "all") {
+        tsParams.append("filter1", "trafficSource");
+        tsParams.append("filter1Value", trafficSourceFilter);
+      }
+      if (countryFilter && countryFilter !== "all") {
+        const fKey = tsParams.has("filter1") ? "filter2" : "filter1";
+        const fVal = tsParams.has("filter1") ? "filter2Value" : "filter1Value";
+        tsParams.append(fKey, "country");
+        tsParams.append(fVal, countryFilter);
+      }
       const tsUrl = `${base.replace(/\/$/, "")}/report?${tsParams.toString()}`;
       const tsRes = await fetch(tsUrl, {
         method: "GET",
