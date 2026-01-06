@@ -1407,6 +1407,7 @@ function CampaignBuilderTab(props?: {}) {
   };
 
   return (
+    <div className="relative">
     <section className="grid gap-6 lg:grid-cols-2">
       <div className="rounded-xl border border-slate-800 bg-slate-900/80 p-4 flex flex-col gap-3">
         <div>
@@ -1608,6 +1609,17 @@ function CampaignBuilderTab(props?: {}) {
         </ul>
       </div>
     </section>
+    {/* Coming soon overlay */}
+    <div className="absolute inset-0 z-20 flex items-center justify-center bg-slate-950/60 backdrop-blur-sm">
+      <div className="text-center">
+        <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-100">
+          <span>Coming soon</span>
+          <span aria-hidden>⏳</span>
+        </div>
+        <p className="text-xs text-slate-300 mt-1">Campaign Builder is under construction.</p>
+      </div>
+    </div>
+    </div>
   );
 }
 
