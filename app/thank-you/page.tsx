@@ -9,6 +9,8 @@ export const dynamic = "force-dynamic";
 function ThankYouInner() {
   const [progress, setProgress] = React.useState(0);
   const [importMsg, setImportMsg] = React.useState<string>("");
+  const [done, setDone] = React.useState<boolean>(false);
+  const [statusLabel, setStatusLabel] = React.useState<string>("Queued");
   const search = useSearchParams();
   const router = useRouter();
   const steps = React.useMemo(
@@ -24,25 +26,19 @@ function ThankYouInner() {
   );
 
   React.useEffect(() => {
+    // Simulate progress up to 90% max. Reaching 100% only happens when import succeeds.
     let pct = 0;
     const tick = () => {
-      // ease to 95%, then finalize to 100% after a short delay
-      const max = pct < 90 ? 95 : 100;
+      if (done) return; // stop when finished
+      const max = 90; // cap until real import completes
       const step = Math.max(1, Math.round(Math.random() * (pct < 60 ? 7 : 4)));
       pct = Math.min(max, pct + step);
       setProgress(pct);
-      if (pct < 95) {
-        timer = setTimeout(tick, 400 + Math.random() * 500);
-      } else if (pct < 100) {
-        timer = setTimeout(() => {
-          pct = 100;
-          setProgress(100);
-        }, 2500 + Math.random() * 2000);
-      }
+      if (pct < max && !done) timer = setTimeout(tick, 400 + Math.random() * 500);
     };
     let timer: any = setTimeout(tick, 500);
     return () => clearTimeout(timer);
-  }, []);
+  }, [done]);
 
   // If a task id is present, poll the import endpoint to pull images into Gallery
   React.useEffect(() => {
@@ -54,24 +50,39 @@ function ThankYouInner() {
       if (stop) return;
       tries++;
       try {
+        // Poll ClickUp task to mirror agent step progress
+        try {
+          const pRes = await fetch(`/api/clickup-task/progress?task=${encodeURIComponent(taskId)}`, { cache: "no-store" });
+          const pj = await pRes.json().catch(() => ({}));
+          if (pj?.ok) {
+            setStatusLabel(pj.label || "Processing");
+            setProgress((prev) => Math.max(prev, Math.min(90, Number(pj.percent || 0))));
+          }
+        } catch {}
+
         const res = await fetch(`/api/creative-gallery/import?task=${encodeURIComponent(taskId)}`, { cache: "no-store" });
         const j = await res.json().catch(() => ({}));
         if (j?.saved > 0) {
           setImportMsg(`Imported ${j.saved} image(s) for task ${taskId}.`);
           setProgress(100);
+          setDone(true);
           return; // stop polling
         }
         setImportMsg(j?.error ? `Import error: ${j.error}` : `Waiting for images… attempt ${tries}`);
       } catch (e: any) {
         setImportMsg(`Import error: ${e?.message || String(e)}`);
       }
-      if (tries < 12 && !stop) setTimeout(poll, 5000);
+      if (tries < 24 && !stop) {
+        setTimeout(poll, 5000);
+      } else if (!stop) {
+        setImportMsg((m) => m || "Still processing… you can check the Gallery in a moment.");
+      }
     };
     poll();
     return () => { stop = true; };
   }, [search]);
 
-  const current = steps.find((s) => progress <= s.pct) || steps[steps.length - 1];
+  const current = { pct: progress, label: statusLabel } as any;
 
   return (
     <main className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 px-4">
