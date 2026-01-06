@@ -35,6 +35,19 @@ export async function GET(req: NextRequest): Promise<Response> {
     const apiKey = process.env.CLICKUP_API_KEY;
     if (!apiKey) return json({ error: "missing CLICKUP_API_KEY" }, 500);
 
+    // Helper: filter out obvious avatars/emojis/icons
+    const isAcceptableImageUrl = (u: string) => {
+      try {
+        const url = new URL(u);
+        const path = url.pathname.toLowerCase();
+        const host = url.host.toLowerCase();
+        const isExt = /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u);
+        const banned = /avatar|profile-?photos?|emoji|reaction|userpic|gravatar|icons?\//i.test(path);
+        const bannedHosts = /(gravatar\.com|githubusercontent\.com)/i.test(host);
+        return isExt && !banned && !bannedHosts;
+      } catch { return false; }
+    };
+
     // Task meta
     const infoRes = await fetch(`${CLICKUP_API_BASE}/task/${encodeURIComponent(taskId)}`, {
       method: "GET",
@@ -58,7 +71,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       const u = att?.url || att?.thumb || att?.image || att?.path || att?.download_url;
       const mime = att?.mime || att?.mimetype || att?.content_type || att?.type;
       const isImg = (typeof mime === 'string' && mime.toLowerCase().startsWith('image/')) || (typeof att?.type === 'string' && att.type.toLowerCase() === 'image');
-      if (typeof u === 'string' && (isImg || /^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u))) urls.push(u);
+      if (typeof u === 'string' && (isImg || isAcceptableImageUrl(u))) urls.push(u);
     }
     console.log(`[import] Task ${taskId}: task.attachments found=${taskAtts.length}, extracted=${urls.length}`);
 
@@ -70,14 +83,14 @@ export async function GET(req: NextRequest): Promise<Response> {
         while (stack.length) {
           const v = stack.pop();
           if (typeof v === 'string') {
-            if (/^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(v)) out.push(v);
+            if (isAcceptableImageUrl(v)) out.push(v);
           } else if (Array.isArray(v)) {
             for (const x of v) stack.push(x);
           } else if (v && typeof v === 'object') {
             const u = (v as any).url || (v as any).thumb || (v as any).image || (v as any).path || (v as any).download_url;
             const mime = (v as any).mime || (v as any).mimetype || (v as any).content_type || (v as any).type;
             const isImg = (typeof mime === 'string' && mime.toLowerCase().startsWith('image/')) || (typeof (v as any).type === 'string' && (v as any).type.toLowerCase() === 'image');
-            if (typeof u === 'string' && (isImg || /^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u))) out.push(u);
+            if (typeof u === 'string' && (isImg || isAcceptableImageUrl(u))) out.push(u);
             for (const k of Object.keys(v)) stack.push((v as any)[k]);
           }
         }
@@ -123,7 +136,7 @@ export async function GET(req: NextRequest): Promise<Response> {
       if (Array.isArray(commentItems)) {
         for (const item of commentItems) {
           // Look for image items: { type: "image", image: { url: "..." } }
-          if (item?.type === "image" && item?.image?.url) {
+          if (item?.type === "image" && item?.image?.url && isAcceptableImageUrl(item.image.url)) {
             urls.push(item.image.url);
           }
           // Look for text items to get the bot comment (first text item)

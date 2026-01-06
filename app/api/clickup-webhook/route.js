@@ -199,10 +199,23 @@ export async function POST(request) {
       }
     }
 
+    const shouldKeepUrl = (u) => {
+      try {
+        const url = new URL(u);
+        const path = url.pathname.toLowerCase();
+        const host = url.host.toLowerCase();
+        const isExt = /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u);
+        const banned = /avatar|profile-?photos?|emoji|reaction|userpic|gravatar|icons?\//i.test(path);
+        const bannedHosts = /(gravatar\.com)/i.test(host);
+        return isExt && !banned && !bannedHosts;
+      } catch { return false; }
+    };
+
     async function persistImages(urls, meta = {}) {
       if (!urls || !urls.length) return;
       const now = new Date().toISOString();
       for (const url of urls) {
+        if (!shouldKeepUrl(url)) continue;
         try {
           try { const added = await kv.sadd(MEDIA_SEEN_KEY, url); if (added === 0) continue; } catch {}
           const filename = (() => {
@@ -276,7 +289,7 @@ export async function POST(request) {
             }
           } catch {}
         }
-        const uniqueUrls = Array.from(new Set(urls));
+        const uniqueUrls = Array.from(new Set(urls.filter((u) => shouldKeepUrl(u))));
         console.log('[clickup-webhook] fetchTaskCommentImageUrls extracted:', { taskId, count: uniqueUrls.length, urls: uniqueUrls.slice(0, 3) });
         return uniqueUrls;
       } catch (e) {
@@ -306,7 +319,7 @@ export async function POST(request) {
           const isImg = (typeof mime === 'string' && mime.toLowerCase().startsWith('image/')) || (typeof att?.type === 'string' && att.type.toLowerCase() === 'image');
           if (typeof u === 'string' && (isImg || /^https?:\/\/.+\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u))) urls.push(u);
         }
-        const unique = Array.from(new Set(urls));
+        const unique = Array.from(new Set(urls.filter((u) => shouldKeepUrl(u))));
         console.log('[clickup-webhook] fetchTaskAttachmentImageUrls extracted:', { taskId, count: unique.length, urls: unique.slice(0, 3) });
         return unique;
       } catch (e) {
@@ -332,7 +345,7 @@ export async function POST(request) {
         });
 
         // Try to extract image URLs (very defensive parsing)
-        const imageUrls = [];
+        let imageUrls = [];
         
         // Check attachments field
         if (Array.isArray(attachments)) {
@@ -361,6 +374,9 @@ export async function POST(request) {
         // Also scan text for embedded URLs
         const urlMatches = (text.match(/https?:\/\/\S+/g) || []).filter(u => /\.(png|jpe?g|webp|gif)(\?|$)/i.test(u));
         imageUrls.push(...urlMatches);
+
+        // Filter out avatars/emojis/icons
+        imageUrls = imageUrls.filter((u) => shouldKeepUrl(u));
 
         console.log('[clickup-webhook] taskCommentPosted extracted URLs:', {
           taskId,
