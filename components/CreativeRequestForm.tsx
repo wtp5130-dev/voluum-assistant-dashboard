@@ -65,8 +65,9 @@ export default function CreativeRequestForm() {
         setResult({ success: false, error: data?.error || text || `Request failed (${res.status})` });
       } else {
         setResult({ success: true, taskUrl: data?.taskUrl ?? null, taskId: data?.taskId ?? null });
-        // Redirect to thank-you after a short delay
-        setTimeout(() => router.push("/thank-you"), 600);
+        // Redirect to thank-you with task id to enable auto-import/progress
+        const tid = data?.taskId ? String(data.taskId) : "";
+        setTimeout(() => router.push(tid ? `/thank-you?task=${encodeURIComponent(tid)}` : "/thank-you"), 600);
       }
     } catch (err: any) {
       setResult({ success: false, error: err?.message || "Unexpected error" });

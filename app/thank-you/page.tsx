@@ -2,9 +2,13 @@
 
 import Link from "next/link";
 import React from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 
 export default function ThankYouPage() {
   const [progress, setProgress] = React.useState(0);
+  const [importMsg, setImportMsg] = React.useState<string>("");
+  const search = useSearchParams();
+  const router = useRouter();
   const steps = React.useMemo(
     () => [
       { pct: 5, label: "Queued" },
@@ -38,6 +42,34 @@ export default function ThankYouPage() {
     return () => clearTimeout(timer);
   }, []);
 
+  // If a task id is present, poll the import endpoint to pull images into Gallery
+  React.useEffect(() => {
+    const taskId = search?.get("task") || search?.get("taskId") || "";
+    const token = process.env.NEXT_PUBLIC_SEED_TOKEN || process.env.NEXT_PUBLIC_IMPORT_TOKEN || "";
+    if (!taskId || !token) return;
+    let tries = 0;
+    let stop = false;
+    const poll = async () => {
+      if (stop) return;
+      tries++;
+      try {
+        const res = await fetch(`/api/creative-gallery/import?task=${encodeURIComponent(taskId)}&token=${encodeURIComponent(token)}`, { cache: "no-store" });
+        const j = await res.json().catch(() => ({}));
+        if (j?.saved > 0) {
+          setImportMsg(`Imported ${j.saved} image(s) for task ${taskId}.`);
+          setProgress(100);
+          return; // stop polling
+        }
+        setImportMsg(j?.error ? `Import error: ${j.error}` : `Waiting for images… attempt ${tries}`);
+      } catch (e: any) {
+        setImportMsg(`Import error: ${e?.message || String(e)}`);
+      }
+      if (tries < 12 && !stop) setTimeout(poll, 5000);
+    };
+    poll();
+    return () => { stop = true; };
+  }, [search]);
+
   const current = steps.find((s) => progress <= s.pct) || steps[steps.length - 1];
 
   return (
@@ -67,6 +99,7 @@ export default function ThankYouPage() {
         {progress === 100 && (
           <div className="text-emerald-300 text-sm mb-2">Your design is ready in the Gallery.</div>
         )}
+        {!!importMsg && <div className="text-[12px] text-slate-400 mb-2">{importMsg}</div>}
 
         <div className="flex items-center justify-center gap-3">
           <Link href="/creative-request" className="inline-flex items-center gap-2 bg-indigo-600 hover:bg-indigo-500 text-white px-5 py-2.5 rounded-md">
