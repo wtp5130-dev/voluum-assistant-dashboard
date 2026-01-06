@@ -21,7 +21,9 @@ export async function GET(req: NextRequest): Promise<Response> {
       status: 200,
       headers: {
         "Content-Type": contentType,
-        "Cache-Control": "public, max-age=3600",
+        // Disable caching to ensure latest image versions are shown in Gallery
+        "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+        "Pragma": "no-cache",
       },
     });
   } catch (e: any) {
