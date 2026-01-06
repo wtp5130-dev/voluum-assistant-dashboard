@@ -47,15 +47,14 @@ function ThankYouInner() {
   // If a task id is present, poll the import endpoint to pull images into Gallery
   React.useEffect(() => {
     const taskId = search?.get("task") || search?.get("taskId") || "";
-    const token = process.env.NEXT_PUBLIC_SEED_TOKEN || process.env.NEXT_PUBLIC_IMPORT_TOKEN || "";
-    if (!taskId || !token) return;
+    if (!taskId) return;
     let tries = 0;
     let stop = false;
     const poll = async () => {
       if (stop) return;
       tries++;
       try {
-        const res = await fetch(`/api/creative-gallery/import?task=${encodeURIComponent(taskId)}&token=${encodeURIComponent(token)}`, { cache: "no-store" });
+        const res = await fetch(`/api/creative-gallery/import?task=${encodeURIComponent(taskId)}`, { cache: "no-store" });
         const j = await res.json().catch(() => ({}));
         if (j?.saved > 0) {
           setImportMsg(`Imported ${j.saved} image(s) for task ${taskId}.`);

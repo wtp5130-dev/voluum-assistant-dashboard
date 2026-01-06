@@ -16,8 +16,20 @@ export async function GET(req: NextRequest): Promise<Response> {
     const url = new URL(req.url);
     const token = url.searchParams.get("token") || "";
     const taskId = url.searchParams.get("taskId") || url.searchParams.get("task") || "";
-    const allow = process.env.IMPORT_TOKEN || process.env.SEED_TOKEN || process.env.NEXT_PUBLIC_SEED_TOKEN || "";
-    if (!allow || token !== allow) return json({ error: "unauthorized" }, 401);
+    const allow = process.env.IMPORT_TOKEN || process.env.SEED_TOKEN || process.env.NEXT_PUBLIC_SEED_TOKEN || process.env.NEXT_PUBLIC_IMPORT_TOKEN || "";
+    // Allow when
+    // 1) a matching token is provided, OR
+    // 2) the request is same-origin (referer host matches request host). This enables client-side calls without exposing the token.
+    if (allow && token && token === allow) {
+      // ok
+    } else {
+      const referer = req.headers.get("referer") || "";
+      const reqHost = req.headers.get("host") || url.host || "";
+      let refHost = "";
+      try { refHost = referer ? new URL(referer).host : ""; } catch {}
+      const sameOrigin = !!refHost && refHost === reqHost;
+      if (!sameOrigin) return json({ error: "unauthorized" }, 401);
+    }
     if (!taskId) return json({ error: "missing taskId" }, 400);
 
     const apiKey = process.env.CLICKUP_API_KEY;
