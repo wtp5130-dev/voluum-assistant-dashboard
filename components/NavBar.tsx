@@ -162,7 +162,12 @@ export default function NavBar() {
                 <button onClick={() => router.push("/creative-request")} className={"px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200"}>Creatives</button>
               )}
               {(me?.role === "admin" || me?.perms?.builder || !me) && (
-                <button onClick={() => selectTab("builder")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "builder" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Campaign Builder</button>
+                <button onClick={() => selectTab("builder")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "builder" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>
+                  <span className="inline-flex items-center gap-1">
+                    <span>Campaign Builder</span>
+                    <span className="text-[10px]" title="Coming soon" aria-label="Coming soon">⏳</span>
+                  </span>
+                </button>
               )}
               {me?.role === "admin" && (
                 <button onClick={() => selectTab("audit")} className={`px-4 py-1.5 rounded-full hover:bg-slate-800 ${activeTab === "audit" ? "bg-emerald-500 text-slate-900" : "text-slate-200"}`}>Audit Trail</button>
@@ -179,7 +184,12 @@ export default function NavBar() {
                 <button onClick={() => router.push("/creative-request")} className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Creatives</button>
               )}
               {(me?.role === "admin" || me?.perms?.builder || !me) && (
-                <button onClick={() => router.push("/?tab=builder#builder")} className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Campaign Builder</button>
+                <button onClick={() => router.push("/?tab=builder#builder")} className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">
+                  <span className="inline-flex items-center gap-1">
+                    <span>Campaign Builder</span>
+                    <span className="text-[10px]" title="Coming soon" aria-label="Coming soon">⏳</span>
+                  </span>
+                </button>
               )}
               {me?.role === "admin" && (
                 <button onClick={() => router.push("/?tab=audit#audit")} className="px-4 py-1.5 rounded-full hover:bg-slate-800 text-slate-200">Audit Trail</button>
