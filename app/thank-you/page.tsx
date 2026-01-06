@@ -1,10 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import React from "react";
+import React, { Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 
-export default function ThankYouPage() {
+export const dynamic = "force-dynamic";
+
+function ThankYouInner() {
   const [progress, setProgress] = React.useState(0);
   const [importMsg, setImportMsg] = React.useState<string>("");
   const search = useSearchParams();
@@ -120,5 +122,23 @@ export default function ThankYouPage() {
         </div>
       </div>
     </main>
+  );
+}
+
+export default function ThankYouPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-100 px-4">
+          <div className="w-full max-w-lg text-center">
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-slate-700 flex items-center justify-center">⏳</div>
+            <h1 className="text-2xl font-semibold mb-2">Request received</h1>
+            <p className="text-slate-300">Loading progress…</p>
+          </div>
+        </main>
+      }
+    >
+      <ThankYouInner />
+    </Suspense>
   );
 }
