@@ -579,42 +579,20 @@ export async function GET(request: Request) {
 
     const rows: any[] = reportJson.rows || reportJson.data || [];
 
-    let campaigns: DashboardCampaign[] = [];
-
-    for (let index = 0; index < rows.length; index++) {
-      const row = rows[index];
-
+    // Build base campaigns list WITHOUT heavy per-campaign details first
+    let campaigns: DashboardCampaign[] = rows.map((row, index) => {
       const visits = Number(row.visits ?? 0);
       const conversions = Number(row.conversions ?? 0);
       const revenue = Number(row.revenue ?? 0);
       const cost = Number(row.cost ?? 0);
-
-      const profit = Number(
-        typeof row.profit === "number" ? row.profit : revenue - cost
-      );
+      const profit = Number(typeof row.profit === "number" ? row.profit : revenue - cost);
       const roi = Number(row.roi ?? (cost !== 0 ? (profit / cost) * 100 : 0));
-
       const signups = Number(row.customConversions1 ?? 0);
       const deposits = Number(row.customConversions2 ?? 0);
-
       const cpa = Number(row.CostPerSignup ?? 0);
       const cpr = Number(row.CPR ?? 0);
-
-      const campaignId: string =
-        row.campaignId || row.campaignName || `row-${index}`;
-
-      let zones: DashboardZone[] = [];
-      let creatives: DashboardCreative[] = [];
-
-      // Only fetch detailed breakdown for first N campaigns
-      if (index < MAX_DETAIL_CAMPAIGNS) {
-        zones = await fetchZonesForCampaign(base, token, fromIso, toIso, campaignId);
-        await sleep(DETAIL_THROTTLE_MS);
-        creatives = await fetchCreativesForCampaign(base, token, fromIso, toIso, campaignId);
-        await sleep(DETAIL_THROTTLE_MS);
-      }
-
-      campaigns.push({
+      const campaignId: string = row.campaignId || row.campaignName || `row-${index}`;
+      return {
         id: campaignId,
         name: row.campaignName || "Unknown campaign",
         trafficSource: row.trafficSourceName || "Unknown source",
@@ -628,10 +606,10 @@ export async function GET(request: Request) {
         cost,
         cpa,
         cpr,
-        zones,
-        creatives,
-      });
-    }
+        zones: [],
+        creatives: [],
+      } as DashboardCampaign;
+    });
 
     // Apply server-side filters as a safety net (in case provider ignored filters)
     const inferCountryFromName = (name?: string): string | null => {
@@ -645,6 +623,19 @@ export async function GET(request: Request) {
     }
     if (countryFilter && countryFilter !== "ALL") {
       campaigns = campaigns.filter((c) => inferCountryFromName(c.name) === countryFilter);
+    }
+
+    // Only now fetch detailed breakdown for first N campaigns in the FILTERED view
+    for (let i = 0; i < Math.min(campaigns.length, MAX_DETAIL_CAMPAIGNS); i++) {
+      const c = campaigns[i];
+      try {
+        c.zones = await fetchZonesForCampaign(base, token, fromIso, toIso, c.id);
+      } catch {}
+      await sleep(DETAIL_THROTTLE_MS);
+      try {
+        c.creatives = await fetchCreativesForCampaign(base, token, fromIso, toIso, c.id);
+      } catch {}
+      await sleep(DETAIL_THROTTLE_MS);
     }
 
     // 3) KPIs
