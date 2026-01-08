@@ -217,6 +217,8 @@ export default function DashboardPage() {
   const [selectedCampaignId, setSelectedCampaignId] = useState<string | null>(
     null
   );
+  // Quick campaign search
+  const [campaignSearch, setCampaignSearch] = useState<string>("");
 
   const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
   const [viewMode, setViewMode] = useState<ViewMode>("standard");
@@ -632,8 +634,14 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
     if (countryFilter !== "all") {
       list = list.filter((c) => inferCountry(c) === countryFilter);
     }
+    if (campaignSearch.trim()) {
+      const q = campaignSearch.toLowerCase();
+      list = list.filter((c) =>
+        (c.name || "").toLowerCase().includes(q) || String(c.id).toLowerCase().includes(q)
+      );
+    }
     return list;
-  }, [data, trafficSourceFilter, countryFilter]);
+  }, [data, trafficSourceFilter, countryFilter, campaignSearch]);
 
   /**
    * Ensure selected campaign exists in filtered list
@@ -909,8 +917,8 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
   return (
     <main className="min-h-screen text-slate-100 pt-0 px-4 md:px-6 pb-6">
       <div className="max-w-7xl mx-auto space-y-6">
-      {/* Header */}
-      <header className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+      {/* Header – now sticky under navbar for quick access */}
+      <header className="sticky top-14 z-40 border border-slate-800 bg-slate-950/60 supports-[backdrop-filter]:bg-slate-950/60 backdrop-blur rounded-xl px-4 py-3 flex flex-col md:flex-row md:items-start md:justify-between gap-3 shadow-sm">
         <div>
           <p className="text-sm md:text-base text-slate-300 mt-1">
             For Marketers. By Marketers
@@ -1017,11 +1025,27 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
             </div>
           </div>
 
-          {refreshing && (
-            <div className="flex items-center justify-end">
+          <div className="flex items-center justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setDateRange("last7days");
+                setFromDate(getDaysAgoYMD(7));
+                setToDate(getTodayYMD());
+                setTrafficSourceFilter("all");
+                setCountryFilter("all");
+                setCampaignSearch("");
+                setSelectedCampaignId(null);
+              }}
+              className="text-[11px] px-2 py-1 rounded-md border border-slate-700 bg-slate-900 hover:bg-slate-800"
+              title="Reset filters to defaults"
+            >
+              Reset
+            </button>
+            {refreshing && (
               <span className="text-[11px] text-slate-400">Updating…</span>
-            </div>
-          )}
+            )}
+          </div>
 
           {/* Custom date pickers */}
           {dateRange === "custom" && (
@@ -1849,13 +1873,36 @@ function DashboardTab(props: {
     <section className="grid gap-6 xl:grid-cols-[minmax(0,3fr)_minmax(0,4fr)]">
       {/* Left: Campaign list */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/60 overflow-hidden">
-        <div className="px-4 py-3 border-b border-slate-800 flex justify-between items-center">
+        <div className="px-4 py-3 border-b border-slate-800 flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-center">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-300">
             Campaigns
           </h2>
-          <span className="text-xs text-slate-500">
-            Showing {formatInteger(filteredCampaigns.length)} of {formatInteger(data.campaigns.length)}
-          </span>
+          <div className="flex items-center gap-2 sm:ml-auto">
+            <div className="relative">
+              <input
+                type="search"
+                value={campaignSearch}
+                onChange={(e)=> setCampaignSearch(e.target.value)}
+                placeholder="Search campaigns…"
+                className="w-48 bg-slate-900 border border-slate-700 rounded-md pl-7 pr-7 py-1 text-xs"
+                aria-label="Search campaigns"
+              />
+              <span className="pointer-events-none absolute left-2 top-1.5 text-[11px] text-slate-500">🔎</span>
+              {campaignSearch && (
+                <button
+                  type="button"
+                  onClick={()=> setCampaignSearch("")}
+                  className="absolute right-2 top-1 text-[11px] text-slate-400 hover:text-slate-200"
+                  aria-label="Clear search"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+            <span className="text-xs text-slate-500 whitespace-nowrap">
+              Showing {formatInteger(filteredCampaigns.length)} of {formatInteger(data.campaigns.length)}
+            </span>
+          </div>
         </div>
 
         <div className="max-h-[600px] md:max-h-[calc(100vh-280px)] overflow-auto text-xs">
