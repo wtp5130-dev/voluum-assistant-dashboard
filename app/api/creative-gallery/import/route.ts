@@ -11,6 +11,18 @@ function json(data: any, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "Content-Type": "application/json" } });
 }
 
+// Normalize asset URLs for dedupe: strip query, lowercase host, keep path only
+function normalizeUrl(u: string): string {
+  try {
+    const url = new URL(u);
+    const host = url.host.toLowerCase();
+    // Remove query and hash which often contain expiring tokens
+    return `${url.protocol}//${host}${url.pathname}`;
+  } catch {
+    return u;
+  }
+}
+
 export async function GET(req: NextRequest): Promise<Response> {
   try {
     const url = new URL(req.url);
@@ -182,12 +194,18 @@ export async function GET(req: NextRequest): Promise<Response> {
     }
 
     console.log(`[import] Task ${taskId}: extracted ${urls.length} URLs`);
-    const unique = Array.from(new Set(urls));
+    // Build a unique list by normalized URL (keeps first seen original)
+    const byNorm = new Map<string, string>();
+    for (const u of urls) {
+      const k = normalizeUrl(u);
+      if (!byNorm.has(k)) byNorm.set(k, u);
+    }
+    const unique = Array.from(byNorm.values());
     const now = new Date().toISOString();
     let saved = 0;
     for (const u of unique) {
       try {
-        const added = await kv.sadd(MEDIA_SEEN_KEY, u);
+        const added = await kv.sadd(MEDIA_SEEN_KEY, normalizeUrl(u));
         if (added === 0) continue;
       } catch {}
       const filename = (() => { try { const p = new URL(u).pathname.split("/").pop() || "image"; return decodeURIComponent(p); } catch { return "image"; } })();

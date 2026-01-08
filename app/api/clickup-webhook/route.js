@@ -199,31 +199,45 @@ export async function POST(request) {
       }
     }
 
+    const normalizeUrl = (u) => {
+      try {
+        const url = new URL(u);
+        return `${url.protocol}//${url.host.toLowerCase()}${url.pathname}`;
+      } catch { return u; }
+    };
+
     const shouldKeepUrl = (u) => {
       try {
         const url = new URL(u);
         const path = url.pathname.toLowerCase();
         const host = url.host.toLowerCase();
         const isExt = /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u);
+        const isClickUp = /clickup|attachments|clickupusercontent/.test(host);
+        const looksLikeAsset = /attachment|image|thumb|uploads?/i.test(path);
         const banned = /avatar|profile-?photos?|emoji|reaction|userpic|gravatar|icons?\//i.test(path);
         const bannedHosts = /(gravatar\.com)/i.test(host);
-        return isExt && !banned && !bannedHosts;
+        return ((isExt || (isClickUp && looksLikeAsset)) && !banned && !bannedHosts);
       } catch { return false; }
     };
 
     async function persistImages(urls, meta = {}) {
       if (!urls || !urls.length) return;
       const now = new Date().toISOString();
-      for (const url of urls) {
-        if (!shouldKeepUrl(url)) continue;
+      // Deduplicate by normalized URL across the batch
+      const seenBatch = new Set();
+      for (const raw of urls) {
+        if (!shouldKeepUrl(raw)) continue;
+        const norm = normalizeUrl(raw);
+        if (seenBatch.has(norm)) continue;
+        seenBatch.add(norm);
         try {
-          try { const added = await kv.sadd(MEDIA_SEEN_KEY, url); if (added === 0) continue; } catch {}
+          try { const added = await kv.sadd(MEDIA_SEEN_KEY, norm); if (added === 0) continue; } catch {}
           const filename = (() => {
-            try { const u = new URL(url); return decodeURIComponent(u.pathname.split('/').pop() || 'image'); } catch { return 'image'; }
+            try { const u = new URL(raw); return decodeURIComponent(u.pathname.split('/').pop() || 'image'); } catch { return 'image'; }
           })();
-          const galleryItem = { id: crypto.randomUUID(), url, provider: 'clickup', prompt: meta.prompt || meta.botComment || '(ClickUp attachment)', size: meta.size, style_preset: meta.style_preset, negative_prompt: meta.negative_prompt, brandId: meta.brandId, brandName: meta.brandName, outputs: meta.outputs, botComment: meta.botComment, comments: [], taskId: meta.taskId, status: 'open', createdAt: now };
+          const galleryItem = { id: crypto.randomUUID(), url: raw, provider: 'clickup', prompt: meta.prompt || meta.botComment || '(ClickUp attachment)', size: meta.size, style_preset: meta.style_preset, negative_prompt: meta.negative_prompt, brandId: meta.brandId, brandName: meta.brandName, outputs: meta.outputs, botComment: meta.botComment, comments: [], taskId: meta.taskId, status: 'open', createdAt: now };
           await kv.lpush(GALLERY_KEY, galleryItem); await kv.ltrim(GALLERY_KEY, 0, 999);
-          const mediaItem = { id: crypto.randomUUID(), url, filename, mime: undefined, size: undefined, brandId: meta.brandId, brandName: meta.brandName, tags: undefined, kind: undefined, createdAt: now };
+          const mediaItem = { id: crypto.randomUUID(), url: raw, filename, mime: undefined, size: undefined, brandId: meta.brandId, brandName: meta.brandName, tags: undefined, kind: undefined, createdAt: now };
           await kv.lpush(MEDIA_KEY, mediaItem); await kv.ltrim(MEDIA_KEY, 0, 999);
         } catch (e) {
           console.error('[clickup-webhook] persist image failed', e);
