@@ -42,9 +42,12 @@ export async function GET(req: NextRequest): Promise<Response> {
         const path = url.pathname.toLowerCase();
         const host = url.host.toLowerCase();
         const isExt = /\.(png|jpe?g|webp|gif|svg)(\?|$)/i.test(u);
+        const isClickUp = /clickup|attachments|clickupusercontent/.test(host);
+        const looksLikeAsset = /attachment|image|thumb|uploads?/i.test(path);
         const banned = /avatar|profile-?photos?|emoji|reaction|userpic|gravatar|icons?\//i.test(path);
         const bannedHosts = /(gravatar\.com|githubusercontent\.com)/i.test(host);
-        return isExt && !banned && !bannedHosts;
+        // Allow ClickUp asset links even without classical extensions
+        return ((isExt || (isClickUp && looksLikeAsset)) && !banned && !bannedHosts);
       } catch { return false; }
     };
 
