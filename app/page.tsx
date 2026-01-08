@@ -1113,6 +1113,8 @@ const [remixInfluence, setRemixInfluence] = useState<number>(70);
           selectedCampaign={selectedCampaign}
           selectedCampaignId={selectedCampaignId}
           setSelectedCampaignId={setSelectedCampaignId}
+          campaignSearch={campaignSearch}
+          setCampaignSearch={setCampaignSearch}
           zones={zones}
           creatives={creatives}
           chatMessages={chatMessages}
@@ -1656,6 +1658,8 @@ function DashboardTab(props: {
   selectedCampaign: Campaign | null;
   selectedCampaignId: string | null;
   setSelectedCampaignId: (id: string | null) => void;
+  campaignSearch: string;
+  setCampaignSearch: (v: string) => void;
   zones: Zone[];
   creatives: Creative[];
   chatMessages: ChatMessage[];
@@ -1671,6 +1675,8 @@ function DashboardTab(props: {
     selectedCampaign,
     selectedCampaignId,
     setSelectedCampaignId,
+    campaignSearch,
+    setCampaignSearch,
     zones,
     creatives,
     chatMessages,
