@@ -11,6 +11,8 @@ function ThankYouInner() {
   const [importMsg, setImportMsg] = React.useState<string>("");
   const [done, setDone] = React.useState<boolean>(false);
   const [statusLabel, setStatusLabel] = React.useState<string>("Queued");
+  const [elapsedSec, setElapsedSec] = React.useState<number>(0);
+  const startRef = React.useRef<number>(Date.now());
   const search = useSearchParams();
   const router = useRouter();
   const steps = React.useMemo(
@@ -33,12 +35,37 @@ function ThankYouInner() {
       const max = 90; // cap until real import completes
       const step = Math.max(1, Math.round(Math.random() * (pct < 60 ? 7 : 4)));
       pct = Math.min(max, pct + step);
-      setProgress(pct);
+      setProgress((prev) => Math.max(prev, pct));
       if (pct < max && !done) timer = setTimeout(tick, 400 + Math.random() * 500);
     };
     let timer: any = setTimeout(tick, 500);
     return () => clearTimeout(timer);
   }, [done]);
+
+  // Elapsed time ticker
+  React.useEffect(() => {
+    const id = setInterval(() => {
+      setElapsedSec(Math.floor((Date.now() - startRef.current) / 1000));
+    }, 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const formatTime = (s: number) => {
+    if (!isFinite(s) || s < 0) s = 0;
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = Math.floor(s % 60);
+    if (h > 0) return `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+    return `${m}:${String(sec).padStart(2, '0')}`;
+  };
+
+  const etaSec = React.useMemo(() => {
+    if (done) return 0;
+    const p = Math.max(1, Math.min(95, Math.floor(progress))); // keep reasonable bounds
+    if (p < 5 || elapsedSec < 5) return undefined; // not enough signal
+    const estTotal = (elapsedSec * 100) / p;
+    return Math.max(0, Math.round(estTotal - elapsedSec));
+  }, [progress, elapsedSec, done]);
 
   // If a task id is present, poll the import endpoint to pull images into Gallery
   React.useEffect(() => {
@@ -96,18 +123,23 @@ function ThankYouInner() {
         <p className="text-slate-300">BannerBot is generating your design now.</p>
         <p className="text-slate-400 mb-6">This may take a few minutes. Images will appear in the Gallery when ready.</p>
 
-        {/* Progress bar */}
+        {/* Time metrics (replace progress bar) */}
         <div className="text-left bg-slate-900/70 border border-slate-800 rounded-lg p-3 mb-4">
-          <div className="flex items-center justify-between text-[12px] text-slate-300 mb-1">
-            <span>{current.label}</span>
-            <span>{progress}%</span>
+          <div className="flex items-center justify-between text-[12px] text-slate-300 mb-2">
+            <span className="font-medium">{current.label}</span>
+            <span className="text-slate-400">{progress}%</span>
           </div>
-          <div className="h-2 w-full bg-slate-800 rounded-full overflow-hidden">
-            <div
-              className="h-full bg-emerald-500 transition-[width] duration-500 ease-out"
-              style={{ width: `${progress}%` }}
-            />
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="rounded-md border border-slate-800 bg-slate-950/60 p-2">
+              <div className="text-[10px] uppercase tracking-wide text-slate-500">Time Spent</div>
+              <div className="text-sm text-slate-200 mt-0.5">{formatTime(elapsedSec)}</div>
+            </div>
+            <div className="rounded-md border border-slate-800 bg-slate-950/60 p-2">
+              <div className="text-[10px] uppercase tracking-wide text-slate-500">Est. Time Remaining</div>
+              <div className="text-sm text-slate-200 mt-0.5">{done ? '0:00' : (etaSec === undefined ? 'Calculating…' : formatTime(etaSec))}</div>
+            </div>
           </div>
+          <div className="mt-2 text-[11px] text-slate-500">Estimates will improve as steps progress.</div>
         </div>
 
         {progress === 100 && (
