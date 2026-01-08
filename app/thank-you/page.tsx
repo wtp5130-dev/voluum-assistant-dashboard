@@ -44,6 +44,7 @@ function ThankYouInner() {
   React.useEffect(() => {
     const taskId = search?.get("task") || search?.get("taskId") || "";
     if (!taskId) return;
+    const clientToken = (process.env.NEXT_PUBLIC_IMPORT_TOKEN as string) || (process.env.NEXT_PUBLIC_SEED_TOKEN as string) || "";
     let tries = 0;
     let stop = false;
     const poll = async () => {
@@ -60,7 +61,8 @@ function ThankYouInner() {
           }
         } catch {}
 
-        const res = await fetch(`/api/creative-gallery/import?task=${encodeURIComponent(taskId)}`, { cache: "no-store" });
+        const tokenParam = clientToken ? `&token=${encodeURIComponent(clientToken)}` : "";
+        const res = await fetch(`/api/creative-gallery/import?task=${encodeURIComponent(taskId)}${tokenParam}`, { cache: "no-store" });
         const j = await res.json().catch(() => ({}));
         if (j?.saved > 0) {
           setImportMsg(`Imported ${j.saved} image(s) for task ${taskId}.`);
