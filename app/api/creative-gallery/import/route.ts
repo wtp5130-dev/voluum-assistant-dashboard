@@ -130,21 +130,52 @@ export async function GET(req: NextRequest): Promise<Response> {
 
     // Extract image URLs and a bot comment if any (merge into urls)
     let botComment: string | undefined;
+    const pushUrl = (u?: string) => { if (typeof u === 'string' && isAcceptableImageUrl(u)) urls.push(u); };
+    const extractUrlsFromAny = (v: any) => {
+      if (!v) return;
+      if (typeof v === 'string') {
+        // Pull URLs from plaintext/HTML as fallback
+        try {
+          const re = /(https?:\/\/[^\s"')]+\.(?:png|jpe?g|webp|gif|svg))(?:\?[^\s"')]*)?/ig;
+          let m: RegExpExecArray | null;
+          while ((m = re.exec(v)) !== null) pushUrl(m[1]);
+        } catch {}
+      } else if (Array.isArray(v)) {
+        for (const x of v) extractUrlsFromAny(x);
+      } else if (typeof v === 'object') {
+        const u = (v as any).url || (v as any).thumb || (v as any).image || (v as any).path || (v as any).download_url;
+        if (typeof u === 'string') pushUrl(u);
+        // sometimes image is nested object with url
+        if (v && (v as any).image && typeof (v as any).image === 'object') pushUrl((v as any).image.url);
+        for (const k of Object.keys(v)) extractUrlsFromAny((v as any)[k]);
+      }
+    };
+
     for (const c of comments) {
-      // ClickUp comments structure: c.comment is an array of objects
+      // 1) Comment items (rich text blocks)
       const commentItems = c?.comment || [];
       if (Array.isArray(commentItems)) {
         for (const item of commentItems) {
-          // Look for image items: { type: "image", image: { url: "..." } }
-          if (item?.type === "image" && item?.image?.url && isAcceptableImageUrl(item.image.url)) {
-            urls.push(item.image.url);
+          // Prefer declared image blocks
+          if (item?.type === 'image') {
+            if (typeof item?.image === 'string') pushUrl(item.image);
+            if (item?.image?.url) pushUrl(item.image.url);
           }
-          // Look for text items to get the bot comment (first text item)
-          if (item?.type !== "image" && item?.text && !botComment) {
-            botComment = item.text;
-          }
+          // Capture text as bot comment once
+          if (!botComment && typeof item?.text === 'string' && item.text.trim()) botComment = item.text;
+          // Deep-extract any embedded links
+          extractUrlsFromAny(item);
         }
       }
+      // 2) Comment attachments array
+      const atts = Array.isArray(c?.attachments) ? c.attachments : [];
+      for (const a of atts) {
+        const au = a?.url || a?.thumb || a?.image || a?.path || a?.download_url;
+        pushUrl(typeof au === 'string' ? au : undefined);
+      }
+      // 3) Raw HTML/plaintext body for embedded URLs
+      if (typeof c?.comment_text === 'string') extractUrlsFromAny(c.comment_text);
+      if (typeof c?.text === 'string') extractUrlsFromAny(c.text);
     }
 
     console.log(`[import] Task ${taskId}: extracted ${urls.length} URLs`);
