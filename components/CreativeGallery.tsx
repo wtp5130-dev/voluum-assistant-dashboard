@@ -138,7 +138,7 @@ export default function CreativeGallery() {
       </div>
       {error && <div className="text-rose-400 text-sm">{error}</div>}
       {importMsg && <div className="text-[12px] text-slate-300">{importMsg}</div>}
-      {loading && <div className="text-sm text-slate-400">Please be patient…</div>}
+      {/* Removed loading message per request */}
       <div className="rounded-xl border border-slate-800 bg-slate-900/70 p-3 text-[11px] flex flex-wrap items-end gap-3">
         <div>
           <label className="block text-[10px] uppercase tracking-wide text-slate-400 mb-1">Brand</label>
