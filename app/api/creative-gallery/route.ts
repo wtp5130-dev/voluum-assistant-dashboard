@@ -116,6 +116,48 @@ export async function PATCH(req: NextRequest): Promise<Response> {
           console.error('[creative-gallery] ClickUp comment post error:', e);
         }
       }
+      // If user approved/resolved, also attempt to set ClickUp task to a closed status
+      if (apiKey && next.taskId && (next.status === 'approved' || next.status === 'resolved')) {
+        try {
+          // Fetch task to identify its list
+          const tRes = await fetch(`https://api.clickup.com/api/v2/task/${encodeURIComponent(next.taskId)}`, {
+            method: 'GET', headers: { 'Authorization': apiKey }
+          });
+          const tTxt = await tRes.text();
+          const tJson: any = tTxt ? JSON.parse(tTxt) : {};
+          const listId: string | undefined = (tJson?.list?.id ? String(tJson.list.id) : undefined);
+          let desired: string | null = null;
+          if (listId) {
+            // Read list statuses and pick a closed one
+            const lRes = await fetch(`https://api.clickup.com/api/v2/list/${encodeURIComponent(listId)}`, {
+              method: 'GET', headers: { 'Authorization': apiKey }
+            });
+            const lTxt = await lRes.text();
+            let statuses: any[] = [];
+            try { const lJson = lTxt ? JSON.parse(lTxt) : {}; statuses = Array.isArray(lJson?.statuses) ? lJson.statuses : []; } catch { statuses = []; }
+            const closed = statuses.find((s: any) => String(s?.type || '').toLowerCase() === 'closed');
+            const complete = statuses.find((s: any) => String(s?.status || '').toLowerCase() === 'complete');
+            const done = statuses.find((s: any) => String(s?.status || '').toLowerCase() === 'done');
+            desired = (closed?.status || complete?.status || done?.status || null);
+          }
+          if (!desired) desired = 'complete'; // generic fallback; ClickUp will reject if not valid
+          try {
+            const uRes = await fetch(`https://api.clickup.com/api/v2/task/${encodeURIComponent(next.taskId)}`, {
+              method: 'PUT',
+              headers: { 'Authorization': apiKey, 'Content-Type': 'application/json' },
+              body: JSON.stringify({ status: desired })
+            });
+            if (!uRes.ok) {
+              const ut = await uRes.text();
+              console.warn('[creative-gallery] ClickUp status update failed', { taskId: next.taskId, status: uRes.status, body: ut?.slice(0, 300) });
+            }
+          } catch (e) {
+            console.warn('[creative-gallery] ClickUp status update error', e);
+          }
+        } catch (e) {
+          console.warn('[creative-gallery] Unable to set task closed status', e);
+        }
+      }
     } catch (e) {
       console.error('[creative-gallery] Comment sync error:', e);
     }
